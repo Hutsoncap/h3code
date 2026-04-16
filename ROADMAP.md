@@ -12,7 +12,7 @@ H3 Code is a fork of [`t3code`](https://github.com/pingdotgg/t3code) / [`dpcode`
 2. **Codex = Claude, always.** Every feature that talks to an agent, MCP, model settings, or prompt UI works identically for both providers. If a feature only works for one, it's not done.
 3. **Minimalism first.** Every addition must pass the question "does this make the app feel busier?". If yes, hide it behind progressive disclosure (collapsed section, command palette entry, right-click menu) rather than putting another control in front of the user.
 4. **Iterate in small, independent PRs.** Each numbered sub-PR below is sized to be buildable in a single worktree by a single agent in one session.
-5. **Review gates.** Every PR runs the `code-review` skill before merge. UI-touching PRs additionally run the `frontend-design` skill. Every agent does a `simplify` self-pass before marking a PR ready.
+5. **Review gates.** Every PR runs the `code-review` skill before merge. UI-touching PRs additionally run the `frontend-design` skill. Every agent does a **complexity pass** before marking a PR ready — re-read the diff and strip speculative abstractions, unused options, and premature generalizations. (If the author's harness has a `simplify` skill available, use it; the expectation is the outcome, not a specific tool.)
 6. **Never break what's already there.** T3/DP ship polished chat, diff, and workspace experiences — additions must not regress those.
 7. **Keyboard-first.** Every new panel ships with keyboard shortcuts from day one. Nothing is mouse-only.
 
@@ -78,7 +78,7 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 - [ ] `bun fmt`, `bun lint`, `bun typecheck`, and `bun run test` all pass.
 - [ ] `code-review` skill run; findings addressed.
 - [ ] `frontend-design` skill run (UI changes present); findings addressed.
-- [ ] `simplify` self-pass done.
+- [ ] Complexity pass done.
 
 ### v1b — Pinned section + generalized pin store
 
@@ -112,10 +112,12 @@ Pure refactor. No new routes, no new UI, no new stores. The thread-embedded brow
 - Existing call sites ([ChatView.tsx](apps/web/src/components/ChatView.tsx), [_chat.$threadId.tsx](apps/web/src/routes/_chat.$threadId.tsx)) pass `{ kind: "thread", threadId }`.
 - Accept legacy `threadId`-only IPC payloads and coerce to `{ kind: "thread", threadId }` during a deprecation window.
 - Keep the existing `persist:t3code-browser` session partition untouched.
+- **Persisted-state migration is required.** `browserStateStore` is a zustand/persist store keyed by `threadId` today; rekeying to `surfaceId` means existing on-disk entries will not deserialize cleanly. Bump the persist `version`, write a `migrate` that rewrites every legacy `threadId` entry to the `thread:<id>` surface-key form, and add a test that round-trips the prior on-disk shape. Users with open browser tabs at upgrade time must not lose restored tabs. This is also hX1 territory — the test lives with this PR.
 
 **Verification**
 - [ ] Thread-embedded browser works identically to pre-PR (manual regression: open a thread, open browser panel, open tabs, restart app, verify tabs restore).
 - [ ] Contract tests cover all three surface kinds even though only `thread` is used.
+- [ ] Persisted-state migration test: seed localStorage with the prior `threadId`-keyed shape, load the app, confirm tabs restore under the new `thread:<id>` surface keys without loss.
 - [ ] `bun run test` passes.
 
 #### v1c.2 — Standalone browser route + sidebar Browser section
@@ -277,25 +279,30 @@ Hardening lane (hX1–hX7) — runs continuously in parallel with all phases.
 
 ## Execution model: parallel worktrees
 
-Each sub-PR is sized for one agent in one worktree. Sub-PRs within a phase that touch **different files** can run in parallel on separate worktrees. Examples:
-- v1a must land before v1b and v1c.
-- v1b and v1c can run in parallel (different files, no conflict beyond the `sidebarSectionsStore` addition).
-- v3a → v3b → v3c is serial within itself but parallel to v1/v2 tracks.
+Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narrower than it looks — most pairs share sidebar structure, the browser-surface contract, or the pin store. Be conservative.
+
+- **v1a** must land before v1b, v1c.1, v1c.2, and v1c.3.
+- **v1b ∥ v1c.1** is safe — v1b touches the Pinned section and pin store; v1c.1 is a pure contract/runtime refactor of the browser surface with no sidebar UI changes.
+- **v1c.2 and v1c.3 serialize around sidebar ownership.** Both edit the sidebar Browser section and both depend on v1c.1. Do not run them in parallel with v1b either — they all touch the same sidebar render path.
+- v3a → v3b → v3c is serial within itself; parallel to v1/v2 tracks only after the affected surfaces stabilize.
+- **Hardening lane items are independent and can always run in parallel** with feature work, subject to the feature PR not invalidating the test they add.
 
 ### Per-PR protocol (every agent follows this)
 
 1. **Before starting** — flip this file: sub-PR status to `🚧 worktree: <name>`. Open a draft PR early so others see the work.
 2. **While working** — keep changes scoped to the sub-PR. If you discover adjacent work worth doing, note it at the bottom of this file under "Spawned follow-ups" and keep going.
-3. **Completion gates — required by [AGENTS.md](AGENTS.md):**
-   - `bun fmt` — formats the workspace (oxfmt).
-   - `bun lint` — lints the workspace (oxlint).
-   - `bun typecheck` — runs `turbo run typecheck`.
-   - `bun run test` — runs Vitest. **Never use `bun test`** (different binary; AGENTS.md forbids it).
-   - Treat these as heavyweight checks: bundle them into one final verification pass per task; avoid rerunning the full set repeatedly during iteration.
+3. **Completion gates:**
+   - **Required by [AGENTS.md](AGENTS.md):**
+     - `bun fmt` — formats the workspace (oxfmt).
+     - `bun lint` — lints the workspace (oxlint).
+     - `bun typecheck` — runs `turbo run typecheck`.
+   - **Required by this roadmap** (separate policy, not AGENTS.md):
+     - `bun run test` — runs Vitest on the PR's area. **Never use `bun test`** (different binary; AGENTS.md forbids it).
+   - Treat the AGENTS.md trio as heavyweight workspace checks — bundle them into one final verification pass per task and avoid rerunning them repeatedly during iteration. Tests can be run more frequently on the scoped area you're editing.
 4. **Review gates:**
    - `code-review` skill — mandatory on every PR.
    - `frontend-design` skill — mandatory on any PR that changes UI (new components, styling, layout, copy in views, interaction behavior). Skippable for pure refactors with no user-visible change.
-   - `simplify` skill — self-pass by the authoring agent before marking the PR ready. Not a separate reviewer; it's "did I leave unneeded complexity on the floor?"
+   - **Complexity pass** — self-review by the authoring agent before marking the PR ready. Re-read the diff and strip speculative abstractions, unused options, dead branches, and premature generalizations. Not a separate reviewer and not a specific tool — the `simplify` skill can be used if available, but any method that produces the outcome is fine.
 5. **Codex parity check** on every PR that touches agent, MCP, model, or prompt surfaces — confirm explicitly in the PR body.
 6. **On merge** — flip this file: sub-PR status to `✅ #<PR number> — <one-line summary>`. If scope shifted, update downstream sub-PR notes.
 
