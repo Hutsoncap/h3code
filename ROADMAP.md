@@ -4,17 +4,30 @@
 
 H3 Code is a fork of [`t3code`](https://github.com/pingdotgg/t3code) / [`dpcode`](https://github.com/Emanuele-web04/dpcode) being reshaped into a single Electron app that replaces the dev-tool sprawl: **terminal + browser + diff + git + agent (Claude *and* Codex) + editor + spaces**, all in one window. The upstream apps are already strong — every change here is additive, iterative, and preserves what works.
 
+### Execution order at a glance
+
+1. **Phase 0 — Prerequisites.** Pay down the existing gravity wells in `.plans/` and unify the product name. Nothing in Phase 1+ starts until the Phase 0 gate items are merged.
+2. **Phase 1 — Foundations.** Sidebar unify (v1a), Pinned section (v1b), Browser as its own section (v1c.1 → v1c.2 → v1c.3), theme catalog (bundled with v1a).
+3. **Phase 2 — Spaces.** Arc/Zen-style top-level containers.
+4. **Phase 3+ — Editor, productivity, git/MCP, multi-pane, power features, polish.**
+5. **Hardening lane runs continuously.**
+
 ---
 
 ## Guiding principles
 
+The next success factor for this project is **engineering discipline, not feature ambition.** The codebase already has gravity wells — [ChatView.tsx](apps/web/src/components/ChatView.tsx) (~6.4k lines), [Sidebar.tsx](apps/web/src/components/Sidebar.tsx) (~4.4k), [store.ts](apps/web/src/store.ts) (~2k), [codexAppServerManager.ts](apps/server/src/codexAppServerManager.ts) (~2.7k) — that carry too much integration weight. Shipping UI features *into* those files is **fake velocity**: each feature increases coupling, and regressions get harder to catch. Real velocity comes from paying down that coupling first, then building on clean seams.
+
+The product risk is becoming an Electron kitchen sink — browser, editor, spaces, git UI, command palette, task queue, MCP manager are all good ideas individually, and together they can easily turn into a cluttered, fragile app. The antidote is minimalism as a hard constraint, not a preference.
+
 1. **Performance and reliability first.** [AGENTS.md](AGENTS.md) sets the bar: predictable behavior under load and during failures (session restarts, reconnects, partial streams). When a tradeoff is required, choose correctness and robustness over short-term convenience. Features are built around this principle, not in tension with it.
-2. **Codex = Claude, always.** Every feature that talks to an agent, MCP, model settings, or prompt UI works identically for both providers. If a feature only works for one, it's not done.
-3. **Minimalism first.** Every addition must pass the question "does this make the app feel busier?". If yes, hide it behind progressive disclosure (collapsed section, command palette entry, right-click menu) rather than putting another control in front of the user.
-4. **Iterate in small, independent PRs.** Each numbered sub-PR below is sized to be buildable in a single worktree by a single agent in one session.
-5. **Review gates.** Every PR runs the `code-review` skill before merge. UI-touching PRs additionally run the `frontend-design` skill. Every agent does a **complexity pass** before marking a PR ready — re-read the diff and strip speculative abstractions, unused options, and premature generalizations. (If the author's harness has a `simplify` skill available, use it; the expectation is the outcome, not a specific tool.)
-6. **Never break what's already there.** T3/DP ship polished chat, diff, and workspace experiences — additions must not regress those.
-7. **Keyboard-first.** Every new panel ships with keyboard shortcuts from day one. Nothing is mouse-only.
+2. **Seams before features.** Before adding a major new surface, the integration files it touches must be in a shape that makes adding the surface additive — not another layer pasted onto a 6k-line god component. Phase 0 enforces this; the Hardening lane sustains it.
+3. **Codex = Claude, always.** Every feature that talks to an agent, MCP, model settings, or prompt UI works identically for both providers. If a feature only works for one, it's not done.
+4. **Minimalism as a hard constraint.** Every addition must pass the question "does this make the app feel busier?". If yes, hide it behind progressive disclosure (collapsed section, command palette entry, right-click menu) rather than putting another control in front of the user. The product gets better by *reducing friction*, not by exposing every capability all the time.
+5. **Iterate in small, independent PRs.** Each numbered sub-PR below is sized to be buildable in a single worktree by a single agent in one session.
+6. **Review gates.** Every PR runs the `code-review` skill before merge. UI-touching PRs additionally run the `frontend-design` skill. Every agent does a **complexity pass** before marking a PR ready — re-read the diff and strip speculative abstractions, unused options, and premature generalizations. (If the author's harness has a `simplify` skill available, use it; the expectation is the outcome, not a specific tool.)
+7. **Never break what's already there.** T3/DP ship polished chat, diff, and workspace experiences — additions must not regress those.
+8. **Keyboard-first.** Every new panel ships with keyboard shortcuts from day one. Nothing is mouse-only.
 
 ---
 
@@ -27,6 +40,59 @@ H3 Code is a fork of [`t3code`](https://github.com/pingdotgg/t3code) / [`dpcode`
 - ⏸ **Blocked** — waiting on an upstream PR or decision.
 
 Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. `🚧 worktree: bold-heisenberg`). When merged, flip to ✅ with the PR number.
+
+---
+
+## Phase 0 — Prerequisites: seams, safety nets, and naming
+
+**These land before any Phase 1 work starts.** The existing `.plans/` directory already identifies the seams the roadmap needs; they are not background cleanup, they are the foundation every subsequent feature PR stands on. Each item below is an existing plan in `.plans/` unless noted; read the linked file for the authoritative spec. This roadmap references them — it does not redefine them.
+
+| ID | Title | Source | Status |
+|----|-------|--------|--------|
+| **p0.1** | Typed IPC boundaries | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md) | 📋 Planned |
+| **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md) | 📋 Planned |
+| **p0.3** | Split ChatView.tsx | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md) | 📋 Planned |
+| **p0.4** | Split codexAppServerManager.ts | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md) | 📋 Planned |
+| **p0.5** | Event-state test expansion | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md) | 📋 Planned |
+| **p0.6** | Unify process/session abstraction | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | 📋 Planned |
+| **p0.7** | CI quality gates | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md) | 📋 Planned |
+| **p0.8** | Pre-commit format + lint | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md) | 📋 Planned |
+| **p0.9** | Product naming unification | (new — this roadmap) | 📋 Planned |
+
+### Why these, why now
+
+Every one of these directly lifts a constraint that Phase 1+ would otherwise hit:
+
+- **p0.1 typed IPC boundaries** — v1c.1 modifies the browser IPC surface. Typing it first means v1c.1 is an additive change, not a corrective one.
+- **p0.2 persisted-state validation** — v1a, v1b, v1c.1, and v1c.3 all add new zustand/persist stores or re-key existing ones. Shipping them on top of a validated persist pipeline means every future store inherits safe migrations for free.
+- **p0.3 split ChatView.tsx** — v1c.1's thread-scoped browser lives inside this file. Working against 6.4k lines is a tax on every PR that follows; doing it once up front is cheaper.
+- **p0.4 split codexAppServerManager.ts** — not on v1's hot path, but Codex parity (principle 3) lives here. Any MCP, model-picker, or agent-surface work after v1 will be cleaner with this split done.
+- **p0.5 event-state tests** + **p0.6 process/session unification** — the reliability substrate. AGENTS.md calls out "session restarts, reconnects, partial streams" as the load-bearing cases; shipping features before these exist means every feature PR is a reliability gamble.
+- **p0.7 CI gates** + **p0.8 precommit hooks** — turn the completion-gate policy from honor-system into enforcement. Stops drift permanently.
+- **p0.9 product naming** — see below.
+
+### p0.9 Product naming unification
+
+[README.md](README.md) still says "DP Code"; this roadmap says "H3 Code"; packages are `@t3tools/*`; persisted storage keys use `t3code:` and the Electron session partition is `persist:t3code-browser`; the custom protocol is `t3://`; the Electron dev data dir is `.dpcode/`. **Four names are live in the repo simultaneously.** That drift matters more than it seems — it makes the product feel unfinished and creates migration cost every time a name is touched later.
+
+**This roadmap commits to "H3 Code" as the product name** (user-confirmed in the planning conversation). The rename PR:
+
+- Updates [README.md](README.md), marketing copy, in-app strings, window title, About dialog.
+- Migrates persisted storage keys from `t3code:*` → `h3code:*` with a one-shot `localStorage` migration in [useLocalStorage.ts](apps/web/src/hooks/useLocalStorage.ts) and every zustand/persist store (list: theme, sidebar sections, pinned items, web-apps, workspace pages, browser surface state, app settings, composer drafts, terminal state, temporary threads, pinned threads).
+- Migrates the Electron session partition `persist:t3code-browser` → `persist:h3code-browser`. **Session cookies/logins will migrate** — the existing session is copied to the new partition name at first launch, then the old partition is retained read-only for one release cycle as a rollback.
+- Renames the custom protocol `t3://` → `h3://`; keep `t3://` registered as an alias for one release cycle.
+- Renames the dev data dir `.dpcode/` → `.h3code/`.
+- Package scope `@t3tools/*` is **not** renamed in p0.9 — that's a separate, mechanical PR (`@h3code/*`) that can land any time after p0.9 without user impact. Defer unless the churn is cheap to batch.
+
+**Verification:**
+- [ ] Upgrade from a pre-rename build: all persisted state (threads, workspaces, pinned items, theme, browser tabs, composer drafts) survives.
+- [ ] Browser logins survive (session partition migration).
+- [ ] `t3://` links still resolve (alias).
+- [ ] String grep for `dpcode`, `DP Code`, `t3code`, and `T3 Code` in user-facing surfaces returns zero results (internal package names and git history are fine).
+
+### Phase 0 exit criteria
+
+Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7, p0.9 are ✅ merged**. p0.4, p0.6, p0.8 are strongly preferred but can land in parallel with v1a if scope conflicts allow it — document any deviation at the top of the affected sub-PR.
 
 ---
 
@@ -256,23 +322,36 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 ## Dependencies map
 
 ```
-v1a ─┬→ v1b ────────────────────────┐
-     │                               │
-     ├→ v1c.1 → v1c.2 → v1c.3 ─────→ v2a → v2b → v2c
-     │           (v1b ∥ v1c.* after v1a)
-     │
-     └→ v3a → v3b → v3c
+Phase 0 (required before Phase 1 begins)
+  p0.1 typed IPC ────────────┐
+  p0.2 persist validation ───┤
+  p0.3 split ChatView ───────┼→ Phase 1 gate
+  p0.5 event-state tests ────┤
+  p0.7 CI gates ─────────────┤
+  p0.9 naming unification ───┘
+  p0.4, p0.6, p0.8 — preferred before Phase 1; may run in parallel with v1a if no scope conflict.
 
-v4a (palette) — any time after v1a
-v4b (ask-about-this) — needs v3a + v4a
-v4c (snippets/bookmarks) — needs v1b
-v4d (scratchpad) — needs v2a
-v5a/b/c/d — any time after v1c.3
-v6a — needs v1c.3 + v2c
-v6b — needs v6a
-v7a — any time; earlier is better
+Phase 1+ (only after Phase 0 gate)
+  v1a ─┬→ v1b ────────────────────────┐
+       │                               │
+       ├→ v1c.1 → v1c.2 → v1c.3 ─────→ v2a → v2b → v2c
+       │           (v1b ∥ v1c.1 only; v1c.2 and v1c.3 serialize)
+       │
+       └→ v3a → v3b → v3c
 
-Hardening lane (hX1–hX7) — runs continuously in parallel with all phases.
+  v4a (palette) — any time after v1a
+  v4b (ask-about-this) — needs v3a + v4a
+  v4c (snippets/bookmarks) — needs v1b
+  v4d (scratchpad) — needs v2a
+  v5a/b/c/d — any time after v1c.3
+  v6a — needs v1c.3 + v2c
+  v6b — needs v6a
+  v7a — any time; earlier is better
+
+Hardening lane (hX1–hX7) — runs continuously in parallel with all phases,
+including Phase 0. Items that overlap with a Phase 0 plan are absorbed
+into that plan (e.g. hX1 persisted-state migration harness is a
+deliverable of p0.2).
 ```
 
 ---
