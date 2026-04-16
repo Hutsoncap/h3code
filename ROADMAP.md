@@ -8,12 +8,13 @@ H3 Code is a fork of [`t3code`](https://github.com/pingdotgg/t3code) / [`dpcode`
 
 ## Guiding principles
 
-1. **Codex = Claude, always.** Every feature that talks to an agent, MCP, model settings, or prompt UI works identically for both providers. If a feature only works for one, it's not done.
-2. **Minimalism first.** Every addition must pass the question "does this make the app feel busier?". If yes, hide it behind progressive disclosure (collapsed section, command palette entry, right-click menu) rather than putting another control in front of the user.
-3. **Iterate in small, independent PRs.** Each numbered sub-PR below is sized to be buildable in a single worktree by a single agent in one session.
-4. **Every PR goes through `code-review` and `frontend-design` skill reviews** before merge. The two can run in parallel. Run `simplify` before marking done.
-5. **Never break what's already there.** T3/DP ship polished chat, diff, and workspace experiences — additions must not regress those.
-6. **Keyboard-first.** Every new panel ships with keyboard shortcuts from day one. Nothing is mouse-only.
+1. **Performance and reliability first.** [AGENTS.md](AGENTS.md) sets the bar: predictable behavior under load and during failures (session restarts, reconnects, partial streams). When a tradeoff is required, choose correctness and robustness over short-term convenience. Features are built around this principle, not in tension with it.
+2. **Codex = Claude, always.** Every feature that talks to an agent, MCP, model settings, or prompt UI works identically for both providers. If a feature only works for one, it's not done.
+3. **Minimalism first.** Every addition must pass the question "does this make the app feel busier?". If yes, hide it behind progressive disclosure (collapsed section, command palette entry, right-click menu) rather than putting another control in front of the user.
+4. **Iterate in small, independent PRs.** Each numbered sub-PR below is sized to be buildable in a single worktree by a single agent in one session.
+5. **Review gates.** Every PR runs the `code-review` skill before merge. UI-touching PRs additionally run the `frontend-design` skill. Every agent does a `simplify` self-pass before marking a PR ready.
+6. **Never break what's already there.** T3/DP ship polished chat, diff, and workspace experiences — additions must not regress those.
+7. **Keyboard-first.** Every new panel ships with keyboard shortcuts from day one. Nothing is mouse-only.
 
 ---
 
@@ -35,7 +36,9 @@ Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. 
 |----|-------|--------|
 | **v1a** | Sidebar unify + theme catalog | 📋 Planned |
 | **v1b** | Pinned section + generalized pin store | 📋 Planned |
-| **v1c** | Browser as its own sidebar section + Web Apps + Browser settings | 📋 Planned |
+| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 📋 Planned |
+| **v1c.2** | Standalone browser route + sidebar Browser section | 📋 Planned |
+| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page | 📋 Planned |
 
 ### v1a — Sidebar unify + theme catalog
 
@@ -44,7 +47,7 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 **Sidebar unify**
 - Delete `SidebarSegmentedPicker` from [apps/web/src/components/Sidebar.tsx](apps/web/src/components/Sidebar.tsx) (~line 651) and the `view` state/handler.
 - Add a reusable `SidebarSection` at `apps/web/src/components/sidebar/SidebarSection.tsx` — header row (title + chevron + optional trailing action) with a collapsible body.
-- Add a persistent collapse store at `apps/web/src/sidebarSectionsStore.ts` (zustand/persist, key `t3code:sidebar-sections:v1`, initial shape `{ threads: boolean; workspaces: boolean }` — `pinned` / `browser` arrive with v1b / v1c).
+- Add a persistent collapse store at `apps/web/src/sidebarSectionsStore.ts` (zustand/persist, key `t3code:sidebar-sections:v1`). Shape includes **all four section keys up front** to avoid shared-state churn across later sub-PRs: `{ pinned: boolean; threads: boolean; workspaces: boolean; browser: boolean }`. Only `threads` and `workspaces` are rendered in v1a; `pinned` and `browser` keys sit dormant until their sub-PRs wire them up. This lets v1b and v1c proceed in parallel without touching this file.
 - Render Threads section and Workspaces section stacked; wrap existing trees untouched internally. dnd-kit reorder ([line 620](apps/web/src/components/Sidebar.tsx:620) / [line 684](apps/web/src/components/Sidebar.tsx:684)) keeps working.
 
 **Theme catalog**
@@ -58,7 +61,8 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 - [apps/web/src/components/terminal/terminalRuntimeAppearance.ts](apps/web/src/components/terminal/terminalRuntimeAppearance.ts): read from a new subscribable `getActiveTerminalPalette()` / `subscribeTerminalPalette()` so running xterm instances recolor on theme change.
 - [apps/desktop/src/main.ts:1278](apps/desktop/src/main.ts:1278): traffic-light sync stays on the existing `"light"|"dark"|"system"` IPC; value derived from the active theme's `variant`.
 - Add a Theme section to the settings page (locate during implementation via `useAppSettings` consumers): mode toggle + theme grid (5-swatch preview + name).
-- Note: themes can also be installed using the Ghostty theme format similar to how Ghostty terminal does it so that we have a larger theme library. Perhaps we can crosscheck the available themes on their repo and build out from there?
+
+*(Importing the 450-theme Ghostty/iTerm2 corpus is scoped separately as v8c. v1a stays focused on the curated catalog.)*
 
 **Verification**
 - [ ] Sidebar shows stacked Threads + Workspaces sections; no picker.
@@ -71,8 +75,10 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 - [ ] `dark:` Tailwind utilities still apply under dark-variant themes.
 - [ ] Legacy `t3code:theme` string values migrate without throwing.
 - [ ] Chat, diff viewer, composer, terminal drawer verified under one light and one dark theme.
-- [ ] `bun run check` and `bun run test` pass.
-- [ ] `code-review`, `frontend-design`, and `simplify` skills run; findings addressed.
+- [ ] `bun fmt`, `bun lint`, `bun typecheck`, and `bun run test` all pass.
+- [ ] `code-review` skill run; findings addressed.
+- [ ] `frontend-design` skill run (UI changes present); findings addressed.
+- [ ] `simplify` self-pass done.
 
 ### v1b — Pinned section + generalized pin store
 
@@ -80,9 +86,9 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 
 - Create `apps/web/src/pinnedItemsStore.ts` — generic `{ kind: "thread"|"workspace"|"webapp"; id: string }` items persisted at `t3code:pinned-items:v1`. Actions: `togglePin`, `unpin`, `reorder`, `prune`. Migrate existing pinned-threads localStorage.
 - Keep the existing thread-only pin store as a thin selector wrapper during the deprecation window; remove once proven.
-- Add the **Pinned** section at the top of the sidebar; hidden when empty. Reuse existing thread and workspace row components. Web-app rows arrive with v1c.
+- Add the **Pinned** section at the top of the sidebar; hidden when empty. Reuse existing thread and workspace row components. Web-app rows arrive with v1c.3.
 - Add pin affordance to workspace context menus (threads already have one).
-- Extend `sidebarSectionsStore` with `pinned: boolean`.
+- The `pinned` key already exists in `sidebarSectionsStore` (seeded by v1a) — just wire it to the new section's collapse state.
 
 **Verification**
 - [ ] Thread pins migrate from legacy store.
@@ -91,33 +97,63 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 - [ ] Section collapse persists.
 - [ ] Pinned items navigable with keyboard.
 
-### v1c — Browser as its own sidebar section
+### v1c — Browser as its own sidebar section (split into three sub-PRs)
 
-*Can run in parallel with v1b after v1a lands. Largest v1 sub-PR.*
+Today's browser ([apps/web/src/components/BrowserPanel.tsx](apps/web/src/components/BrowserPanel.tsx), [apps/desktop/src/browserManager.ts](apps/desktop/src/browserManager.ts), [apps/web/src/browserStateStore.ts](apps/web/src/browserStateStore.ts)) is a full WebContentsView-backed multi-tab browser — but it's keyed by `threadId` and only renders inside a chat thread. The original v1c plan bundled seven concerns (contracts, desktop runtime, store migration, routing, sidebar UX, install flow, settings) into one PR — too large for the "one agent, one session" rule. Split into three serial slices.
 
-Today's browser ([apps/web/src/components/BrowserPanel.tsx](apps/web/src/components/BrowserPanel.tsx), [apps/desktop/src/browserManager.ts](apps/desktop/src/browserManager.ts), [apps/web/src/browserStateStore.ts](apps/web/src/browserStateStore.ts)) is a full WebContentsView-backed multi-tab browser — but it's keyed by `threadId` and only renders inside a chat thread. v1c generalizes it and promotes it to a top-level sidebar section.
+#### v1c.1 — Browser surface abstraction (no user-visible changes)
 
-- Generalize from thread-scoped to surface-scoped: `BrowserSurfaceId = { kind: "thread"; threadId } | { kind: "standalone"; id: "main" } | { kind: "webapp"; webAppId }`. Update `BrowserPanel` props, state store keys, runtime map in `browserManager`, and IPC inputs. Accept legacy `threadId` payloads during deprecation.
-- Add routes: `/browser` and `/webapp/$webAppId` (TanStack Router), each rendering `BrowserPanel` with the right surface id.
+*Can run in parallel with v1b after v1a lands.*
+
+Pure refactor. No new routes, no new UI, no new stores. The thread-embedded browser behaves identically after this PR.
+
+- Introduce `BrowserSurfaceId = { kind: "thread"; threadId } | { kind: "standalone"; id: string } | { kind: "webapp"; webAppId }` in `packages/contracts`.
+- Update `BrowserPanel` props (`threadId` → `surfaceId`), state store keys in [browserStateStore.ts](apps/web/src/browserStateStore.ts), runtime map in [browserManager.ts](apps/desktop/src/browserManager.ts), and IPC inputs/outputs in [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (lines 61–88).
+- Existing call sites ([ChatView.tsx](apps/web/src/components/ChatView.tsx), [_chat.$threadId.tsx](apps/web/src/routes/_chat.$threadId.tsx)) pass `{ kind: "thread", threadId }`.
+- Accept legacy `threadId`-only IPC payloads and coerce to `{ kind: "thread", threadId }` during a deprecation window.
+- Keep the existing `persist:t3code-browser` session partition untouched.
+
+**Verification**
+- [ ] Thread-embedded browser works identically to pre-PR (manual regression: open a thread, open browser panel, open tabs, restart app, verify tabs restore).
+- [ ] Contract tests cover all three surface kinds even though only `thread` is used.
+- [ ] `bun run test` passes.
+
+#### v1c.2 — Standalone browser route + sidebar Browser section
+
+*Depends on v1c.1. Can run in parallel with v1b.*
+
+- Add TanStack Router route `/browser` rendering `<BrowserPanel surfaceId={{ kind: "standalone", id: "main" }} />`.
+- Add the **Browser** section to the sidebar (key `browser` already exists in `sidebarSectionsStore` from v1a). Contents: a single "Open Browser" row that navigates to `/browser`.
+- State persistence for the standalone surface's tab list uses the surface-keyed store from v1c.1.
+
+**Verification**
+- [ ] Sidebar shows a Browser section with an "Open Browser" row.
+- [ ] Clicking it navigates to `/browser` with a functional tabbed browser.
+- [ ] Tabs and session cookies persist across app restart.
+- [ ] Thread-embedded browser (regression) still works.
+
+#### v1c.3 — Web Apps store + install flow + Settings → Browser page
+
+*Depends on v1c.2.*
+
 - New `apps/web/src/webAppsStore.ts` — persist `{ id, name, url, faviconUrl, createdAt }[]` at `t3code:web-apps:v1`. Actions: `installFromTab`, `rename`, `delete`, `reorder`.
-- Add an **Install as web app** button in `BrowserPanel` chrome, visible when `surfaceId.kind !== "webapp"`. Writes current tab → `webAppsStore`.
-- Sidebar **Browser** section:
-  - "Open Browser" row → navigates to `/browser`.
-  - "Web Apps" sub-list → each entry navigates to `/webapp/$id`.
-  - "Add web app…" inline form (name + URL).
+- Add route `/webapp/$webAppId` rendering `<BrowserPanel surfaceId={{ kind: "webapp", webAppId }} />`.
+- Add **Install as web app** button in `BrowserPanel` chrome, visible when `surfaceId.kind !== "webapp"`. Writes current tab → `webAppsStore`.
+- Extend the sidebar Browser section with a **Web Apps** sub-list and an "Add web app…" inline form.
+- Pin integration: right-click a web-app → Pin uses the generalized pin store from v1b (records `{ kind: "webapp", id }`).
 - Settings → **Browser** page:
-  - Default search engine (Google / DuckDuckGo / Bing / custom `{query}` template). Replaces hardcoded `SEARCH_URL_PREFIX` at [browserManager.ts:21](apps/desktop/src/browserManager.ts:21).
+  - Default search engine (Google / DuckDuckGo / Bing / custom `{query}` template). Replaces hardcoded `SEARCH_URL_PREFIX` at [browserManager.ts:21](apps/desktop/src/browserManager.ts:21); plumbed through `appSettings`.
   - Homepage URL (default `about:blank`).
-  - Clear browsing data (clears `persist:t3code-browser` session).
+  - Clear browsing data button (clears `persist:t3code-browser` session).
   - "Extensions — coming soon" disabled stub (realistic future scope is an MV2-compatible curated allowlist, not the Chrome Web Store).
 
 **Verification**
-- [ ] "Open Browser" → `/browser` renders functioning tabs.
-- [ ] Tabs + cookies persist across app restart.
-- [ ] Install-as-web-app adds a sidebar entry.
-- [ ] Web-app route opens with the URL prepopulated.
-- [ ] Right-click a web-app → Pin surfaces it in Pinned (requires v1b).
-- [ ] Settings → Browser: search engine change honored.
+- [ ] Install-as-web-app adds an entry to the Web Apps sub-list.
+- [ ] `/webapp/$id` opens with the installed URL.
+- [ ] Right-click web-app → Pin surfaces it in Pinned.
+- [ ] Settings → Browser: search engine change honored by URL bar queries.
+- [ ] Homepage setting honored by new tabs.
+- [ ] Clear browsing data clears cookies (verify with a test login).
 - [ ] Thread-embedded browser (regression) still works.
 
 ---
@@ -199,22 +235,42 @@ The gap today: you can view diffs and chat with agents, but you can't open `foo.
 
 ---
 
+## Cross-cutting lane — Hardening (always-open track)
+
+Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane runs in parallel with the feature phases and has no fixed sequencing — any agent with spare cycles can pick up an item. Every feature PR must land without regressing these, and some items trail each major feature.
+
+| ID | Title | Status |
+|----|-------|--------|
+| **hX1** | Persisted-state migration test harness — every zustand/persist store (theme, sidebar sections, pinned items, web-apps, workspaces, browser surface state) gets an explicit legacy-value migration test covering the prior on-disk shape | 📋 Planned |
+| **hX2** | WebSocket reconnect / session recovery test suite — simulate server restart, partial stream, network flap; verify thread state, browser tabs, and terminal runtimes recover predictably | 📋 Planned |
+| **hX3** | Codex + Claude parity regression suite — one shared test matrix that exercises the same prompt/MCP/model flows for both providers; any provider-only feature fails CI | 📋 Planned |
+| **hX4** | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold | 📋 Planned |
+| **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | 📋 Planned |
+| **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev | 📋 Planned |
+| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` catches packaging regressions before they reach users | 📋 Planned |
+
+---
+
 ## Dependencies map
 
 ```
-v1a ─┬→ v1b ─┬→ v1c ─┬→ v2a ─→ v2b ─→ v2c ───┐
-     │       │        │                       │
-     │       └─ v4c (snippets, needs pin)     │
-     │                                         │
-     └─ v3a ─→ v3b ─→ v3c ─────────────────── ┤
-                                                │
-v4a (palette) — any time after v1a ─────────── │
-v4b (ask-about-this) — needs v3a + v4a ────── ┤
-v4d (scratchpad) — needs v2a ────────────────┤
-v5a/b/c/d — any time after v1c ──────────────┤
-v6a — needs v1c + v2c ───────────────────────┤
-v6b — needs v6a ─────────────────────────────┤
-v7a — any time; earlier is better ─────────── ┘
+v1a ─┬→ v1b ────────────────────────┐
+     │                               │
+     ├→ v1c.1 → v1c.2 → v1c.3 ─────→ v2a → v2b → v2c
+     │           (v1b ∥ v1c.* after v1a)
+     │
+     └→ v3a → v3b → v3c
+
+v4a (palette) — any time after v1a
+v4b (ask-about-this) — needs v3a + v4a
+v4c (snippets/bookmarks) — needs v1b
+v4d (scratchpad) — needs v2a
+v5a/b/c/d — any time after v1c.3
+v6a — needs v1c.3 + v2c
+v6b — needs v6a
+v7a — any time; earlier is better
+
+Hardening lane (hX1–hX7) — runs continuously in parallel with all phases.
 ```
 
 ---
@@ -230,13 +286,18 @@ Each sub-PR is sized for one agent in one worktree. Sub-PRs within a phase that 
 
 1. **Before starting** — flip this file: sub-PR status to `🚧 worktree: <name>`. Open a draft PR early so others see the work.
 2. **While working** — keep changes scoped to the sub-PR. If you discover adjacent work worth doing, note it at the bottom of this file under "Spawned follow-ups" and keep going.
-3. **Before asking for review** — run:
-   - `code-review` skill (mandatory)
-   - `frontend-design` skill (mandatory for any UI PR)
-   - `simplify` skill (mandatory)
-   - `bun run check` and `bun run test` (verify script names during the PR)
-4. **Codex parity check** on every PR that touches agent, MCP, model, or prompt surfaces — confirm explicitly in the PR body.
-5. **On merge** — flip this file: sub-PR status to `✅ #<PR number> — <one-line summary>`. If scope shifted, update downstream sub-PR notes.
+3. **Completion gates — required by [AGENTS.md](AGENTS.md):**
+   - `bun fmt` — formats the workspace (oxfmt).
+   - `bun lint` — lints the workspace (oxlint).
+   - `bun typecheck` — runs `turbo run typecheck`.
+   - `bun run test` — runs Vitest. **Never use `bun test`** (different binary; AGENTS.md forbids it).
+   - Treat these as heavyweight checks: bundle them into one final verification pass per task; avoid rerunning the full set repeatedly during iteration.
+4. **Review gates:**
+   - `code-review` skill — mandatory on every PR.
+   - `frontend-design` skill — mandatory on any PR that changes UI (new components, styling, layout, copy in views, interaction behavior). Skippable for pure refactors with no user-visible change.
+   - `simplify` skill — self-pass by the authoring agent before marking the PR ready. Not a separate reviewer; it's "did I leave unneeded complexity on the floor?"
+5. **Codex parity check** on every PR that touches agent, MCP, model, or prompt surfaces — confirm explicitly in the PR body.
+6. **On merge** — flip this file: sub-PR status to `✅ #<PR number> — <one-line summary>`. If scope shifted, update downstream sub-PR notes.
 
 ### Branch + PR naming
 
