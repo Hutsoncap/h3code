@@ -22,6 +22,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { render } from "vitest-browser-react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
+import { resetNativeApiForTests } from "../nativeApi";
 import { getRouter } from "../router";
 import { useStore } from "../store";
 
@@ -230,6 +231,12 @@ async function mountApp(): Promise<{ cleanup: () => Promise<void> }> {
     },
     { timeout: 8_000, interval: 16 },
   );
+  await vi.waitFor(
+    () => {
+      expect(wsClient).not.toBeNull();
+    },
+    { timeout: 8_000, interval: 16 },
+  );
 
   return {
     cleanup: async () => {
@@ -253,6 +260,20 @@ function sendDomainEventPush(event: OrchestrationEvent) {
   );
 }
 
+function sendWelcomePush(payload: WsWelcomePayload = fixture.welcome) {
+  if (!wsClient) {
+    throw new Error("WebSocket client not connected");
+  }
+  wsClient.send(
+    JSON.stringify({
+      type: "push",
+      sequence: pushSequence++,
+      channel: WS_CHANNELS.serverWelcome,
+      data: payload,
+    }),
+  );
+}
+
 describe("EventRouter snapshot catch-up", () => {
   beforeAll(async () => {
     fixture = buildFixture();
@@ -272,6 +293,7 @@ describe("EventRouter snapshot catch-up", () => {
     document.body.innerHTML = "";
     wsClient = null;
     pushSequence = 1;
+    resetNativeApiForTests();
     localStorage.clear();
     useComposerDraftStore.setState({
       draftsByThreadId: {},
@@ -287,6 +309,7 @@ describe("EventRouter snapshot catch-up", () => {
   });
 
   afterEach(() => {
+    resetNativeApiForTests();
     document.body.innerHTML = "";
   });
 
@@ -374,6 +397,104 @@ describe("EventRouter snapshot catch-up", () => {
             state: "running",
             requestedAt: "2026-03-04T12:00:05.000Z",
           });
+        },
+        { timeout: 4_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("re-syncs from the latest snapshot when a welcome arrives after reconnect", async () => {
+    const mounted = await mountApp();
+
+    try {
+      sendDomainEventPush({
+        sequence: 2,
+        eventId: EventId.makeUnsafe("event-running-reconnect"),
+        aggregateKind: "thread",
+        aggregateId: THREAD_ID,
+        occurredAt: "2026-03-04T12:00:05.000Z",
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        type: "thread.session-set",
+        payload: {
+          threadId: THREAD_ID,
+          session: {
+            threadId: THREAD_ID,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.makeUnsafe("turn-reconnect-1"),
+            lastError: null,
+            updatedAt: "2026-03-04T12:00:05.000Z",
+          },
+        },
+      } satisfies Extract<OrchestrationEvent, { type: "thread.session-set" }>);
+
+      await vi.waitFor(
+        () => {
+          const thread = useStore.getState().threads.find((entry) => entry.id === THREAD_ID);
+          expect(thread?.session?.orchestrationStatus).toBe("running");
+          expect(thread?.latestTurn).toMatchObject({
+            turnId: TurnId.makeUnsafe("turn-reconnect-1"),
+            state: "running",
+          });
+        },
+        { timeout: 4_000, interval: 16 },
+      );
+
+      fixture.snapshot = {
+        ...createSnapshot({
+          updatedAt: "2026-03-04T12:00:09.000Z",
+          latestTurn: null,
+          messages: [
+            {
+              id: MessageId.makeUnsafe("msg-user-1"),
+              role: "user",
+              text: "hello",
+              turnId: null,
+              streaming: false,
+              source: "native",
+              createdAt: NOW_ISO,
+              updatedAt: NOW_ISO,
+            },
+            {
+              id: MessageId.makeUnsafe("msg-assistant-recovered"),
+              role: "assistant",
+              text: "Recovered after reconnect.",
+              turnId: null,
+              streaming: false,
+              source: "native",
+              createdAt: "2026-03-04T12:00:09.000Z",
+              updatedAt: "2026-03-04T12:00:09.000Z",
+            },
+          ],
+          session: {
+            threadId: THREAD_ID,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: "2026-03-04T12:00:09.000Z",
+          },
+        }),
+        snapshotSequence: 3,
+        updatedAt: "2026-03-04T12:00:09.000Z",
+      };
+
+      sendWelcomePush();
+
+      await vi.waitFor(
+        () => {
+          const thread = useStore.getState().threads.find((entry) => entry.id === THREAD_ID);
+          expect(thread?.updatedAt).toBe("2026-03-04T12:00:09.000Z");
+          expect(thread?.session?.orchestrationStatus).toBe("ready");
+          expect(thread?.latestTurn).toBeNull();
+          expect(thread?.messages.at(-1)?.text).toBe("Recovered after reconnect.");
         },
         { timeout: 4_000, interval: 16 },
       );

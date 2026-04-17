@@ -1,6 +1,6 @@
 import type { NativeApi } from "@t3tools/contracts";
 
-import { createWsNativeApi } from "./wsNativeApi";
+import { createWsNativeApi, resetWsNativeApiForTests } from "./wsNativeApi";
 
 let cachedApi: NativeApi | undefined;
 
@@ -23,4 +23,9 @@ export function ensureNativeApi(): NativeApi {
     throw new Error("Native API not found");
   }
   return api;
+}
+
+export function resetNativeApiForTests(): void {
+  cachedApi = undefined;
+  resetWsNativeApiForTests();
 }

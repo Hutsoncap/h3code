@@ -495,3 +495,10 @@ export function createWsNativeApi(): NativeApi {
   instance = { api, transport };
   return api;
 }
+
+export function resetWsNativeApiForTests(): void {
+  instance?.transport.dispose();
+  instance = null;
+  fallbackBrowserStateListeners.clear();
+  fallbackBrowserStates.clear();
+}
