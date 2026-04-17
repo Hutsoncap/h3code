@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
 import {
   DesktopNotificationShowResultSchema,
+  DesktopMenuAction,
   DesktopShellOpenExternalInputSchema,
   DesktopShellShowInFolderInputSchema,
   DesktopUpdateStateSchema,
@@ -66,8 +67,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
-      if (typeof action !== "string") return;
-      listener(action);
+      const parsedAction = safeDecodeIpcPayload(DesktopMenuAction, action);
+      if (!parsedAction) return;
+      listener(parsedAction);
     };
 
     ipcRenderer.on(MENU_ACTION_CHANNEL, wrappedListener);
