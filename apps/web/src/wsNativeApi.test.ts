@@ -374,6 +374,15 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("validates editor launch requests before sending them over the websocket bridge", async () => {
+    const { createWsNativeApi } = await import("./wsNativeApi");
+
+    const api = createWsNativeApi();
+    expect(() => api.shell.openInEditor("/tmp/project", "not-an-editor" as never)).toThrow();
+
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
   it("uses no client timeout for git.runStackedAction", async () => {
     requestMock.mockResolvedValue({
       action: "commit",
