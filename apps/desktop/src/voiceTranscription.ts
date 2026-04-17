@@ -178,7 +178,7 @@ async function resolveDesktopVoiceAuth(
         params: {
           clientInfo: {
             name: "dp-code-desktop",
-            title: "DP Code Desktop",
+            title: "H3 Code Desktop",
             version: app.getVersion(),
           },
           capabilities: { experimentalApi: true },

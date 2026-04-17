@@ -1,6 +1,11 @@
 import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getPersistedStorageItem,
+  removePersistedStorageItem,
+  setPersistedStorageItem,
+} from "../lib/persistedStorage";
 
 const isomorphicLocalStorage: Storage =
   typeof window !== "undefined"
@@ -26,20 +31,20 @@ const encode = <T, E>(schema: Schema.Codec<T, E>, value: T) =>
   Schema.encodeSync(Schema.fromJsonString(schema))(value);
 
 export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E>): T | null => {
-  const item = isomorphicLocalStorage.getItem(key);
+  const item = getPersistedStorageItem(isomorphicLocalStorage, key);
   return item ? decode(schema, item) : null;
 };
 
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(schema, value);
-  isomorphicLocalStorage.setItem(key, valueToSet);
+  setPersistedStorageItem(isomorphicLocalStorage, key, valueToSet);
 };
 
 export const removeLocalStorageItem = (key: string) => {
-  isomorphicLocalStorage.removeItem(key);
+  removePersistedStorageItem(isomorphicLocalStorage, key);
 };
 
-const LOCAL_STORAGE_CHANGE_EVENT = "t3code:local_storage_change";
+const LOCAL_STORAGE_CHANGE_EVENT = "h3code:local_storage_change";
 
 interface LocalStorageChangeDetail {
   key: string;

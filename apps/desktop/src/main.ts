@@ -56,7 +56,7 @@ import {
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
-import { DesktopBrowserManager } from "./browserManager";
+import { DesktopBrowserManager, migrateLegacyBrowserSessionPartition } from "./browserManager";
 
 syncShellEnvironment();
 
@@ -88,15 +88,27 @@ const BROWSER_NEW_TAB_CHANNEL = "desktop:browser-new-tab";
 const BROWSER_CLOSE_TAB_CHANNEL = "desktop:browser-close-tab";
 const BROWSER_SELECT_TAB_CHANNEL = "desktop:browser-select-tab";
 const BROWSER_OPEN_DEVTOOLS_CHANNEL = "desktop:browser-open-devtools";
-const BASE_DIR = process.env.T3CODE_HOME?.trim() || Path.join(OS.homedir(), ".dpcode");
+const H3CODE_HOME_DIRNAME = ".h3code";
+const LEGACY_DPCODE_HOME_DIRNAME = ".dpcode";
+const BASE_DIR =
+  process.env.H3CODE_HOME?.trim() ||
+  process.env.T3CODE_HOME?.trim() ||
+  resolveRenamedDirectory({
+    canonicalPath: Path.join(OS.homedir(), H3CODE_HOME_DIRNAME),
+    legacyPaths: [Path.join(OS.homedir(), LEGACY_DPCODE_HOME_DIRNAME)],
+  });
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
-const DESKTOP_SCHEME = "t3";
+const DESKTOP_SCHEME = "h3";
+const LEGACY_DESKTOP_SCHEME = "t3";
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
-const APP_DISPLAY_NAME = isDevelopment ? "DP Code (Dev)" : "DP Code (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "H3 Code (Dev)" : "H3 Code (Alpha)";
 const APP_USER_MODEL_ID = isDevelopment ? "com.t3tools.dpcode.dev" : "com.t3tools.dpcode";
-const USER_DATA_DIR_NAME = isDevelopment ? "t3code-dev" : "t3code";
-const LEGACY_USER_DATA_DIR_NAME = isDevelopment ? "DP Code (Dev)" : "DP Code (Alpha)";
+const USER_DATA_DIR_NAME = isDevelopment ? "h3code-dev" : "h3code";
+const LEGACY_USER_DATA_DIR_NAMES = [
+  isDevelopment ? "t3code-dev" : "t3code",
+  isDevelopment ? "DP Code (Dev)" : "DP Code (Alpha)",
+] as const;
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
@@ -142,6 +154,30 @@ const initialUpdateState = (): DesktopUpdateState =>
 
 function logTimestamp(): string {
   return new Date().toISOString();
+}
+
+function resolveRenamedDirectory(input: {
+  canonicalPath: string;
+  legacyPaths: readonly string[];
+}): string {
+  if (FS.existsSync(input.canonicalPath)) {
+    return input.canonicalPath;
+  }
+
+  for (const legacyPath of input.legacyPaths) {
+    if (!FS.existsSync(legacyPath)) {
+      continue;
+    }
+
+    try {
+      FS.renameSync(legacyPath, input.canonicalPath);
+      return input.canonicalPath;
+    } catch {
+      return legacyPath;
+    }
+  }
+
+  return input.canonicalPath;
 }
 
 function logScope(scope: string): string {
@@ -351,17 +387,17 @@ function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
   return updateState.errorContext;
 }
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: DESKTOP_SCHEME,
+protocol.registerSchemesAsPrivileged(
+  [DESKTOP_SCHEME, LEGACY_DESKTOP_SCHEME].map((scheme) => ({
+    scheme,
     privileges: {
       standard: true,
       secure: true,
       supportFetchAPI: true,
       corsEnabled: true,
     },
-  },
-]);
+  })),
+);
 
 function resolveAppRoot(): string {
   if (!app.isPackaged) {
@@ -507,7 +543,7 @@ function handleFatalStartupError(stage: string, error: unknown): void {
   console.error(`[desktop] fatal startup error (${stage})`, error);
   if (!isQuitting) {
     isQuitting = true;
-    dialog.showErrorBox("DP Code failed to start", `Stage: ${stage}\n${message}${detail}`);
+    dialog.showErrorBox("H3 Code failed to start", `Stage: ${stage}\n${message}${detail}`);
   }
   stopBackend();
   restoreStdIoCapture?.();
@@ -528,28 +564,33 @@ function registerDesktopProtocol(): void {
   const staticRootPrefix = `${staticRootResolved}${Path.sep}`;
   const fallbackIndex = Path.join(staticRootResolved, "index.html");
 
-  protocol.registerFileProtocol(DESKTOP_SCHEME, (request, callback) => {
-    try {
-      const candidate = resolveDesktopStaticPath(staticRootResolved, request.url);
-      const resolvedCandidate = Path.resolve(candidate);
-      const isInRoot =
-        resolvedCandidate === fallbackIndex || resolvedCandidate.startsWith(staticRootPrefix);
-      const isAssetRequest = isStaticAssetRequest(request.url);
+  const registerScheme = (scheme: string) => {
+    protocol.registerFileProtocol(scheme, (request, callback) => {
+      try {
+        const candidate = resolveDesktopStaticPath(staticRootResolved, request.url);
+        const resolvedCandidate = Path.resolve(candidate);
+        const isInRoot =
+          resolvedCandidate === fallbackIndex || resolvedCandidate.startsWith(staticRootPrefix);
+        const isAssetRequest = isStaticAssetRequest(request.url);
 
-      if (!isInRoot || !FS.existsSync(resolvedCandidate)) {
-        if (isAssetRequest) {
-          callback({ error: -6 });
+        if (!isInRoot || !FS.existsSync(resolvedCandidate)) {
+          if (isAssetRequest) {
+            callback({ error: -6 });
+            return;
+          }
+          callback({ path: fallbackIndex });
           return;
         }
-        callback({ path: fallbackIndex });
-        return;
-      }
 
-      callback({ path: resolvedCandidate });
-    } catch {
-      callback({ path: fallbackIndex });
-    }
-  });
+        callback({ path: resolvedCandidate });
+      } catch {
+        callback({ path: fallbackIndex });
+      }
+    });
+  };
+
+  registerScheme(DESKTOP_SCHEME);
+  registerScheme(LEGACY_DESKTOP_SCHEME);
 
   desktopProtocolRegistered = true;
 }
@@ -615,7 +656,7 @@ async function checkForUpdatesFromMenu(): Promise<void> {
     void dialog.showMessageBox({
       type: "info",
       title: "You're up to date!",
-      message: `DP Code ${updateState.currentVersion} is currently the newest version available.`,
+      message: `H3 Code ${updateState.currentVersion} is currently the newest version available.`,
       buttons: ["OK"],
     });
   } else if (updateState.status === "error") {
@@ -835,9 +876,9 @@ function showDesktopNotification(input: {
  * parentheses (e.g. `~/.config/DP Code (Alpha)` on Linux). This is
  * unfriendly for shell usage and violates Linux naming conventions.
  *
- * We override it to a clean lowercase name (`t3code`). If the legacy
- * directory already exists we keep using it so existing users don't
- * lose their Chromium profile data (localStorage, cookies, sessions).
+ * We override it to a clean lowercase name (`h3code`). Existing `t3code`
+ * and older display-name directories are migrated forward when possible,
+ * then retained as a fallback if the rename cannot complete.
  */
 function resolveUserDataPath(): string {
   const appDataBase =
@@ -847,12 +888,10 @@ function resolveUserDataPath(): string {
         ? Path.join(OS.homedir(), "Library", "Application Support")
         : process.env.XDG_CONFIG_HOME || Path.join(OS.homedir(), ".config");
 
-  const legacyPath = Path.join(appDataBase, LEGACY_USER_DATA_DIR_NAME);
-  if (FS.existsSync(legacyPath)) {
-    return legacyPath;
-  }
-
-  return Path.join(appDataBase, USER_DATA_DIR_NAME);
+  return resolveRenamedDirectory({
+    canonicalPath: Path.join(appDataBase, USER_DATA_DIR_NAME),
+    legacyPaths: LEGACY_USER_DATA_DIR_NAMES.map((dirname) => Path.join(appDataBase, dirname)),
+  });
 }
 
 function configureAppIdentity(): void {
@@ -1715,12 +1754,13 @@ app.on("before-quit", () => {
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
     writeDesktopLogHeader("app ready");
     configureAppIdentity();
     configureMediaPermissions();
     configureApplicationMenu();
     registerDesktopProtocol();
+    await migrateLegacyBrowserSessionPartition();
     configureAutoUpdater();
     void bootstrap().catch((error) => {
       handleFatalStartupError("bootstrap", error);

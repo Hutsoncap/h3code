@@ -9,6 +9,7 @@ import { type TerminalActivityState, type TerminalCliKind } from "@t3tools/share
 import type { ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { createAliasedStateStorage } from "./lib/storage";
 import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,
   DEFAULT_THREAD_TERMINAL_ID,
@@ -53,7 +54,7 @@ interface ThreadTerminalState {
   activeTerminalGroupId: string;
 }
 
-const TERMINAL_STATE_STORAGE_KEY = "t3code:terminal-state:v1";
+const TERMINAL_STATE_STORAGE_KEY = "h3code:terminal-state:v1";
 
 function normalizeTerminalIds(terminalIds: string[]): string[] {
   const ids = [...new Set(terminalIds.map((id) => id.trim()).filter((id) => id.length > 0))];
@@ -1362,7 +1363,7 @@ export const useTerminalStateStore = create<TerminalStateStoreState>()(
     {
       name: TERMINAL_STATE_STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
       partialize: (state) => ({
         terminalStateByThreadId: state.terminalStateByThreadId,
       }),

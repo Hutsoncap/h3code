@@ -57,7 +57,7 @@ function warnIfAlphaAppRunning() {
 
   const result = spawnSync(
     "pgrep",
-    ["-fal", "/Applications/DP Code \\(Alpha\\)\\.app/Contents/MacOS/DP Code \\(Alpha\\)"],
+    ["-fal", "/Applications/H3 Code \\(Alpha\\)\\.app/Contents/MacOS/H3 Code \\(Alpha\\)"],
     { encoding: "utf8" },
   );
   const output = typeof result.stdout === "string" ? result.stdout.trim() : "";
@@ -66,7 +66,7 @@ function warnIfAlphaAppRunning() {
   }
 
   console.error(
-    "[desktop-dev] DP Code (Alpha) is still running. Close it before testing voice in DP Code (Dev), or you may be looking at the wrong app/runtime.",
+    "[desktop-dev] H3 Code (Alpha) is still running. Close it before testing voice in H3 Code (Dev), or you may be looking at the wrong app/runtime.",
   );
   console.error(output);
 }

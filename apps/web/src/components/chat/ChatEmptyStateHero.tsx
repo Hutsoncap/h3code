@@ -8,7 +8,7 @@ export const ChatEmptyStateHero = memo(function ChatEmptyStateHero({
   return (
     <div className="flex flex-col items-center gap-4 select-none">
       <img
-        alt="DP Code logo"
+        alt="H3 Code logo"
         className="size-14 rounded-lg object-contain"
         draggable={false}
         height={112}

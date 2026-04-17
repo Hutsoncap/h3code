@@ -25,6 +25,7 @@ import {
 import { Debouncer } from "@tanstack/react-pacer";
 import { hasLiveTurnTailWork } from "./session-logic";
 import { deriveThreadSummaryMetadata } from "@t3tools/shared/threadSummary";
+import { getPersistedStorageItem } from "./lib/persistedStorage";
 
 // ── State ────────────────────────────────────────────────────────────
 
@@ -40,8 +41,9 @@ type ReadModelThread = OrchestrationReadModel["threads"][number];
 type ReadModelMessage = OrchestrationReadModel["threads"][number]["messages"][number];
 type ThreadMessageSentEvent = Extract<OrchestrationEvent, { type: "thread.message-sent" }>;
 
-const PERSISTED_STATE_KEY = "t3code:renderer-state:v8";
+const PERSISTED_STATE_KEY = "h3code:renderer-state:v8";
 const LEGACY_PERSISTED_STATE_KEYS = [
+  "t3code:renderer-state:v8",
   "t3code:renderer-state:v7",
   "t3code:renderer-state:v6",
   "t3code:renderer-state:v5",
@@ -106,7 +108,9 @@ function rememberProjectLocalNames(
 function readPersistedState(): AppState {
   if (typeof window === "undefined") return initialState;
   try {
-    const raw = window.localStorage.getItem(PERSISTED_STATE_KEY);
+    const raw = getPersistedStorageItem(window.localStorage, PERSISTED_STATE_KEY, [
+      ...LEGACY_PERSISTED_STATE_KEYS,
+    ]);
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as {
       expandedProjectCwds?: string[];

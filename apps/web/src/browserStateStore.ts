@@ -8,8 +8,9 @@
 import type { ThreadBrowserState, ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { createAliasedStateStorage } from "./lib/storage";
 
-const BROWSER_STATE_STORAGE_KEY = "t3code:browser-state:v1";
+const BROWSER_STATE_STORAGE_KEY = "h3code:browser-state:v1";
 const BROWSER_HISTORY_LIMIT = 12;
 const EMPTY_BROWSER_HISTORY: BrowserHistoryEntry[] = [];
 
@@ -99,7 +100,7 @@ export const useBrowserStateStore = create<BrowserStateStore>()(
     }),
     {
       name: BROWSER_STATE_STORAGE_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
     },
   ),
 );

@@ -6,6 +6,7 @@
 import { type ProjectId, type ThreadId, type TurnId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { createAliasedStateStorage } from "./lib/storage";
 import { randomUUID } from "./lib/utils";
 import { type ChatRightPanel } from "./diffRouteSearch";
 import { removeThreadFromSplitView } from "./splitView.logic";
@@ -60,7 +61,7 @@ interface SplitViewStore {
   removeThreadFromSplitViews: (threadId: ThreadId) => void;
 }
 
-const SPLIT_VIEW_STORAGE_KEY = "t3code:split-view-state:v1";
+const SPLIT_VIEW_STORAGE_KEY = "h3code:split-view-state:v1";
 const DEFAULT_RATIO = 0.5;
 const MIN_RATIO = 0.25;
 const MAX_RATIO = 0.75;
@@ -328,7 +329,7 @@ export const useSplitViewStore = create<SplitViewStore>()(
     }),
     {
       name: SPLIT_VIEW_STORAGE_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
     },
   ),
 );

@@ -582,7 +582,7 @@ function SettingsRouteView() {
       return;
     }
 
-    const notification = new Notification(title, { body, tag: "t3code:test-notification" });
+    const notification = new Notification(title, { body, tag: "h3code:test-notification" });
     notification.addEventListener("click", () => {
       window.focus();
     });
@@ -1031,7 +1031,7 @@ function SettingsRouteView() {
         <div className="space-y-2">
           <SettingsRow
             title="Theme"
-            description="Choose how DP Code looks across the app."
+            description="Choose how H3 Code looks across the app."
             resetAction={
               theme !== "system" ? (
                 <SettingResetButton label="theme" onClick={() => setTheme("system")} />

@@ -1,6 +1,6 @@
 import * as Crypto from "node:crypto";
 
-import { BrowserWindow, shell, WebContentsView } from "electron";
+import { BrowserWindow, session, shell, WebContentsView } from "electron";
 import type {
   BrowserNavigateInput,
   BrowserNewTabInput,
@@ -15,7 +15,8 @@ import type {
 } from "@t3tools/contracts";
 
 const ABOUT_BLANK_URL = "about:blank";
-const BROWSER_SESSION_PARTITION = "persist:t3code-browser";
+const BROWSER_SESSION_PARTITION = "persist:h3code-browser";
+const LEGACY_BROWSER_SESSION_PARTITION = "persist:t3code-browser";
 const BROWSER_THREAD_SUSPEND_DELAY_MS = 30_000;
 const BROWSER_ERROR_ABORTED = -3;
 const SEARCH_URL_PREFIX = "https://www.google.com/search?q=";
@@ -176,6 +177,60 @@ function mapBrowserLoadError(errorCode: number): string {
 
 function buildRuntimeKey(threadId: ThreadId, tabId: string): string {
   return `${threadId}:${tabId}`;
+}
+
+function resolveCookieUrl(cookie: Electron.Cookie): string | null {
+  const normalizedDomain = cookie.domain?.replace(/^\./, "").trim() ?? "";
+  if (normalizedDomain.length === 0) {
+    return null;
+  }
+
+  const normalizedPath = cookie.path?.trim() || "/";
+  const path = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+  const protocol = cookie.secure === true ? "https" : "http";
+  return `${protocol}://${normalizedDomain}${path}`;
+}
+
+export async function migrateLegacyBrowserSessionPartition(): Promise<void> {
+  const nextSession = session.fromPartition(BROWSER_SESSION_PARTITION);
+  const legacySession = session.fromPartition(LEGACY_BROWSER_SESSION_PARTITION);
+  const [nextCookies, legacyCookies] = await Promise.all([
+    nextSession.cookies.get({}),
+    legacySession.cookies.get({}),
+  ]);
+
+  if (nextCookies.length > 0 || legacyCookies.length === 0) {
+    return;
+  }
+
+  for (const legacyCookie of legacyCookies) {
+    const url = resolveCookieUrl(legacyCookie);
+    if (!url) {
+      continue;
+    }
+
+    try {
+      const cookieDetails: Electron.CookiesSetDetails = {
+        url,
+        name: legacyCookie.name,
+        value: legacyCookie.value,
+        ...(legacyCookie.domain ? { domain: legacyCookie.domain } : {}),
+        ...(legacyCookie.path ? { path: legacyCookie.path } : {}),
+        ...(typeof legacyCookie.secure === "boolean" ? { secure: legacyCookie.secure } : {}),
+        ...(typeof legacyCookie.httpOnly === "boolean" ? { httpOnly: legacyCookie.httpOnly } : {}),
+        ...(legacyCookie.sameSite ? { sameSite: legacyCookie.sameSite } : {}),
+        ...(!legacyCookie.session && typeof legacyCookie.expirationDate === "number"
+          ? { expirationDate: legacyCookie.expirationDate }
+          : {}),
+      };
+      await nextSession.cookies.set(cookieDetails);
+    } catch {
+      // Ignore individual cookie failures so one malformed legacy cookie does
+      // not block the rest of the browser-session migration.
+    }
+  }
+
+  await nextSession.flushStorageData();
 }
 
 export class DesktopBrowserManager {

@@ -1,17 +1,17 @@
-# DP Code
+# H3 Code
 
-DP Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
+H3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
 
 This project started as a clone of [T3Code](https://github.com/pingdotgg/t3code), and has since been customized into its own product with different branding, packaging, release wiring, and product-level behavior.
 
 ## How to use
 
 > [!WARNING]
-> You need to have [Codex CLI](https://github.com/openai/codex) installed and authorized for DP Code to work.
+> You need to have [Codex CLI](https://github.com/openai/codex) installed and authorized for H3 Code to work.
 
 You can also just install the desktop app. It's cooler.
 
-Install the [desktop app from the Releases page](https://github.com/Emanuele-web04/dpcode/releases)
+Install the [desktop app from the Releases page](https://github.com/Hutsoncap/h3code/releases)
 
 ## Some notes
 

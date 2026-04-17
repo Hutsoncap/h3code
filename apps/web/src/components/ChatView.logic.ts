@@ -20,8 +20,8 @@ import {
   type TerminalContextDraft,
 } from "../lib/terminalContext";
 
-export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
-const WORKTREE_NAME_PREFIX = "dpcode";
+export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "h3code:last-invoked-script-by-project";
+const WORKTREE_NAME_PREFIX = "h3code";
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 
@@ -133,7 +133,7 @@ export function describeVoiceRecordingStartError(error: unknown): string {
   const errorName = typeof error.name === "string" ? error.name : "";
 
   if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
-    return "Microphone access was denied. Enable it in macOS Privacy & Security > Microphone for DP Code, then try again.";
+    return "Microphone access was denied. Enable it in macOS Privacy & Security > Microphone for H3 Code, then try again.";
   }
   if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
     return "No microphone was found. Connect one and try again.";
@@ -299,7 +299,7 @@ export function buildSuggestedWorktreeName(input: {
   title?: string | null;
 }): string {
   const normalizedExisting =
-    input.associatedWorktreeBranch?.trim().replace(/^(codex|t3code|dpcode)\//i, "") ?? "";
+    input.associatedWorktreeBranch?.trim().replace(/^(codex|h3code|t3code|dpcode)\//i, "") ?? "";
   const preferred =
     normalizedExisting ||
     `${WORKTREE_NAME_PREFIX}/${sanitizeBranchFragment(input.title ?? "update")}`;

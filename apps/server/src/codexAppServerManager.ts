@@ -534,7 +534,7 @@ export function buildCodexInitializeParams() {
   return {
     clientInfo: {
       name: "t3code_desktop",
-      title: "DP Code Desktop",
+      title: "H3 Code Desktop",
       version: "0.1.0",
     },
     capabilities: {

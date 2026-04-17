@@ -42,7 +42,7 @@ const DEFAULT_BASE_BRANCH_CANDIDATES = ["main", "master"] as const;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const WORKING_TREE_DIFF_TIMEOUT_MS = 15_000;
 const MAX_UNTRACKED_DIFF_CONCURRENCY = 4;
-const AUTO_DETACHED_WORKTREE_DIRNAME = "dpcode";
+const AUTO_DETACHED_WORKTREE_DIRNAME = "h3code";
 const NON_REPOSITORY_STATUS_DETAILS = Object.freeze({
   isRepo: false,
   hasOriginRemote: false,

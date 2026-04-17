@@ -24,7 +24,11 @@ import {
   buildPromptThreadTitleFallback,
   isGenericChatThreadTitle,
 } from "@t3tools/shared/chatThreads";
-import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+import {
+  isTemporaryWorktreeBranch,
+  stripTemporaryWorktreeBranchPrefix,
+  WORKTREE_BRANCH_PREFIX,
+} from "@t3tools/shared/git";
 import { resolveThreadWorkspaceState } from "@t3tools/shared/threadEnvironment";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
@@ -128,17 +132,7 @@ function stalePendingRequestDetail(
 }
 
 function buildGeneratedWorktreeBranchName(raw: string): string {
-  const normalized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/^refs\/heads\//, "")
-    .replace(/['"`]/g, "");
-
-  const withoutPrefix = normalized.startsWith(`${WORKTREE_BRANCH_PREFIX}/`)
-    ? normalized.slice(`${WORKTREE_BRANCH_PREFIX}/`.length)
-    : normalized;
-
-  const branchFragment = withoutPrefix
+  const branchFragment = stripTemporaryWorktreeBranchPrefix(raw)
     .replace(/[^a-z0-9/_-]+/g, "-")
     .replace(/\/+/g, "/")
     .replace(/-+/g, "-")
