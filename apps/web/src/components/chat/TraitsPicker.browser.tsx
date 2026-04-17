@@ -328,7 +328,7 @@ describe("TraitsPicker (Codex)", () => {
     });
 
     await vi.waitFor(() => {
-      expect(document.body.textContent ?? "").toContain("High · Fast");
+      expect(document.body.textContent ?? "").toMatch(/High\s*·\s*Fast/);
     });
   });
 
