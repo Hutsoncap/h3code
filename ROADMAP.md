@@ -327,6 +327,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX8**  | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | ✅ #26 — provider model resolution parity matrix added                                                                                                                                                      |
 | **hX9**  | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | ✅ #27 — open-in-editor payload validation added                                                                                                                                                            |
 | **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport                                                     | ✅ #28 — shared IPC/browser contract coverage added                                                                                                                                                         |
+| **hX11** | Sidebar search highlight determinism — extract duplicate-match highlighting into a pure helper and cover repeated-token rendering so palette updates stay stable under rerenders                 | 🚧 worktree: codex/hx11-sidebar-search-highlight-hardening                                                                                                                                                  |
 
 ---
 
@@ -359,7 +360,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX9) — runs continuously in parallel with all phases,
+Hardening lane (hX1–hX11) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
