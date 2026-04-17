@@ -415,4 +415,4 @@ Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narro
 
 _Agents: append items here when you spot adjacent work worth doing but out of scope for your current PR. Include enough context that the next agent can act without re-reading this conversation._
 
-(none yet)
+- `chatview-overlay-extraction` - presentational extraction for the remaining ChatView overlay cluster in `apps/web/src/components/ChatView.tsx`; worktree: `codex/p0.3-chatview-overlays`.

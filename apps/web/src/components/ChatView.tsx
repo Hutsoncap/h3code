@@ -134,7 +134,6 @@ import { useComposerCommandMenuItems } from "../hooks/useComposerCommandMenuItem
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import BranchToolbar from "./BranchToolbar";
-import { ThreadWorktreeHandoffDialog } from "./ThreadWorktreeHandoffDialog";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
@@ -201,7 +200,6 @@ import {
 } from "../splitViewStore";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
-import { ComposerSlashStatusDialog } from "./chat/ComposerSlashStatusDialog";
 import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
 import { ComposerCommandItem, ComposerCommandMenu } from "./chat/ComposerCommandMenu";
@@ -216,6 +214,7 @@ import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
 import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip";
 import { ActivePlanCard } from "./chat/ActivePlanCard";
+import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
   getComposerProviderState,
@@ -6183,27 +6182,29 @@ export default function ChatView({
         onDismissThreadError={dismissActiveThreadError}
       />
 
-      <ComposerSlashStatusDialog
-        open={isSlashStatusDialogOpen}
-        onOpenChange={setIsSlashStatusDialogOpen}
-        selectedModel={selectedModel}
-        fastModeEnabled={fastModeEnabled}
-        selectedPromptEffort={selectedPromptEffort}
-        interactionMode={interactionMode}
-        envMode={envMode}
-        envState={envState}
-        branch={activeThread?.branch ?? activeRootBranch}
-        contextWindow={activeContextWindow}
-        cumulativeCostUsd={activeCumulativeCostUsd}
-        rateLimitStatus={activeRateLimitStatus}
-      />
-      <ThreadWorktreeHandoffDialog
-        open={worktreeHandoffDialogOpen}
-        worktreeName={worktreeHandoffName}
-        busy={handoffBusy}
-        onWorktreeNameChange={setWorktreeHandoffName}
-        onOpenChange={setWorktreeHandoffDialogOpen}
-        onConfirm={confirmWorktreeHandoff}
+      <ChatViewDialogs
+        composerSlashStatusDialogProps={{
+          open: isSlashStatusDialogOpen,
+          onOpenChange: setIsSlashStatusDialogOpen,
+          selectedModel,
+          fastModeEnabled,
+          selectedPromptEffort,
+          interactionMode,
+          envMode,
+          envState,
+          branch: activeThread?.branch ?? activeRootBranch,
+          contextWindow: activeContextWindow,
+          cumulativeCostUsd: activeCumulativeCostUsd,
+          rateLimitStatus: activeRateLimitStatus,
+        }}
+        threadWorktreeHandoffDialogProps={{
+          open: worktreeHandoffDialogOpen,
+          worktreeName: worktreeHandoffName,
+          busy: handoffBusy,
+          onWorktreeNameChange: setWorktreeHandoffName,
+          onOpenChange: setWorktreeHandoffDialogOpen,
+          onConfirm: confirmWorktreeHandoff,
+        }}
       />
 
       <ChatExpandedImageDialog
