@@ -9,6 +9,8 @@ import {
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
   ContextMenuPositionSchema,
+  DesktopUpdateActionResultSchema,
+  DesktopUpdateStateSchema,
   DesktopNotificationInputSchema,
   DesktopNotificationShowResultSchema,
   DesktopServerTranscribeVoiceInputSchema,
@@ -25,6 +27,8 @@ const decodeBrowserTabInput = Schema.decodeUnknownSync(BrowserTabInputSchema);
 const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
   DesktopServerTranscribeVoiceInputSchema,
 );
+const decodeDesktopUpdateState = Schema.decodeUnknownSync(DesktopUpdateStateSchema);
+const decodeDesktopUpdateActionResult = Schema.decodeUnknownSync(DesktopUpdateActionResultSchema);
 const decodeDesktopNotificationInput = Schema.decodeUnknownSync(DesktopNotificationInputSchema);
 const decodeDesktopNotificationShowResult = Schema.decodeUnknownSync(
   DesktopNotificationShowResultSchema,
@@ -171,6 +175,102 @@ describe("DesktopNotificationInputSchema", () => {
       decodeDesktopNotificationInput({
         title: "Build complete",
         threadId: 42,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("DesktopUpdateStateSchema", () => {
+  it("parses desktop update snapshots", () => {
+    const parsed = decodeDesktopUpdateState({
+      enabled: true,
+      status: "downloading",
+      currentVersion: "1.2.3",
+      hostArch: "arm64",
+      appArch: "x64",
+      runningUnderArm64Translation: true,
+      availableVersion: "1.2.4",
+      downloadedVersion: null,
+      downloadPercent: 42,
+      checkedAt: "2026-04-17T12:34:56.000Z",
+      message: "Downloading update",
+      errorContext: null,
+      canRetry: false,
+    });
+
+    expect(parsed.status).toBe("downloading");
+    expect(parsed.availableVersion).toBe("1.2.4");
+    expect(parsed.downloadPercent).toBe(42);
+  });
+
+  it("rejects invalid status literals", () => {
+    expect(() =>
+      decodeDesktopUpdateState({
+        enabled: true,
+        status: "installing",
+        currentVersion: "1.2.3",
+        hostArch: "arm64",
+        appArch: "arm64",
+        runningUnderArm64Translation: false,
+        availableVersion: null,
+        downloadedVersion: null,
+        downloadPercent: null,
+        checkedAt: null,
+        message: null,
+        errorContext: null,
+        canRetry: true,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("DesktopUpdateActionResultSchema", () => {
+  it("parses nested desktop update action results", () => {
+    const parsed = decodeDesktopUpdateActionResult({
+      accepted: true,
+      completed: false,
+      state: {
+        enabled: true,
+        status: "downloaded",
+        currentVersion: "1.2.3",
+        hostArch: "arm64",
+        appArch: "arm64",
+        runningUnderArm64Translation: false,
+        availableVersion: "1.2.4",
+        downloadedVersion: "1.2.4",
+        downloadPercent: 100,
+        checkedAt: "2026-04-17T12:34:56.000Z",
+        message: "Ready to install",
+        errorContext: null,
+        canRetry: false,
+      },
+    });
+
+    expect(parsed.accepted).toBe(true);
+    expect(parsed.completed).toBe(false);
+    expect(parsed.state.status).toBe("downloaded");
+  });
+
+  it("rejects malformed nested state", () => {
+    expect(() =>
+      decodeDesktopUpdateActionResult({
+        accepted: true,
+        completed: false,
+        state: {
+          enabled: true,
+          status: "error",
+          currentVersion: "1.2.3",
+          hostArch: "arm64",
+          appArch: "arm64",
+          runningUnderArm64Translation: false,
+          availableVersion: "1.2.4",
+          downloadedVersion: null,
+          downloadPercent: "100",
+          checkedAt: "2026-04-17T12:34:56.000Z",
+          message: "Install failed",
+          errorContext: "install",
+          canRetry: true,
+        },
       }),
     ).toThrow();
   });
