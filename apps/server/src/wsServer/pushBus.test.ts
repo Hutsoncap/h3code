@@ -12,9 +12,13 @@ class MockWebSocket {
   readonly OPEN = MockWebSocket.OPEN;
   readyState = MockWebSocket.OPEN;
   readonly sent: string[] = [];
+  throwOnSend = false;
   private readonly waiters = new Set<() => void>();
 
   send(message: string) {
+    if (this.throwOnSend) {
+      throw new Error("mock send failure");
+    }
     this.sent.push(message);
     for (const waiter of this.waiters) {
       waiter();
@@ -147,6 +151,66 @@ describe("makeServerPushBus", () => {
     ),
   );
 
+  it.live("continues broadcast delivery after one client.send throws", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const failingClient = new MockWebSocket();
+        failingClient.throwOnSend = true;
+        const laterClientA = new MockWebSocket();
+        const laterClientB = new MockWebSocket();
+        const clients = yield* Ref.make(
+          new Set<WebSocket>([
+            failingClient as unknown as WebSocket,
+            laterClientA as unknown as WebSocket,
+            laterClientB as unknown as WebSocket,
+          ]),
+        );
+        const deliveries: Array<{ channel: string; recipients: number }> = [];
+        const pushBus = yield* makeServerPushBus({
+          clients,
+          logOutgoingPush: (push, recipients) => {
+            deliveries.push({ channel: push.channel, recipients });
+          },
+        });
+
+        yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+          issues: [],
+          providers: [],
+        });
+
+        yield* Effect.promise(() => laterClientA.waitForSentCount(1));
+        yield* Effect.promise(() => laterClientB.waitForSentCount(1));
+
+        expect(failingClient.sent).toHaveLength(0);
+        expect(laterClientA.sent).toHaveLength(1);
+        expect(laterClientB.sent).toHaveLength(1);
+        const laterMessageA = laterClientA.sent[0];
+        expect(laterMessageA).toBeDefined();
+        expect(JSON.parse(laterMessageA!)).toEqual({
+          type: "push",
+          sequence: 1,
+          channel: WS_CHANNELS.serverConfigUpdated,
+          data: {
+            issues: [],
+            providers: [],
+          },
+        });
+        const laterMessageB = laterClientB.sent[0];
+        expect(laterMessageB).toBeDefined();
+        expect(JSON.parse(laterMessageB!)).toEqual({
+          type: "push",
+          sequence: 1,
+          channel: WS_CHANNELS.serverConfigUpdated,
+          data: {
+            issues: [],
+            providers: [],
+          },
+        });
+        expect(deliveries).toEqual([{ channel: WS_CHANNELS.serverConfigUpdated, recipients: 2 }]);
+      }),
+    ),
+  );
+
   it.live("skips closed clients while preserving sequence order for later broadcasts", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -186,6 +250,62 @@ describe("makeServerPushBus", () => {
         yield* Effect.promise(() => openClient.waitForSentCount(1));
         expect(closedClient.sent).toHaveLength(0);
         const broadcastMessage = openClient.sent[0];
+        expect(broadcastMessage).toBeDefined();
+        expect(JSON.parse(broadcastMessage!)).toEqual({
+          type: "push",
+          sequence: 2,
+          channel: WS_CHANNELS.serverConfigUpdated,
+          data: {
+            issues: [],
+            providers: [],
+          },
+        });
+        expect(deliveries).toEqual([
+          { channel: WS_CHANNELS.serverWelcome, recipients: 0 },
+          { channel: WS_CHANNELS.serverConfigUpdated, recipients: 1 },
+        ]);
+      }),
+    ),
+  );
+
+  it.live("isolates targeted send failures from later queued publishes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const healthyBroadcastClient = new MockWebSocket();
+        const failingTargetClient = new MockWebSocket();
+        failingTargetClient.throwOnSend = true;
+
+        const clients = yield* Ref.make(
+          new Set<WebSocket>([healthyBroadcastClient as unknown as WebSocket]),
+        );
+        const deliveries: Array<{ channel: string; recipients: number }> = [];
+        const pushBus = yield* makeServerPushBus({
+          clients,
+          logOutgoingPush: (push, recipients) => {
+            deliveries.push({ channel: push.channel, recipients });
+          },
+        });
+
+        const delivered = yield* pushBus.publishClient(
+          failingTargetClient as unknown as WebSocket,
+          WS_CHANNELS.serverWelcome,
+          {
+            cwd: "/tmp/project",
+            projectName: "project",
+          },
+        );
+        expect(delivered).toBe(false);
+
+        yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+          issues: [],
+          providers: [],
+        });
+
+        yield* Effect.promise(() => healthyBroadcastClient.waitForSentCount(1));
+
+        expect(failingTargetClient.sent).toHaveLength(0);
+        expect(healthyBroadcastClient.sent).toHaveLength(1);
+        const broadcastMessage = healthyBroadcastClient.sent[0];
         expect(broadcastMessage).toBeDefined();
         expect(JSON.parse(broadcastMessage!)).toEqual({
           type: "push",

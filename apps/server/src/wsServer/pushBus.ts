@@ -31,6 +31,22 @@ export interface ServerPushBus {
   ) => Effect.Effect<boolean>;
 }
 
+const sendToRecipients = (message: string, recipients: Iterable<WebSocket>) => {
+  let recipientCount = 0;
+  for (const client of recipients) {
+    if (client.readyState !== client.OPEN) {
+      continue;
+    }
+    try {
+      client.send(message);
+      recipientCount += 1;
+    } catch {
+      continue;
+    }
+  }
+  return recipientCount;
+};
+
 export const makeServerPushBus = (input: {
   readonly clients: Ref.Ref<Set<WebSocket>>;
   readonly logOutgoingPush: (push: WsPushEnvelopeBase, recipients: number) => void;
@@ -58,15 +74,7 @@ export const makeServerPushBus = (input: {
 
       return yield* encodePush(push).pipe(
         Effect.map((message) => {
-          let recipientCount = 0;
-          for (const client of recipients) {
-            if (client.readyState !== client.OPEN) {
-              continue;
-            }
-            client.send(message);
-            recipientCount += 1;
-          }
-
+          const recipientCount = sendToRecipients(message, recipients);
           input.logOutgoingPush(push, recipientCount);
           return recipientCount > 0;
         }),
