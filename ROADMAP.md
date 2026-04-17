@@ -335,6 +335,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX16** | Voice transcription websocket boundary validation — reject malformed transcribe requests early and normalize unsupported-provider/runtime plus adapter-failure cases at the ws/native edge       | ✅ #49 — transcribe voice websocket boundary hardened                                                                                                                                                                                                                   |
 | **hX17** | Renderer project.writeFile request validation — decode workspace write payloads before crossing the websocket bridge                                                                             | ✅ #51 — ws native api write-file payload validation added                                                                                                                                                                                                              |
 | **hX18** | IPC contract coverage for browser panel bounds — exercise `BrowserSetPanelBoundsInputSchema` so malformed bounds are rejected before runtime code depends on them                                | ✅ #52 — browser panel bounds schema coverage added                                                                                                                                                                                                                     |
+| **hX19** | Desktop update IPC contract coverage — exercise `DesktopUpdateStateSchema` and `DesktopUpdateActionResultSchema` so malformed update payloads fail before runtime code depends on them           | 🚧 worktree: `h3code-hx19-desktop-update-ipc-coverage`                                                                                                                                                                                                                  |
 
 ---
 
@@ -367,7 +368,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX18) — runs continuously in parallel with all phases,
+Hardening lane (hX1–hX19) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
