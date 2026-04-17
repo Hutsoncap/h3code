@@ -1,0 +1,19 @@
+# Lefthook config — pre-commit format + lint on staged files.
+# Installed automatically by the root `prepare` script on `bun install`.
+# See CONTRIBUTING.md ("Git hooks") for details, including how to bypass.
+
+pre-commit:
+  # fmt runs first and may re-stage fixed files; lint then reads the final content.
+  # Serial (not parallel) avoids any concurrent read/write between the two jobs.
+  jobs:
+    - name: fmt
+      # Match every extension oxfmt formats by default. If the hook glob is
+      # narrower than what `bun fmt:check` scans in CI, the hook will let
+      # unformatted files through and CI will fail on them.
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,md,mdx,yml,yaml,css,html}"
+      run: bunx oxfmt {staged_files}
+      stage_fixed: true
+
+    - name: lint
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: bunx oxlint --report-unused-disable-directives {staged_files}
