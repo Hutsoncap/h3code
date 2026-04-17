@@ -315,7 +315,6 @@ The gap today: you can view diffs and chat with agents, but you can't open `foo.
 
 Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane runs in parallel with the feature phases and has no fixed sequencing — any agent with spare cycles can pick up an item. Every feature PR must land without regressing these, and some items trail each major feature.
 
-<<<<<<< HEAD
 | ID | Title | Status |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | **hX1** | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape | ✅ #15 — persisted-store migration harness added |

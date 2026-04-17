@@ -1,7 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
-import { DesktopUpdateStateSchema, ThreadBrowserStateSchema } from "@t3tools/contracts";
-import { safeDecodeIpcPayload } from "./ipcHelpers";
+import {
+  DesktopNotificationShowResultSchema,
+  DesktopUpdateStateSchema,
+  ThreadBrowserStateSchema,
+} from "@t3tools/contracts";
+import { decodeIpcPayload, safeDecodeIpcPayload } from "./ipcHelpers";
+import { NOTIFICATIONS_SHOW_CHANNEL } from "./desktopNotifications";
 import { SERVER_TRANSCRIBE_VOICE_CHANNEL } from "./voiceTranscription";
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
@@ -17,7 +22,6 @@ const UPDATE_CHECK_CHANNEL = "desktop:update-check";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 const NOTIFICATIONS_IS_SUPPORTED_CHANNEL = "desktop:notifications-is-supported";
-const NOTIFICATIONS_SHOW_CHANNEL = "desktop:notifications-show";
 const BROWSER_STATE_CHANNEL = "desktop:browser-state";
 const BROWSER_OPEN_CHANNEL = "desktop:browser-open";
 const BROWSER_CLOSE_CHANNEL = "desktop:browser-close";
@@ -75,7 +79,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   notifications: {
     isSupported: () => ipcRenderer.invoke(NOTIFICATIONS_IS_SUPPORTED_CHANNEL),
-    show: (input) => ipcRenderer.invoke(NOTIFICATIONS_SHOW_CHANNEL, input),
+    show: async (input) =>
+      decodeIpcPayload(
+        DesktopNotificationShowResultSchema,
+        await ipcRenderer.invoke(NOTIFICATIONS_SHOW_CHANNEL, input),
+      ),
   },
   server: {
     transcribeVoice: (input) => ipcRenderer.invoke(SERVER_TRANSCRIBE_VOICE_CHANNEL, input),

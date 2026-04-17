@@ -30,7 +30,6 @@ import {
   BrowserTabInputSchema,
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
-  DesktopNotificationInputSchema,
   DesktopThemeSchema,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
@@ -39,6 +38,7 @@ import { NetService } from "@t3tools/shared/Net";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { isBackendReadinessAborted, waitForHttpReady } from "./backendReadiness";
 import { showDesktopConfirmDialog } from "./confirmDialog";
+import { registerDesktopNotificationShowHandler } from "./desktopNotifications";
 import { registerValidatedIpcHandler } from "./ipcHelpers";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
@@ -73,7 +73,6 @@ const UPDATE_CHECK_CHANNEL = "desktop:update-check";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 const NOTIFICATIONS_IS_SUPPORTED_CHANNEL = "desktop:notifications-is-supported";
-const NOTIFICATIONS_SHOW_CHANNEL = "desktop:notifications-show";
 const BROWSER_STATE_CHANNEL = "desktop:browser-state";
 const BROWSER_OPEN_CHANNEL = "desktop:browser-open";
 const BROWSER_CLOSE_CHANNEL = "desktop:browser-close";
@@ -1437,12 +1436,11 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(NOTIFICATIONS_IS_SUPPORTED_CHANNEL);
   ipcMain.handle(NOTIFICATIONS_IS_SUPPORTED_CHANNEL, async () => Notification.isSupported());
 
-  registerValidatedIpcHandler(
-    ipcMain,
-    NOTIFICATIONS_SHOW_CHANNEL,
-    DesktopNotificationInputSchema,
-    async (input) => showDesktopNotification(input),
-  );
+  registerDesktopNotificationShowHandler({
+    ipc: ipcMain,
+    isDevelopment: !app.isPackaged,
+    showNotification: showDesktopNotification,
+  });
   registerDesktopVoiceTranscriptionHandler();
 
   registerValidatedIpcHandler(

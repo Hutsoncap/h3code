@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-type IpcHandlerRegistrar = {
+export type IpcHandlerRegistrar = {
   removeHandler: (channel: string) => void;
   handle: (channel: string, listener: (event: unknown, payload: unknown) => unknown) => void;
 };

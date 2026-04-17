@@ -305,6 +305,8 @@ export const DesktopNotificationInputSchema = Schema.Struct({
   silent: Schema.optional(Schema.Boolean),
   threadId: Schema.optional(ThreadId),
 });
+export const DesktopNotificationShowResultSchema = Schema.Boolean;
+export type DesktopNotificationShowResult = typeof DesktopNotificationShowResultSchema.Type;
 export const DesktopServerTranscribeVoiceInputSchema = ServerVoiceTranscriptionInput;
 export type DesktopServerTranscribeVoiceInput = typeof DesktopServerTranscribeVoiceInputSchema.Type;
 
@@ -334,7 +336,7 @@ export interface DesktopBridge {
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   notifications: {
     isSupported: () => Promise<boolean>;
-    show: (input: DesktopNotificationInput) => Promise<boolean>;
+    show: (input: DesktopNotificationInput) => Promise<DesktopNotificationShowResult>;
   };
   server?: {
     transcribeVoice: (
