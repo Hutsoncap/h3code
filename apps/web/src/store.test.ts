@@ -367,6 +367,40 @@ describe("store pure functions", () => {
     });
   });
 
+  it("creates a running latest turn when session-set reports an active turn", () => {
+    const initialState = makeState(makeThread());
+
+    const next = applyOrchestrationEvents(initialState, [
+      makeDomainEvent("thread.session-set", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        session: {
+          threadId: ThreadId.makeUnsafe("thread-1"),
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: TurnId.makeUnsafe("turn-running"),
+          lastError: null,
+          updatedAt: "2026-02-27T00:02:00.000Z",
+        },
+      }),
+    ]);
+
+    expect(next.threads[0]?.session).toMatchObject({
+      status: "running",
+      orchestrationStatus: "running",
+      activeTurnId: TurnId.makeUnsafe("turn-running"),
+      updatedAt: "2026-02-27T00:02:00.000Z",
+    });
+    expect(next.threads[0]?.latestTurn).toMatchObject({
+      turnId: TurnId.makeUnsafe("turn-running"),
+      state: "running",
+      requestedAt: "2026-02-27T00:02:00.000Z",
+      startedAt: "2026-02-27T00:02:00.000Z",
+      completedAt: null,
+      assistantMessageId: null,
+    });
+  });
+
   it("adds projects immediately from live project.created events", () => {
     const next = applyOrchestrationEvents(
       {
@@ -538,6 +572,38 @@ describe("store pure functions", () => {
     });
   });
 
+  it("marks the matching running latest turn interrupted when turn interruption is requested", () => {
+    const initialState = makeState(
+      makeThread({
+        latestTurn: {
+          turnId: TurnId.makeUnsafe("turn-running"),
+          state: "running",
+          requestedAt: "2026-02-27T00:01:00.000Z",
+          startedAt: "2026-02-27T00:01:05.000Z",
+          completedAt: null,
+          assistantMessageId: MessageId.makeUnsafe("assistant-running"),
+        },
+      }),
+    );
+
+    const next = applyOrchestrationEvents(initialState, [
+      makeDomainEvent("thread.turn-interrupt-requested", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        turnId: TurnId.makeUnsafe("turn-running"),
+        createdAt: "2026-02-27T00:02:00.000Z",
+      }),
+    ]);
+
+    expect(next.threads[0]?.latestTurn).toMatchObject({
+      turnId: TurnId.makeUnsafe("turn-running"),
+      state: "interrupted",
+      requestedAt: "2026-02-27T00:01:00.000Z",
+      startedAt: "2026-02-27T00:01:05.000Z",
+      completedAt: "2026-02-27T00:02:00.000Z",
+      assistantMessageId: MessageId.makeUnsafe("assistant-running"),
+    });
+  });
+
   it("keeps pending proposed-plan linkage across live turn updates", () => {
     const sourceProposedPlan = {
       threadId: ThreadId.makeUnsafe("thread-source"),
@@ -569,6 +635,113 @@ describe("store pure functions", () => {
 
     expect(next.threads[0]?.pendingSourceProposedPlan).toEqual(sourceProposedPlan);
     expect(next.threads[0]?.latestTurn?.sourceProposedPlan).toEqual(sourceProposedPlan);
+  });
+
+  it("merges streamed assistant message chunks and clears streaming on completion", () => {
+    const next = applyOrchestrationEvents(makeState(makeThread()), [
+      makeDomainEvent("thread.message-sent", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        messageId: MessageId.makeUnsafe("assistant-message"),
+        role: "assistant",
+        text: "Hel",
+        turnId: TurnId.makeUnsafe("turn-1"),
+        streaming: true,
+        createdAt: "2026-02-27T00:01:00.000Z",
+        updatedAt: "2026-02-27T00:01:00.000Z",
+        attachments: [],
+        source: "native",
+      }),
+      makeDomainEvent("thread.message-sent", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        messageId: MessageId.makeUnsafe("assistant-message"),
+        role: "assistant",
+        text: "lo",
+        turnId: TurnId.makeUnsafe("turn-1"),
+        streaming: true,
+        createdAt: "2026-02-27T00:01:00.000Z",
+        updatedAt: "2026-02-27T00:01:01.000Z",
+        attachments: [],
+        source: "native",
+      }),
+      makeDomainEvent("thread.message-sent", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        messageId: MessageId.makeUnsafe("assistant-message"),
+        role: "assistant",
+        text: "",
+        turnId: TurnId.makeUnsafe("turn-1"),
+        streaming: false,
+        createdAt: "2026-02-27T00:01:00.000Z",
+        updatedAt: "2026-02-27T00:01:02.000Z",
+        attachments: [],
+        source: "native",
+      }),
+    ]);
+
+    expect(next.threads[0]?.messages).toEqual([
+      {
+        id: MessageId.makeUnsafe("assistant-message"),
+        role: "assistant",
+        text: "Hello",
+        turnId: TurnId.makeUnsafe("turn-1"),
+        createdAt: "2026-02-27T00:01:00.000Z",
+        completedAt: "2026-02-27T00:01:02.000Z",
+        streaming: false,
+        source: "native",
+      },
+    ]);
+    expect(next.threads[0]?.latestTurn).toMatchObject({
+      turnId: TurnId.makeUnsafe("turn-1"),
+      state: "completed",
+      requestedAt: "2026-02-27T00:01:00.000Z",
+      startedAt: "2026-02-27T00:01:00.000Z",
+      completedAt: "2026-02-27T00:01:02.000Z",
+      assistantMessageId: MessageId.makeUnsafe("assistant-message"),
+    });
+  });
+
+  it("ignores late streaming chunks after an assistant message is already completed", () => {
+    const initialState = makeState(
+      makeThread({
+        messages: [
+          {
+            id: MessageId.makeUnsafe("assistant-message"),
+            role: "assistant",
+            text: "Hello",
+            turnId: TurnId.makeUnsafe("turn-1"),
+            createdAt: "2026-02-27T00:01:00.000Z",
+            completedAt: "2026-02-27T00:01:02.000Z",
+            streaming: false,
+            source: "native",
+          },
+        ],
+        latestTurn: {
+          turnId: TurnId.makeUnsafe("turn-1"),
+          state: "completed",
+          requestedAt: "2026-02-27T00:01:00.000Z",
+          startedAt: "2026-02-27T00:01:00.000Z",
+          completedAt: "2026-02-27T00:01:02.000Z",
+          assistantMessageId: MessageId.makeUnsafe("assistant-message"),
+        },
+        updatedAt: "2026-02-27T00:01:02.000Z",
+      }),
+    );
+
+    const next = applyOrchestrationEvents(initialState, [
+      makeDomainEvent("thread.message-sent", {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        messageId: MessageId.makeUnsafe("assistant-message"),
+        role: "assistant",
+        text: " world",
+        turnId: TurnId.makeUnsafe("turn-1"),
+        streaming: true,
+        createdAt: "2026-02-27T00:01:00.000Z",
+        updatedAt: "2026-02-27T00:01:03.000Z",
+        attachments: [],
+        source: "native",
+      }),
+    ]);
+
+    expect(next).toEqual(initialState);
   });
 
   it("updates turn diffs and latest turn immediately from live events", () => {
