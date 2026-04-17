@@ -195,7 +195,7 @@ const WebSocketRequestBody = Schema.Union([
 export const WebSocketRequest = Schema.Struct({
   id: TrimmedNonEmptyString,
   body: WebSocketRequestBody,
-});
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
 export type WebSocketRequest = typeof WebSocketRequest.Type;
 
 export const WebSocketResponse = Schema.Struct({
