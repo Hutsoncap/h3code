@@ -12,6 +12,7 @@ import {
   DesktopShellOpenExternalInputSchema,
   DesktopShellShowInFolderInputSchema,
   DesktopConfirmMessageSchema,
+  ProjectWriteFileInput,
   ServerConfigUpdatedPayload,
   WS_CHANNELS,
   WS_METHODS,
@@ -34,6 +35,7 @@ const terminalEventListeners = new Set<(payload: TerminalEvent) => void>();
 const fallbackBrowserStateListeners = new Set<(state: ThreadBrowserState) => void>();
 const fallbackBrowserStates = new Map<ThreadId, ThreadBrowserState>();
 const decodeOpenInEditorInput = Schema.decodeUnknownSync(OpenInEditorInput);
+const decodeProjectWriteFileInput = Schema.decodeUnknownSync(ProjectWriteFileInput);
 const decodeConfirmMessage = Schema.decodeUnknownSync(DesktopConfirmMessageSchema);
 const decodeShellOpenExternalInput = Schema.decodeUnknownSync(DesktopShellOpenExternalInputSchema);
 const decodeShellShowInFolderInput = Schema.decodeUnknownSync(DesktopShellShowInFolderInputSchema);
@@ -276,7 +278,8 @@ export function createWsNativeApi(): NativeApi {
     },
     projects: {
       searchEntries: (input) => transport.request(WS_METHODS.projectsSearchEntries, input),
-      writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
+      writeFile: (input) =>
+        transport.request(WS_METHODS.projectsWriteFile, decodeProjectWriteFileInput(input)),
     },
     shell: {
       openInEditor: (cwd, editor) =>

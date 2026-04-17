@@ -380,6 +380,21 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("validates workspace file write requests before sending them over the websocket bridge", async () => {
+    const { createWsNativeApi } = await import("./wsNativeApi");
+
+    const api = createWsNativeApi();
+    expect(() =>
+      api.projects.writeFile({
+        cwd: 123 as never,
+        relativePath: "plan.md",
+        contents: "# Plan\n",
+      }),
+    ).toThrow();
+
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
   it("validates editor launch requests before sending them over the websocket bridge", async () => {
     const { createWsNativeApi } = await import("./wsNativeApi");
 
