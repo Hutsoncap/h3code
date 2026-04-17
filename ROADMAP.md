@@ -55,7 +55,7 @@ Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. 
 | **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | 📋 Planned                |
 | **p0.5** | Event-state test expansion                        | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md)               | 📋 Planned                |
 | **p0.6** | Unify process/session abstraction                 | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | 📋 Planned                |
-| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | 📋 Planned                |
+| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | ✅ #3 — CI actually runs  |
 | **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | ✅ #2 — lefthook wired up |
 | **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | 📋 Planned                |
 
