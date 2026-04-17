@@ -14,3 +14,4 @@ export * from "./orchestration";
 export * from "./editor";
 export * from "./project";
 export * from "./menuAction";
+export * from "./confirm";

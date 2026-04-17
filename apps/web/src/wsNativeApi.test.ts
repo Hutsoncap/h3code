@@ -25,6 +25,7 @@ const showContextMenuFallbackMock =
       position?: { x: number; y: number },
     ) => Promise<T | null>
   >();
+const showConfirmDialogFallbackMock = vi.fn<(message: string) => Promise<boolean>>();
 const channelListeners = new Map<string, Set<(message: WsPush) => void>>();
 const latestPushByChannel = new Map<string, WsPush>();
 const subscribeMock = vi.fn<
@@ -63,6 +64,10 @@ vi.mock("./wsTransport", () => {
 
 vi.mock("./contextMenuFallback", () => ({
   showContextMenuFallback: showContextMenuFallbackMock,
+}));
+
+vi.mock("./confirmDialogFallback", () => ({
+  showConfirmDialogFallback: showConfirmDialogFallbackMock,
 }));
 
 let nextPushSequence = 1;
@@ -106,6 +111,7 @@ beforeEach(() => {
   vi.resetModules();
   requestMock.mockReset();
   showContextMenuFallbackMock.mockReset();
+  showConfirmDialogFallbackMock.mockReset();
   subscribeMock.mockClear();
   channelListeners.clear();
   latestPushByChannel.clear();
@@ -409,6 +415,24 @@ describe("wsNativeApi", () => {
 
     expect(openExternal).toHaveBeenCalledTimes(1);
     expect(showInFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it("validates confirm bridge requests before reaching the fallback dialog", async () => {
+    showConfirmDialogFallbackMock.mockResolvedValue(true);
+    Reflect.deleteProperty(getWindowForTest(), "desktopBridge");
+
+    const { createWsNativeApi } = await import("./wsNativeApi");
+    const api = createWsNativeApi();
+
+    await expect(api.dialogs.confirm(" Delete project?\nThis cannot be undone. ")).resolves.toBe(
+      true,
+    );
+    await expect(api.dialogs.confirm("   " as never)).rejects.toThrow();
+
+    expect(showConfirmDialogFallbackMock).toHaveBeenCalledWith(
+      "Delete project?\nThis cannot be undone.",
+    );
+    expect(showConfirmDialogFallbackMock).toHaveBeenCalledTimes(1);
   });
 
   it("uses no client timeout for git.runStackedAction", async () => {

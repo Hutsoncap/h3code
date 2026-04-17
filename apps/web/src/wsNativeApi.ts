@@ -11,6 +11,7 @@ import {
   type NativeApi,
   DesktopShellOpenExternalInputSchema,
   DesktopShellShowInFolderInputSchema,
+  DesktopConfirmMessageSchema,
   ServerConfigUpdatedPayload,
   WS_CHANNELS,
   WS_METHODS,
@@ -33,6 +34,7 @@ const terminalEventListeners = new Set<(payload: TerminalEvent) => void>();
 const fallbackBrowserStateListeners = new Set<(state: ThreadBrowserState) => void>();
 const fallbackBrowserStates = new Map<ThreadId, ThreadBrowserState>();
 const decodeOpenInEditorInput = Schema.decodeUnknownSync(OpenInEditorInput);
+const decodeConfirmMessage = Schema.decodeUnknownSync(DesktopConfirmMessageSchema);
 const decodeShellOpenExternalInput = Schema.decodeUnknownSync(DesktopShellOpenExternalInputSchema);
 const decodeShellShowInFolderInput = Schema.decodeUnknownSync(DesktopShellShowInFolderInputSchema);
 
@@ -255,7 +257,7 @@ export function createWsNativeApi(): NativeApi {
         return window.desktopBridge.pickFolder();
       },
       confirm: async (message) => {
-        return showConfirmDialogFallback(message);
+        return showConfirmDialogFallback(decodeConfirmMessage(message));
       },
     },
     terminal: {
