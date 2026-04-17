@@ -215,6 +215,7 @@ import { ChatComposerStatusBanner } from "./chat/ChatComposerStatusBanner";
 import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
+import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
   getComposerProviderState,
@@ -241,7 +242,6 @@ import {
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
-  PullRequestDialogState,
   readFileAsDataUrl,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
@@ -819,8 +819,6 @@ export default function ChatView({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
-  const [pullRequestDialogState, setPullRequestDialogState] =
-    useState<PullRequestDialogState | null>(null);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
@@ -1040,89 +1038,24 @@ export default function ChatView({
     ],
   );
 
-  const openPullRequestDialog = useCallback(
-    (reference?: string) => {
-      if (!canCheckoutPullRequestIntoThread) {
-        return;
-      }
-      setPullRequestDialogState({
-        initialReference: reference ?? null,
-        key: Date.now(),
-      });
-      setComposerHighlightedItemId(null);
-    },
-    [canCheckoutPullRequestIntoThread],
-  );
-
-  const closePullRequestDialog = useCallback(() => {
-    setPullRequestDialogState(null);
-  }, []);
-
-  const openOrReuseProjectDraftThread = useCallback(
-    async (input: { branch: string; worktreePath: string | null; envMode: DraftThreadEnvMode }) => {
-      if (!activeProject) {
-        throw new Error("No active project is available for this pull request.");
-      }
-      const storedDraftThread = getDraftThreadByProjectId(activeProject.id);
-      if (storedDraftThread) {
-        setDraftThreadContext(storedDraftThread.threadId, input);
-        setProjectDraftThreadId(activeProject.id, storedDraftThread.threadId, input);
-        if (storedDraftThread.threadId !== threadId) {
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: storedDraftThread.threadId },
-          });
-        }
-        return;
-      }
-
-      const activeDraftThread = getDraftThread(threadId);
-      if (
-        !isServerThread &&
-        activeDraftThread?.projectId === activeProject.id &&
-        activeDraftThread.entryPoint === "chat"
-      ) {
-        setDraftThreadContext(threadId, input);
-        setProjectDraftThreadId(activeProject.id, threadId, input);
-        return;
-      }
-
-      clearProjectDraftThreadId(activeProject.id);
-      const nextThreadId = newThreadId();
-      setProjectDraftThreadId(activeProject.id, nextThreadId, {
-        createdAt: new Date().toISOString(),
-        runtimeMode: DEFAULT_RUNTIME_MODE,
-        interactionMode: DEFAULT_INTERACTION_MODE,
-        ...input,
-      });
-      await navigate({
-        to: "/$threadId",
-        params: { threadId: nextThreadId },
-      });
-    },
-    [
-      activeProject,
-      clearProjectDraftThreadId,
-      getDraftThread,
-      getDraftThreadByProjectId,
-      isServerThread,
-      navigate,
-      setDraftThreadContext,
-      setProjectDraftThreadId,
-      threadId,
-    ],
-  );
-
-  const handlePreparedPullRequestThread = useCallback(
-    async (input: { branch: string; worktreePath: string | null }) => {
-      await openOrReuseProjectDraftThread({
-        branch: input.branch,
-        worktreePath: input.worktreePath,
-        envMode: input.worktreePath ? "worktree" : "local",
-      });
-    },
-    [openOrReuseProjectDraftThread],
-  );
+  const {
+    pullRequestDialogState,
+    openPullRequestDialog,
+    closePullRequestDialog,
+    handlePreparedPullRequestThread,
+  } = useChatPullRequestController({
+    activeProject,
+    canCheckoutPullRequestIntoThread,
+    currentThreadId: threadId,
+    getDraftThreadByProjectId,
+    getDraftThread,
+    setDraftThreadContext,
+    setProjectDraftThreadId,
+    clearProjectDraftThreadId,
+    navigate,
+    clearComposerHighlightedItemId: () => setComposerHighlightedItemId(null),
+    isServerThread,
+  });
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -2992,7 +2925,6 @@ export default function ChatView({
 
   useEffect(() => {
     setExpandedWorkGroups({});
-    setPullRequestDialogState(null);
     if (planSidebarOpenOnNextThreadRef.current) {
       planSidebarOpenOnNextThreadRef.current = false;
       setPlanSidebarOpen(true);
