@@ -1,0 +1,68 @@
+import { describe, expect, it, vi } from "vitest";
+import { BrowserOpenInputSchema, ThreadBrowserStateSchema } from "@t3tools/contracts";
+
+import { registerValidatedIpcHandler, safeDecodeIpcPayload } from "./ipcHelpers";
+
+describe("registerValidatedIpcHandler", () => {
+  it("parses payloads before invoking the handler", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+    const listener = vi.fn(
+      (input: { threadId: string; initialUrl?: string | undefined }) => input.threadId,
+    );
+
+    registerValidatedIpcHandler(
+      { removeHandler, handle },
+      "desktop:browser-open",
+      BrowserOpenInputSchema,
+      listener,
+    );
+
+    expect(removeHandler).toHaveBeenCalledWith("desktop:browser-open");
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    expect(registered).toBeTypeOf("function");
+
+    await expect(
+      registered?.({}, { threadId: "thread-1", initialUrl: "https://example.com" }),
+    ).resolves.toBe("thread-1");
+    expect(listener).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      initialUrl: "https://example.com",
+    });
+  });
+
+  it("rejects invalid payloads before handler logic runs", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+    const listener = vi.fn();
+
+    registerValidatedIpcHandler(
+      { removeHandler, handle },
+      "desktop:browser-open",
+      BrowserOpenInputSchema,
+      listener,
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(registered?.({}, { threadId: 42 })).rejects.toThrow();
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("safeDecodeIpcPayload", () => {
+  it("returns null for invalid event payloads", () => {
+    expect(
+      safeDecodeIpcPayload(ThreadBrowserStateSchema, {
+        threadId: 42,
+        open: true,
+        activeTabId: null,
+        tabs: [],
+        lastError: null,
+      }),
+    ).toBeNull();
+  });
+});

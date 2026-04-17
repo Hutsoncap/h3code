@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 import type {
   GitCheckoutInput,
   GitActionProgressEvent,
@@ -62,7 +64,7 @@ import type {
   OrchestrationReadModel,
 } from "./orchestration";
 import { EditorId } from "./editor";
-import type { ThreadId } from "./baseSchemas";
+import { ThreadId } from "./baseSchemas";
 import type {
   ProviderComposerCapabilities,
   ProviderGetComposerCapabilitiesInput,
@@ -84,24 +86,49 @@ export interface ContextMenuItem<T extends string = string> {
   destructive?: boolean;
 }
 
-export type DesktopUpdateStatus =
-  | "disabled"
-  | "idle"
-  | "checking"
-  | "up-to-date"
-  | "available"
-  | "downloading"
-  | "downloaded"
-  | "error";
+export const ContextMenuItemSchema = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  destructive: Schema.optional(Schema.Boolean),
+});
+export const ContextMenuPositionSchema = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+});
+export const ContextMenuRequestSchema = Schema.Struct({
+  items: Schema.Array(ContextMenuItemSchema),
+  position: Schema.optional(ContextMenuPositionSchema),
+});
+export type ContextMenuRequest = typeof ContextMenuRequestSchema.Type;
 
-export type DesktopRuntimeArch = "arm64" | "x64" | "other";
-export type DesktopTheme = "light" | "dark" | "system";
+export const DesktopUpdateStatusSchema = Schema.Literals([
+  "disabled",
+  "idle",
+  "checking",
+  "up-to-date",
+  "available",
+  "downloading",
+  "downloaded",
+  "error",
+]);
+export type DesktopUpdateStatus = typeof DesktopUpdateStatusSchema.Type;
+
+export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
+export type DesktopRuntimeArch = typeof DesktopRuntimeArchSchema.Type;
+export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
+export type DesktopTheme = typeof DesktopThemeSchema.Type;
 
 export interface DesktopRuntimeInfo {
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
   runningUnderArm64Translation: boolean;
 }
+
+export const DesktopRuntimeInfoSchema = Schema.Struct({
+  hostArch: DesktopRuntimeArchSchema,
+  appArch: DesktopRuntimeArchSchema,
+  runningUnderArm64Translation: Schema.Boolean,
+});
 
 export interface DesktopUpdateState {
   enabled: boolean;
@@ -119,11 +146,33 @@ export interface DesktopUpdateState {
   canRetry: boolean;
 }
 
+export const DesktopUpdateStateSchema = Schema.Struct({
+  enabled: Schema.Boolean,
+  status: DesktopUpdateStatusSchema,
+  currentVersion: Schema.String,
+  hostArch: DesktopRuntimeArchSchema,
+  appArch: DesktopRuntimeArchSchema,
+  runningUnderArm64Translation: Schema.Boolean,
+  availableVersion: Schema.NullOr(Schema.String),
+  downloadedVersion: Schema.NullOr(Schema.String),
+  downloadPercent: Schema.NullOr(Schema.Number),
+  checkedAt: Schema.NullOr(Schema.String),
+  message: Schema.NullOr(Schema.String),
+  errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
+  canRetry: Schema.Boolean,
+});
+
 export interface DesktopUpdateActionResult {
   accepted: boolean;
   completed: boolean;
   state: DesktopUpdateState;
 }
+
+export const DesktopUpdateActionResultSchema = Schema.Struct({
+  accepted: Schema.Boolean,
+  completed: Schema.Boolean,
+  state: DesktopUpdateStateSchema,
+});
 
 export interface BrowserTabState {
   id: string;
@@ -138,6 +187,19 @@ export interface BrowserTabState {
   lastError: string | null;
 }
 
+export const BrowserTabStateSchema = Schema.Struct({
+  id: Schema.String,
+  url: Schema.String,
+  title: Schema.String,
+  status: Schema.Literals(["live", "suspended"]),
+  isLoading: Schema.Boolean,
+  canGoBack: Schema.Boolean,
+  canGoForward: Schema.Boolean,
+  faviconUrl: Schema.NullOr(Schema.String),
+  lastCommittedUrl: Schema.NullOr(Schema.String),
+  lastError: Schema.NullOr(Schema.String),
+});
+
 export interface ThreadBrowserState {
   threadId: ThreadId;
   open: boolean;
@@ -146,31 +208,65 @@ export interface ThreadBrowserState {
   lastError: string | null;
 }
 
+export const ThreadBrowserStateSchema = Schema.Struct({
+  threadId: ThreadId,
+  open: Schema.Boolean,
+  activeTabId: Schema.NullOr(Schema.String),
+  tabs: Schema.Array(BrowserTabStateSchema),
+  lastError: Schema.NullOr(Schema.String),
+});
+
 export interface BrowserOpenInput {
   threadId: ThreadId;
-  initialUrl?: string;
+  initialUrl?: string | undefined;
 }
+
+export const BrowserOpenInputSchema = Schema.Struct({
+  threadId: ThreadId,
+  initialUrl: Schema.optional(Schema.String),
+});
 
 export interface BrowserThreadInput {
   threadId: ThreadId;
 }
+
+export const BrowserThreadInputSchema = Schema.Struct({
+  threadId: ThreadId,
+});
 
 export interface BrowserTabInput {
   threadId: ThreadId;
   tabId: string;
 }
 
+export const BrowserTabInputSchema = Schema.Struct({
+  ...BrowserThreadInputSchema.fields,
+  tabId: Schema.String,
+});
+
 export interface BrowserNavigateInput {
   threadId: ThreadId;
-  tabId?: string;
+  tabId?: string | undefined;
   url: string;
 }
 
+export const BrowserNavigateInputSchema = Schema.Struct({
+  ...BrowserThreadInputSchema.fields,
+  tabId: Schema.optional(Schema.String),
+  url: Schema.String,
+});
+
 export interface BrowserNewTabInput {
   threadId: ThreadId;
-  url?: string;
-  activate?: boolean;
+  url?: string | undefined;
+  activate?: boolean | undefined;
 }
+
+export const BrowserNewTabInputSchema = Schema.Struct({
+  ...BrowserThreadInputSchema.fields,
+  url: Schema.optional(Schema.String),
+  activate: Schema.optional(Schema.Boolean),
+});
 
 export interface BrowserPanelBounds {
   x: number;
@@ -179,17 +275,36 @@ export interface BrowserPanelBounds {
   height: number;
 }
 
+export const BrowserPanelBoundsSchema = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+});
+
 export interface BrowserSetPanelBoundsInput {
   threadId: ThreadId;
   bounds: BrowserPanelBounds | null;
 }
 
+export const BrowserSetPanelBoundsInputSchema = Schema.Struct({
+  ...BrowserThreadInputSchema.fields,
+  bounds: Schema.NullOr(BrowserPanelBoundsSchema),
+});
+
 export interface DesktopNotificationInput {
   title: string;
-  body?: string;
-  silent?: boolean;
-  threadId?: ThreadId;
+  body?: string | undefined;
+  silent?: boolean | undefined;
+  threadId?: ThreadId | undefined;
 }
+
+export const DesktopNotificationInputSchema = Schema.Struct({
+  title: Schema.String,
+  body: Schema.optional(Schema.String),
+  silent: Schema.optional(Schema.Boolean),
+  threadId: Schema.optional(ThreadId),
+});
 
 export interface DesktopBridge {
   getWsUrl: () => string | null;
