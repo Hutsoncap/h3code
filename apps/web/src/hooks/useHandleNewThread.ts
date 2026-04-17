@@ -19,6 +19,19 @@ import { useStore } from "../store";
 import { useTemporaryThreadStore } from "../temporaryThreadStore";
 import { useTerminalStateStore } from "../terminalStateStore";
 
+function clearDraftContextOverrides(options?: NewThreadOptions): NewThreadOptions | undefined {
+  if (!options) {
+    return undefined;
+  }
+  const {
+    branch: _branch,
+    worktreePath: _worktreePath,
+    envMode: _envMode,
+    ...nextOptions
+  } = options;
+  return nextOptions;
+}
+
 export function useHandleNewThread() {
   const projects = useStore((store) => store.projects);
   const { settings } = useAppSettings();
@@ -89,6 +102,7 @@ export function useHandleNewThread() {
       const resolveCreationState = (
         targetThreadId: ThreadId,
         draftThread: DraftThreadState | null,
+        creationOptions: NewThreadOptions | undefined = options,
       ) =>
         resolveTerminalThreadCreationState({
           activeDraftThread: activeDraftThreadSnapshot,
@@ -97,7 +111,7 @@ export function useHandleNewThread() {
           draftComposerState:
             useComposerDraftStore.getState().draftsByThreadId[targetThreadId] ?? null,
           draftThread,
-          options,
+          options: creationOptions,
           projectDefaultModelSelection,
           projectId,
         });
@@ -134,12 +148,8 @@ export function useHandleNewThread() {
           if (wantsTemporaryThread) {
             markTemporaryThread(bootstrapPlan.threadId);
           }
-          let resolvedStoredDraftThread: DraftThreadState | null = bootstrapPlan.draftThread;
-          const draftContextPatch = buildDraftThreadContextPatch(entryPoint, options);
-          if (draftContextPatch) {
-            setDraftThreadContext(bootstrapPlan.threadId, draftContextPatch);
-            resolvedStoredDraftThread = getDraftThread(bootstrapPlan.threadId);
-          }
+          // Reopening a stored draft should preserve its saved workspace intent.
+          const resolvedStoredDraftThread: DraftThreadState | null = bootstrapPlan.draftThread;
           applyProviderOverride(bootstrapPlan.threadId);
           setProjectDraftThreadId(projectId, bootstrapPlan.threadId, { entryPoint });
           activateThreadEntryPoint(bootstrapPlan.threadId);
@@ -147,7 +157,11 @@ export function useHandleNewThread() {
             if (entryPoint === "terminal") {
               await createTerminalThread(
                 bootstrapPlan.threadId,
-                resolveCreationState(bootstrapPlan.threadId, resolvedStoredDraftThread),
+                resolveCreationState(
+                  bootstrapPlan.threadId,
+                  resolvedStoredDraftThread,
+                  clearDraftContextOverrides(options),
+                ),
               );
             }
             return;
@@ -159,7 +173,11 @@ export function useHandleNewThread() {
           if (entryPoint === "terminal") {
             await createTerminalThread(
               bootstrapPlan.threadId,
-              resolveCreationState(bootstrapPlan.threadId, resolvedStoredDraftThread),
+              resolveCreationState(
+                bootstrapPlan.threadId,
+                resolvedStoredDraftThread,
+                clearDraftContextOverrides(options),
+              ),
             );
           }
         })();
