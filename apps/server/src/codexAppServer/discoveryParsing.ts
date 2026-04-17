@@ -275,8 +275,8 @@ export function parseModelListResponse(response: unknown): ProviderListModelsRes
     .map((value) => readObject(value))
     .flatMap((model) => {
       if (!model) return [];
-      const slug = readString(model, "id") ?? readString(model, "slug");
-      const name = readString(model, "name") ?? slug;
+      const slug = (readString(model, "id") ?? readString(model, "slug"))?.trim();
+      const name = (readString(model, "name") ?? slug)?.trim();
       if (!slug || !name) {
         return [];
       }
