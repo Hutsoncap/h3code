@@ -498,12 +498,14 @@ export class DesktopBrowserManager {
   }
 
   private activateThread(threadId: ThreadId, bounds: BrowserPanelBounds): void {
-    if (this.activeThreadId && this.activeThreadId !== threadId) {
-      this.scheduleThreadSuspend(this.activeThreadId);
-    }
+    const previousActiveThreadId =
+      this.activeThreadId && this.activeThreadId !== threadId ? this.activeThreadId : null;
 
     this.activeThreadId = threadId;
     this.activeBounds = bounds;
+    if (previousActiveThreadId) {
+      this.scheduleThreadSuspend(previousActiveThreadId);
+    }
     this.resumeThread(threadId);
     this.attachActiveTab(threadId, bounds);
   }
