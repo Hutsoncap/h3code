@@ -213,7 +213,7 @@ import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
 import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip";
 import { ChatComposerFooter } from "./chat/ChatComposerFooter";
-import { ActivePlanCard } from "./chat/ActivePlanCard";
+import { ChatActivePlanCard } from "./chat/ChatActivePlanCard";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -5573,16 +5573,13 @@ export default function ChatView({
     if (!activeThread) return;
     setThreadError(activeThread.id, null);
   }, [activeThread, setThreadError]);
-  const composerActivePlanCard =
-    activePlan && !planSidebarOpen ? (
-      <div className="mx-auto w-11/12">
-        <ActivePlanCard
-          activePlan={activePlan}
-          backgroundTaskCount={activeBackgroundTasks?.activeCount ?? 0}
-          onOpenSidebar={() => setPlanSidebarOpen(true)}
-        />
-      </div>
-    ) : null;
+  const composerActivePlanCard = (
+    <ChatActivePlanCard
+      activePlan={activePlan && !planSidebarOpen ? activePlan : null}
+      backgroundTaskCount={activeBackgroundTasks?.activeCount ?? 0}
+      onOpenSidebar={() => setPlanSidebarOpen(true)}
+    />
+  );
   const composerStatusBanner = activePendingApproval ? (
     <ComposerPendingApprovalPanel
       approval={activePendingApproval}
