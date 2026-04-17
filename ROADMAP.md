@@ -328,7 +328,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX9**  | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | ✅ #27 — open-in-editor payload validation added                                                                                                                                                            |
 | **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport                                                     | ✅ #28 — shared IPC/browser contract coverage added                                                                                                                                                         |
 | **hX11** | Sidebar search highlight determinism — extract duplicate-match highlighting into a pure helper and cover repeated-token rendering so palette updates stay stable under rerenders                 | ✅ #40 — sidebar search highlights stabilized                                                                                                                                                               |
-| **hX12** | Orchestration revert integration stabilization — wait for turn-processing quiescence before checkpoint-revert assertions so Claude rollback coverage stops racing runtime tail work              | 🚧 worktree: h3code-revert-timeout-hardening                                                                                                                                                                |
+| **hX12** | Orchestration revert integration stabilization — wait for turn-processing quiescence before checkpoint-revert assertions so Claude rollback coverage stops racing runtime tail work              | ✅ #41 — orchestration revert timing stabilized                                                                                                                                                             |
 
 ---
 
@@ -361,7 +361,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX11) — runs continuously in parallel with all phases,
+Hardening lane (hX1–hX12) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
