@@ -57,6 +57,7 @@ import { searchWorkspaceEntries } from "./workspaceEntries";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
+import { ProviderUnsupportedError } from "./provider/Errors";
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderDiscoveryService } from "./provider/Services/ProviderDiscoveryService";
 import { ProviderAdapterRegistry } from "./provider/Services/ProviderAdapterRegistry";
@@ -322,6 +323,47 @@ export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycl
 class RouteRequestError extends Schema.TaggedErrorClass<RouteRequestError>()("RouteRequestError", {
   message: Schema.String,
 }) {}
+
+function sanitizeUserFacingRouteErrorMessage(message: string, fallback: string): string {
+  const normalized = message.trim();
+  if (normalized.length === 0) {
+    return fallback;
+  }
+
+  const firstLine = normalized.split("\n", 1)[0]?.trim() ?? "";
+  const withoutInlineStack = firstLine.replace(/\s+at file:\/\/.*$/s, "").trim();
+  return withoutInlineStack.length > 0 ? withoutInlineStack : fallback;
+}
+
+function voiceTranscriptionUnavailableMessage(provider: string): string {
+  return `Voice transcription is unavailable for provider '${provider}'.`;
+}
+
+function toVoiceTranscriptionFailureMessage(input: {
+  provider: string;
+  cause: Cause.Cause<unknown>;
+}): string {
+  const fallback = "Voice transcription failed.";
+  const squashed = Cause.squash(input.cause);
+
+  if (Schema.is(ProviderUnsupportedError)(squashed)) {
+    return voiceTranscriptionUnavailableMessage(input.provider);
+  }
+
+  if (squashed instanceof Error) {
+    return sanitizeUserFacingRouteErrorMessage(squashed.message, fallback);
+  }
+
+  return fallback;
+}
+
+function toRouteResponseErrorMessage(cause: Cause.Cause<unknown>): string {
+  const squashed = Cause.squash(cause);
+  if (Schema.is(RouteRequestError)(squashed)) {
+    return squashed.message;
+  }
+  return Cause.pretty(cause);
+}
 
 // Summarize noisy websocket pushes so explicit debug logging stays useful
 // without dumping ANSI-heavy terminal redraw traffic into the server logs.
@@ -1227,21 +1269,25 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverTranscribeVoice: {
         const body = stripRequestTag(request.body);
-        const adapter = yield* providerAdapterRegistry.getByProvider(body.provider);
+        const unavailableMessage = voiceTranscriptionUnavailableMessage(body.provider);
+        const adapter = yield* providerAdapterRegistry
+          .getByProvider(body.provider)
+          .pipe(Effect.mapError(() => new RouteRequestError({ message: unavailableMessage })));
         if (!adapter.transcribeVoice) {
           return yield* new RouteRequestError({
-            message: `Voice transcription is unavailable for provider '${body.provider}'.`,
+            message: unavailableMessage,
           });
         }
         return yield* adapter.transcribeVoice(body).pipe(
-          Effect.mapError(
-            (cause) =>
+          Effect.catchCause((cause) =>
+            Effect.fail(
               new RouteRequestError({
-                message:
-                  cause instanceof Error && cause.message.length > 0
-                    ? cause.message
-                    : "Voice transcription failed.",
+                message: toVoiceTranscriptionFailureMessage({
+                  provider: body.provider,
+                  cause,
+                }),
               }),
+            ),
           ),
         );
       }
@@ -1318,7 +1364,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     if (Exit.isFailure(result)) {
       return yield* sendWsResponse({
         id: request.success.id,
-        error: { message: Cause.pretty(result.cause) },
+        error: { message: toRouteResponseErrorMessage(result.cause) },
       });
     }
 
