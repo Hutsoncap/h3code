@@ -63,3 +63,16 @@ Opening a PR does not create an obligation on our side.
 We may close it. We may ignore it. We may ask you to shrink it. We may reimplement the idea ourselves later.
 
 If you are fine with that, proceed.
+
+## Git Hooks
+
+`bun install` wires up [Lefthook](https://lefthook.dev/) pre-commit hooks via the root `prepare` script. On every `git commit`, Lefthook runs two jobs in parallel against your staged files only:
+
+- `oxfmt` formats staged code, config, and docs files in place (JS/TS/JSON/YAML/CSS/HTML/Markdown) and re-stages the fixes.
+- `oxlint --report-unused-disable-directives` runs the same lint pass CI does. The repo's current `.oxlintrc.json` treats every rule as a warning, so violations surface in the commit output without blocking. If the config ever escalates rules to `error`, the hook will block matching commits.
+
+Hooks only touch staged files, so docs-only or unrelated-file commits add no latency.
+
+If you need to bypass the hook in an emergency, `git commit --no-verify` skips it — but prefer fixing the underlying issue. `AGENTS.md` still requires `bun fmt`, `bun lint`, and `bun typecheck` to pass before a task is considered done, so skipping the hook just defers the work to CI.
+
+If `bun install` didn't install the hook for some reason (e.g. the `prepare` script was skipped), run `bun run prepare` manually.

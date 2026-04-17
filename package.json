@@ -22,6 +22,7 @@
   },
   "type": "module",
   "scripts": {
+    "prepare": "lefthook install",
     "dev": "node scripts/dev-runner.ts dev",
     "dev:server": "node scripts/dev-runner.ts dev:server",
     "dev:web": "node scripts/dev-runner.ts dev:web",
@@ -54,6 +55,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "lefthook": "^2.1.6",
     "oxfmt": "^0.40.0",
     "oxlint": "^1.55.0",
     "turbo": "^2.3.3",
