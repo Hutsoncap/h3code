@@ -199,7 +199,6 @@ import {
   useSplitViewStore,
 } from "../splitViewStore";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
-import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
 import { ComposerCommandItem, ComposerCommandMenu } from "./chat/ComposerCommandMenu";
@@ -215,6 +214,8 @@ import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip";
 import { ActivePlanCard } from "./chat/ActivePlanCard";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
+import { ChatViewShell } from "./chat/ChatViewShell";
+import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
   getComposerProviderState,
@@ -222,7 +223,6 @@ import {
 } from "./chat/composerProviderRegistry";
 import { getComposerTraitSelection } from "./chat/composerTraits";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
-import { ChatThreadPane } from "./chat/ChatThreadPane";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
   appendVoiceTranscriptToPrompt,
@@ -6158,28 +6158,30 @@ export default function ChatView({
     );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <ChatThreadPane
-        bodyProps={{
-          branchToolbar: branchToolbarNode,
-          chatComposerPaneProps,
-          chatTranscriptPaneProps,
-          planSidebar: planSidebarNode,
-          pullRequestDialog: pullRequestDialogNode,
-          terminalWorkspaceOpen,
-          terminalWorkspaceTerminalTabActive,
-          workspaceTerminalDrawer,
+    <>
+      <ChatViewShell
+        chatThreadPaneProps={{
+          bodyProps: {
+            branchToolbar: branchToolbarNode,
+            chatComposerPaneProps,
+            chatTranscriptPaneProps,
+            planSidebar: planSidebarNode,
+            pullRequestDialog: pullRequestDialogNode,
+            terminalWorkspaceOpen,
+            terminalWorkspaceTerminalTabActive,
+            workspaceTerminalDrawer,
+          },
+          headerProps: chatHeaderProps,
+          isElectron: isElectron,
+          rateLimitStatus: activeRateLimitStatus,
+          providerStatus: activeProviderStatus,
+          sidebarSide: settings.sidebarSide,
+          terminalDrawer: terminalDrawerNode,
+          terminalWorkspaceOpen: terminalWorkspaceOpen,
+          terminalWorkspaceTabProps,
+          threadError: activeThread.error,
+          onDismissThreadError: dismissActiveThreadError,
         }}
-        headerProps={chatHeaderProps}
-        isElectron={isElectron}
-        rateLimitStatus={activeRateLimitStatus}
-        providerStatus={activeProviderStatus}
-        sidebarSide={settings.sidebarSide}
-        terminalDrawer={terminalDrawerNode}
-        terminalWorkspaceOpen={terminalWorkspaceOpen}
-        terminalWorkspaceTabProps={terminalWorkspaceTabProps}
-        threadError={activeThread.error}
-        onDismissThreadError={dismissActiveThreadError}
       />
 
       <ChatViewDialogs
@@ -6212,6 +6214,6 @@ export default function ChatView({
         onClose={closeExpandedImage}
         onNavigate={navigateExpandedImage}
       />
-    </div>
+    </>
   );
 }
