@@ -59,6 +59,10 @@ Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. 
 | **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | ✅ #2 — lefthook wired up                                                                                                                                                                           |
 | **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | ✅ #8 — H3 Code naming + compatibility sweep                                                                                                                                                        |
 
+Current p0.3 sub-slice:
+
+- 🚧 worktree: `codex/p0.3-chatview-pull-request-dialog` — pull-request dialog host extracted; more ChatView seams remain
+
 ### Why these, why now
 
 Every one of these directly lifts a constraint that Phase 1+ would otherwise hit:

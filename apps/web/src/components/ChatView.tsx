@@ -212,9 +212,9 @@ import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip"
 import { ChatComposerFooter } from "./chat/ChatComposerFooter";
 import { ChatActivePlanCard } from "./chat/ChatActivePlanCard";
 import { ChatComposerStatusBanner } from "./chat/ChatComposerStatusBanner";
+import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
-import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
   getComposerProviderState,
@@ -6085,20 +6085,14 @@ export default function ChatView({
         : {})}
     />
   ) : null;
-  const pullRequestDialogNode = pullRequestDialogState ? (
-    <PullRequestThreadDialog
-      key={pullRequestDialogState.key}
-      open
+  const pullRequestDialogNode = (
+    <ChatPullRequestDialog
+      dialogState={pullRequestDialogState}
       cwd={activeProject?.cwd ?? null}
-      initialReference={pullRequestDialogState.initialReference}
-      onOpenChange={(open) => {
-        if (!open) {
-          closePullRequestDialog();
-        }
-      }}
+      onClose={closePullRequestDialog}
       onPrepared={handlePreparedPullRequestThread}
     />
-  ) : null;
+  );
   const workspaceTerminalDrawer = terminalWorkspaceOpen ? (
     <div
       aria-hidden={!terminalWorkspaceTerminalTabActive}
