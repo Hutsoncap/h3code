@@ -325,7 +325,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev                                                                       | 🚧 #18/#22 — voice transcription and notifications IPC validated; more boundaries remain |
 | **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                            | ✅ #16 — release smoke gates CI + release preflight                                      |
 | **hX8** | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | ✅ #26 — provider model resolution parity matrix added                                   |
-| **hX9** | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | 🚧 worktree: h3code-hx6-open-in-editor-boundary                                          |
+| **hX9** | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | ✅ #27 — open-in-editor payload validation added                                         |
 
 ---
 
@@ -358,7 +358,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX8) — runs continuously in parallel with all phases,
+Hardening lane (hX1–hX9) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
