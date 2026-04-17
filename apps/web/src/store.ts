@@ -1346,10 +1346,13 @@ function applyThreadMessageSentEvent(thread: Thread, event: ThreadMessageSentEve
     thread.messages.find((message) => message.id === payload.messageId),
   );
   const existingIndex = thread.messages.findIndex((message) => message.id === payload.messageId);
+  const existingMessage = existingIndex >= 0 ? thread.messages[existingIndex] : undefined;
+  if (payload.streaming && existingMessage?.completedAt !== undefined) {
+    return thread;
+  }
   let messages = thread.messages;
 
   if (existingIndex >= 0) {
-    const existingMessage = thread.messages[existingIndex];
     if (!existingMessage) {
       return thread;
     }
