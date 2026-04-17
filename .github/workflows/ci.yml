@@ -6,9 +6,13 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  quality:
-    name: Format, Lint, Typecheck, Test, Browser Test, Build
+  format_lint:
+    name: Format + Lint
     # Upstream uses blacksmith-4vcpu-ubuntu-2404 (Blacksmith-hosted runner).
     # This fork doesn't have the Blacksmith GitHub App installed, so those jobs
     # would queue forever. Using GitHub-hosted ubuntu-24.04 instead — slower but
@@ -19,36 +23,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
-      - name: Cache Bun and Turbo
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.bun/install/cache
-            .turbo
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-${{ hashFiles('turbo.json') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-ci
 
       - name: Format
         run: bun run fmt:check
@@ -56,11 +32,43 @@ jobs:
       - name: Lint
         run: bun run lint
 
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-ci
+
       - name: Typecheck
         run: bun run typecheck
 
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-ci
+
       - name: Test
         run: bun run test
+
+  browser_test:
+    name: Browser Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-ci
+        with:
+          cache-playwright: "true"
 
       - name: Install browser test runtime
         run: |
@@ -69,6 +77,16 @@ jobs:
 
       - name: Browser test
         run: bun run --cwd apps/web test:browser
+
+  build_desktop:
+    name: Build Desktop Pipeline
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-ci
 
       - name: Build desktop pipeline
         run: bun run build:desktop
