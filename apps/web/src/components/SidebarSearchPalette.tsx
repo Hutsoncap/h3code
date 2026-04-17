@@ -19,6 +19,7 @@ import {
   matchSidebarSearchProjects,
   matchSidebarSearchThreads,
 } from "./SidebarSearchPalette.logic";
+import { SidebarSearchHighlight } from "./sidebar/SidebarSearchHighlight";
 import {
   Command,
   CommandDialog,
@@ -107,53 +108,6 @@ function threadMatchLabel(input: {
     return "Project match";
   }
   return null;
-}
-
-function tokenizeHighlightQuery(query: string): string[] {
-  const tokens = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((token) => token.length > 0)
-    .filter((token, index, allTokens) => allTokens.indexOf(token) === index);
-  return tokens.toSorted((left, right) => right.length - left.length);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function HighlightedText(props: { text: string; query: string; className?: string }) {
-  const segments = useMemo(() => {
-    const tokens = tokenizeHighlightQuery(props.query);
-    if (tokens.length === 0) {
-      return [{ text: props.text, highlighted: false }];
-    }
-
-    const pattern = new RegExp(`(${tokens.map(escapeRegExp).join("|")})`, "gi");
-    const parts = props.text.split(pattern).filter((part) => part.length > 0);
-    return parts.map((part) => ({
-      text: part,
-      highlighted: tokens.some((token) => token === part.toLowerCase()),
-    }));
-  }, [props.query, props.text]);
-
-  return (
-    <span className={props.className}>
-      {segments.map((segment, index) =>
-        segment.highlighted ? (
-          <mark
-            key={`${segment.text}-${index}`}
-            className="rounded-[3px] bg-amber-200/80 px-[1px] text-current dark:bg-amber-300/25"
-          >
-            {segment.text}
-          </mark>
-        ) : (
-          <span key={`${segment.text}-${index}`}>{segment.text}</span>
-        ),
-      )}
-    </span>
-  );
 }
 
 export function SidebarSearchPalette(props: SidebarSearchPaletteProps) {
@@ -259,7 +213,7 @@ export function SidebarSearchPalette(props: SidebarSearchPaletteProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-3">
                           <div className="min-w-0 flex-1 truncate text-[length:var(--app-font-size-ui,12px)] text-foreground">
-                            <HighlightedText
+                            <SidebarSearchHighlight
                               text={thread.title || "Untitled thread"}
                               query={query}
                             />
@@ -278,7 +232,7 @@ export function SidebarSearchPalette(props: SidebarSearchPaletteProps) {
                         {snippet ? (
                           <div className="mt-0.5 flex items-start gap-3">
                             <div className="min-w-0 flex-1 line-clamp-1 text-[length:var(--app-font-size-ui-meta,10px)] leading-5 text-muted-foreground/78">
-                              <HighlightedText text={snippet} query={query} />
+                              <SidebarSearchHighlight text={snippet} query={query} />
                             </div>
                             <div className="flex w-[8.5rem] shrink-0 justify-end">
                               {threadMatchLabel({ matchKind, messageMatchCount }) ? (
