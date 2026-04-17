@@ -64,6 +64,7 @@ import {
   readBrowserNotificationPermissionState,
   requestBrowserNotificationPermission,
 } from "../notifications/taskCompletion";
+import { parseDesktopNotificationInput } from "../notifications/desktopNotificationInput";
 import { normalizeSettingsSection, SETTINGS_NAV_ITEMS } from "../settingsNavigation";
 import { useStore } from "../store";
 import { formatRelativeTime } from "../components/Sidebar";
@@ -560,7 +561,9 @@ function SettingsRouteView() {
     const body = "Notification test for chats and terminal agents.";
 
     if (window.desktopBridge) {
-      const shown = await window.desktopBridge.notifications.show({ title, body, silent: false });
+      const shown = await window.desktopBridge.notifications.show(
+        parseDesktopNotificationInput({ title, body, silent: false }),
+      );
       toastManager.add({
         type: shown ? "success" : "warning",
         title: shown ? "Test notification sent" : "Notifications unavailable",
