@@ -326,7 +326,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX7**  | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                            | ✅ #16 — release smoke gates CI + release preflight                                                   |
 | **hX8**  | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | ✅ #26 — provider model resolution parity matrix added                                                |
 | **hX9**  | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | ✅ #27 — open-in-editor payload validation added                                                      |
-| **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport                                                     | 🚧 worktree: codex/hx9-ipc-contract-hardening                                                         |
+| **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport                                                     | ✅ #28 — shared IPC/browser contract coverage added                                                   |
 
 ---
 
