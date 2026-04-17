@@ -169,6 +169,19 @@ const startTurn = (input: {
     createdAt: nowIso(),
   });
 
+const waitForTurnProcessingQuiesced = (
+  harness: OrchestrationIntegrationHarness,
+  checkpointTurnCount: number,
+  timeoutMs = 8_000,
+) =>
+  harness.waitForReceipt(
+    (receipt): receipt is TurnProcessingQuiescedReceipt =>
+      receipt.type === "turn.processing.quiesced" &&
+      receipt.threadId === THREAD_ID &&
+      receipt.checkpointTurnCount === checkpointTurnCount,
+    timeoutMs,
+  );
+
 it.live("runs a single turn end-to-end and persists checkpoint state in sqlite + git", () =>
   withHarness((harness) =>
     Effect.gen(function* () {
@@ -1266,6 +1279,7 @@ itLiveUnlessCi("reverts claudeAgent turns and rolls back provider conversation s
             model: "claude-sonnet-4-6",
           },
         });
+        yield* waitForTurnProcessingQuiesced(harness, 1);
 
         yield* harness.waitForThread(
           THREAD_ID,
@@ -1308,6 +1322,7 @@ itLiveUnlessCi("reverts claudeAgent turns and rolls back provider conversation s
           messageId: "msg-user-claude-revert-2",
           text: "Second Claude edit",
         });
+        yield* waitForTurnProcessingQuiesced(harness, 2);
 
         yield* harness.waitForThread(
           THREAD_ID,
