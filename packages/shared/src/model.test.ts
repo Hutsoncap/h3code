@@ -151,6 +151,34 @@ describe("resolveSelectableModel", () => {
   });
 });
 
+describe("provider model resolution parity", () => {
+  const cases = [
+    {
+      provider: "codex" as const,
+      alias: "5.3",
+      label: "GPT-5.3 Codex",
+      canonical: "gpt-5.3-codex" as const,
+      options: [{ slug: "gpt-5.3-codex", name: "GPT-5.3 Codex" }],
+    },
+    {
+      provider: "claudeAgent" as const,
+      alias: "sonnet",
+      label: "Claude Sonnet 4.6",
+      canonical: "claude-sonnet-4-6" as const,
+      options: [{ slug: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" }],
+    },
+  ] as const;
+
+  it("resolves Codex and Claude model aliases through the same canonical path", () => {
+    for (const { provider, alias, label, canonical, options } of cases) {
+      expect(resolveModelSlugForProvider(provider, alias)).toBe(canonical);
+      expect(resolveSelectableModel(provider, alias, options)).toBe(canonical);
+      expect(resolveSelectableModel(provider, label, options)).toBe(canonical);
+      expect(resolveSelectableModel(provider, canonical, options)).toBe(canonical);
+    }
+  });
+});
+
 describe("getModelCapabilities reasoningEffortLevels", () => {
   const values = (provider: "codex" | "claudeAgent", model: string | null) =>
     getModelCapabilities(provider, model).reasoningEffortLevels.map((l) => l.value);
