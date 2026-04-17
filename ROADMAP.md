@@ -415,4 +415,4 @@ Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narro
 
 _Agents: append items here when you spot adjacent work worth doing but out of scope for your current PR. Include enough context that the next agent can act without re-reading this conversation._
 
-(none yet)
+- `editor-contract-hardening` - shared editor launch contract coverage for `packages/contracts/src/editor.ts` and the web-facing editor metadata boundary; worktree: `codex/hx6-editor-contract-hardening`.
