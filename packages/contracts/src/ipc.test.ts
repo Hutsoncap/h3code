@@ -4,8 +4,9 @@ import { Schema } from "effect";
 import {
   BrowserNavigateInputSchema,
   ContextMenuRequestSchema,
-  DesktopServerTranscribeVoiceInputSchema,
   DesktopNotificationInputSchema,
+  DesktopNotificationShowResultSchema,
+  DesktopServerTranscribeVoiceInputSchema,
   ThreadBrowserStateSchema,
 } from "./ipc";
 
@@ -15,6 +16,9 @@ const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
   DesktopServerTranscribeVoiceInputSchema,
 );
 const decodeDesktopNotificationInput = Schema.decodeUnknownSync(DesktopNotificationInputSchema);
+const decodeDesktopNotificationShowResult = Schema.decodeUnknownSync(
+  DesktopNotificationShowResultSchema,
+);
 const decodeThreadBrowserState = Schema.decodeUnknownSync(ThreadBrowserStateSchema);
 
 describe("ContextMenuRequestSchema", () => {
@@ -62,6 +66,17 @@ describe("DesktopNotificationInputSchema", () => {
         threadId: 42,
       }),
     ).toThrow();
+  });
+});
+
+describe("DesktopNotificationShowResultSchema", () => {
+  it("parses boolean results from the desktop notification bridge", () => {
+    expect(decodeDesktopNotificationShowResult(true)).toBe(true);
+    expect(decodeDesktopNotificationShowResult(false)).toBe(false);
+  });
+
+  it("rejects non-boolean results", () => {
+    expect(() => decodeDesktopNotificationShowResult("shown")).toThrow();
   });
 });
 
