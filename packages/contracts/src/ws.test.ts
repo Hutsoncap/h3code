@@ -73,6 +73,24 @@ it.effect("accepts git.preparePullRequestThread requests", () =>
   }),
 );
 
+it.effect("rejects websocket requests with excess body fields", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWebSocketRequest({
+        id: "req-keybinding-1",
+        body: {
+          _tag: WS_METHODS.serverUpsertKeybinding,
+          key: "mod+shift+r",
+          command: "script.run-tests.run",
+          unexpected: true,
+        },
+      }),
+    );
+
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

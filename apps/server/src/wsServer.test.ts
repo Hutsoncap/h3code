@@ -1751,6 +1751,57 @@ describe("WebSocket Server", () => {
     );
   });
 
+  it("rejects malformed keybinding websocket requests before mutating config", async () => {
+    const baseDir = makeTempDir("t3code-state-invalid-upsert-keybinding-");
+    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    ensureParentDir(keybindingsPath);
+    fs.writeFileSync(
+      keybindingsPath,
+      JSON.stringify([{ key: "mod+j", command: "terminal.toggle" }]),
+      "utf8",
+    );
+
+    server = await createTestServer({ cwd: "/my/workspace", baseDir });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const initialConfig = JSON.parse(fs.readFileSync(keybindingsPath, "utf8")) as KeybindingsConfig;
+
+    for (const params of [
+      { key: "", command: "terminal.toggle" },
+      { key: "mod+shift+r", command: "script.Run.run" },
+      { key: "mod+shift+r", command: "script.run-tests.run", unexpected: true },
+    ] as const) {
+      const response = await sendRequest(ws, WS_METHODS.serverUpsertKeybinding, params);
+      expect(response.result).toBeUndefined();
+      expect(response.error?.message).toContain("Invalid request format");
+    }
+
+    const persistedConfig = JSON.parse(
+      fs.readFileSync(keybindingsPath, "utf8"),
+    ) as KeybindingsConfig;
+    expect(persistedConfig).toEqual(initialConfig);
+
+    const configResponse = await sendRequest(ws, WS_METHODS.serverGetConfig);
+    expect(configResponse.error).toBeUndefined();
+    expect(configResponse.result).toEqual({
+      cwd: "/my/workspace",
+      homeDir: "/Users/tester",
+      worktreesDir: expect.any(String),
+      keybindingsConfigPath: keybindingsPath,
+      keybindings: compileKeybindings(initialConfig),
+      issues: [],
+      providers: defaultProviderStatuses,
+      availableEditors: expect.any(Array),
+    });
+    expectAvailableEditors(
+      (configResponse.result as { availableEditors: unknown }).availableEditors,
+    );
+  });
+
   it("returns error for unknown methods", async () => {
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();

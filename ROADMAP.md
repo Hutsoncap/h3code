@@ -330,6 +330,10 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX11** | Sidebar search highlight determinism — extract duplicate-match highlighting into a pure helper and cover repeated-token rendering so palette updates stay stable under rerenders                 | ✅ #40 — sidebar search highlights stabilized                                                                                                                                                                                                 |
 | **hX12** | Orchestration revert integration stabilization — wait for turn-processing quiescence before checkpoint-revert assertions so Claude rollback coverage stops racing runtime tail work              | ✅ #41 — orchestration revert timing stabilized                                                                                                                                                                                               |
 
+Current hX6 sub-slice:
+
+- 🚧 worktree: `codex/hx6-keybinding-ws-validation` — keybinding websocket request validation
+
 ---
 
 ## Dependencies map
