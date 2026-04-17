@@ -69,6 +69,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Release smoke
+        run: bun run release:smoke
+
       - name: Lint
         run: bun run lint
 

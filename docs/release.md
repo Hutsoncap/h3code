@@ -5,7 +5,7 @@ This document covers how to run desktop releases from one tag, first without sig
 ## What the workflow does
 
 - Trigger: push tag matching `v*.*.*`.
-- Runs quality gates first: lint, typecheck, test.
+- Runs preflight quality gates first: `bun run release:smoke`, lint, typecheck, test.
 - Builds four artifacts in parallel:
   - macOS `arm64` DMG
   - macOS `x64` DMG
@@ -73,13 +73,18 @@ Checklist:
 
 Use this first to validate the release pipeline.
 
-1. Confirm no signing secrets are required for this test.
-2. Create a test tag:
+1. Run the local preflight set from the repo root:
+   - `bun run release:smoke`
+   - `bun lint`
+   - `bun typecheck`
+   - `bun run test`
+2. Confirm no signing secrets are required for this test.
+3. Create a test tag:
    - `git tag v0.0.0-test.1`
    - `git push origin v0.0.0-test.1`
-3. Wait for `.github/workflows/release.yml` to finish.
-4. Verify the GitHub Release contains all platform artifacts.
-5. Download each artifact and sanity-check installation on each OS.
+4. Wait for `.github/workflows/release.yml` to finish.
+5. Verify the GitHub Release contains all platform artifacts.
+6. Download each artifact and sanity-check installation on each OS.
 
 ## 2) Apple signing + notarization setup (macOS)
 
@@ -140,14 +145,15 @@ Checklist:
 ## 4) Ongoing release checklist
 
 1. Ensure `main` is green in CI.
-2. Bump app version as needed.
-3. Create release tag: `vX.Y.Z`.
-4. Push tag.
-5. Verify workflow steps:
-   - preflight passes
+2. Run `bun run release:smoke` locally before cutting a tag.
+3. Bump app version as needed.
+4. Create release tag: `vX.Y.Z`.
+5. Push tag.
+6. Verify workflow steps:
+   - preflight passes `bun run release:smoke`, lint, typecheck, and test
    - all matrix builds pass
    - release job uploads expected files
-6. Smoke test downloaded artifacts.
+7. Smoke test downloaded artifacts.
 
 ## 5) Troubleshooting
 

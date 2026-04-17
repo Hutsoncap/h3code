@@ -323,7 +323,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX4** | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold                                                                  | 📋 Planned                                         |
 | **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces                                        | ✅ #14 — browser suspend invariants verified       |
 | **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev                                                                                                              | 📋 Planned                                         |
-| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` catches packaging regressions before they reach users                                                                                                  | 📋 Planned                                         |
+| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                                                                   | 🚧 worktree: h3code-hx7-release-smoke-hardening    |
 
 ---
 
