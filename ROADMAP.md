@@ -324,7 +324,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | ✅ #14 — browser suspend invariants verified                                             |
 | **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev                                                                       | 🚧 #18/#22 — voice transcription and notifications IPC validated; more boundaries remain |
 | **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                            | ✅ #16 — release smoke gates CI + release preflight                                      |
-| **hX8** | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | 🚧 worktree: h3code-hx3-provider-parity-model-resolution                                 |
+| **hX8** | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | ✅ #26 — provider model resolution parity matrix added                                   |
 
 ---
 
