@@ -54,3 +54,23 @@ export function registerValidatedIpcHandler<S extends Schema.Top, R>(
     handler(decodeIpcPayload(decodeSchema, payload)),
   );
 }
+
+export function registerValidatedIpcEndpoint<S extends Schema.Top, T extends Schema.Top>(
+  ipc: IpcHandlerRegistrar,
+  channel: string,
+  inputSchema: S,
+  outputSchema: T,
+  handler: (input: Schema.Schema.Type<S>) => Promise<Schema.Schema.Type<T>> | Schema.Schema.Type<T>,
+  options?: ValidatedIpcHandlerOptions,
+): void {
+  const decodeInputSchema = withDevelopmentExactSchema(inputSchema, options);
+  const decodeOutputSchema = withDevelopmentExactSchema(outputSchema, options);
+
+  ipc.removeHandler(channel);
+  ipc.handle(channel, async (_event, payload: unknown) =>
+    decodeIpcPayload(
+      decodeOutputSchema,
+      await handler(decodeIpcPayload(decodeInputSchema, payload)),
+    ),
+  );
+}

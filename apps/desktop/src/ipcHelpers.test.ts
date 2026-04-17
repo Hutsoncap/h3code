@@ -1,7 +1,16 @@
+import { Schema } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { BrowserOpenInputSchema, ThreadBrowserStateSchema } from "@t3tools/contracts";
+import {
+  BrowserOpenInputSchema,
+  DesktopUpdateStateSchema,
+  ThreadBrowserStateSchema,
+} from "@t3tools/contracts";
 
-import { registerValidatedIpcHandler, safeDecodeIpcPayload } from "./ipcHelpers";
+import {
+  registerValidatedIpcEndpoint,
+  registerValidatedIpcHandler,
+  safeDecodeIpcPayload,
+} from "./ipcHelpers";
 
 describe("registerValidatedIpcHandler", () => {
   it("parses payloads before invoking the handler", async () => {
@@ -120,5 +129,103 @@ describe("safeDecodeIpcPayload", () => {
         lastError: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("registerValidatedIpcEndpoint", () => {
+  it("validates both the incoming payload and the outgoing response", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+    const listener = vi.fn(() => ({
+      enabled: true,
+      status: "idle" as const,
+      currentVersion: "1.0.0",
+      hostArch: "x64" as const,
+      appArch: "x64" as const,
+      runningUnderArm64Translation: false,
+      availableVersion: null,
+      downloadedVersion: null,
+      downloadPercent: null,
+      checkedAt: null,
+      message: null,
+      errorContext: null,
+      canRetry: false,
+    }));
+
+    registerValidatedIpcEndpoint(
+      { removeHandler, handle },
+      "desktop:update-get-state",
+      Schema.Undefined,
+      DesktopUpdateStateSchema,
+      listener,
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(registered?.({}, undefined)).resolves.toMatchObject({
+      status: "idle",
+      currentVersion: "1.0.0",
+    });
+  });
+
+  it("rejects invalid response payloads before replying to the renderer", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+
+    registerValidatedIpcEndpoint(
+      { removeHandler, handle },
+      "desktop:update-get-state",
+      Schema.Undefined,
+      DesktopUpdateStateSchema,
+      () =>
+        ({
+          enabled: true,
+          status: "bogus",
+        }) as never,
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(registered?.({}, undefined)).rejects.toThrow();
+  });
+
+  it("rejects unknown response fields when exact validation is enabled in development", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+
+    registerValidatedIpcEndpoint(
+      { removeHandler, handle },
+      "desktop:update-get-state",
+      Schema.Undefined,
+      DesktopUpdateStateSchema,
+      () =>
+        ({
+          enabled: true,
+          status: "idle",
+          currentVersion: "1.0.0",
+          hostArch: "x64",
+          appArch: "x64",
+          runningUnderArm64Translation: false,
+          availableVersion: null,
+          downloadedVersion: null,
+          downloadPercent: null,
+          checkedAt: null,
+          message: null,
+          errorContext: null,
+          canRetry: false,
+          extra: true,
+        }) as never,
+      {
+        rejectUnknownFieldsInDevelopment: true,
+        isDevelopment: true,
+      },
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(registered?.({}, undefined)).rejects.toThrow(/Unexpected key/);
   });
 });
