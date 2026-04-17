@@ -18,7 +18,6 @@ import {
   TerminalWriteInput,
 } from "@t3tools/contracts";
 import type { TerminalActivityState, TerminalCliKind } from "@t3tools/shared/terminalThreads";
-import { PtyProcess } from "./PTY";
 import { Effect, Schema, ServiceMap } from "effect";
 
 export class TerminalError extends Schema.TaggedErrorClass<TerminalError>()("TerminalError", {
@@ -26,12 +25,16 @@ export class TerminalError extends Schema.TaggedErrorClass<TerminalError>()("Ter
   cause: Schema.optional(Schema.Defect),
 }) {}
 
+export interface TerminalSessionRuntimeState {
+  pid: number;
+}
+
 export interface TerminalSessionState {
   threadId: string;
   terminalId: string;
   cwd: string;
   status: TerminalSessionStatus;
-  pid: number | null;
+  runtime: TerminalSessionRuntimeState | null;
   history: string;
   historyLineBreakCount: number;
   historyEndsWithNewline: boolean;
@@ -41,9 +44,6 @@ export interface TerminalSessionState {
   updatedAt: string;
   cols: number;
   rows: number;
-  process: PtyProcess | null;
-  unsubscribeData: (() => void) | null;
-  unsubscribeExit: (() => void) | null;
   hasRunningSubprocess: boolean;
   detectedCliKind: TerminalCliKind | null;
   managedAgentRunning: boolean;

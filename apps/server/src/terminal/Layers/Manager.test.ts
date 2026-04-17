@@ -29,7 +29,13 @@ class FakePtyProcess implements PtyProcess {
   killed = false;
   paused = false;
 
-  constructor(readonly pid: number) {}
+  constructor(
+    readonly pid: number,
+    private readonly options: {
+      stickyDataListeners?: boolean;
+      stickyExitListeners?: boolean;
+    } = {},
+  ) {}
 
   write(data: string): void {
     this.writes.push(data);
@@ -55,6 +61,9 @@ class FakePtyProcess implements PtyProcess {
   onData(callback: (data: string) => void): () => void {
     this.dataListeners.add(callback);
     return () => {
+      if (this.options.stickyDataListeners) {
+        return;
+      }
       this.dataListeners.delete(callback);
     };
   }
@@ -62,6 +71,9 @@ class FakePtyProcess implements PtyProcess {
   onExit(callback: (event: PtyExitEvent) => void): () => void {
     this.exitListeners.add(callback);
     return () => {
+      if (this.options.stickyExitListeners) {
+        return;
+      }
       this.exitListeners.delete(callback);
     };
   }
@@ -85,7 +97,13 @@ class FakePtyAdapter implements PtyAdapterShape {
   readonly spawnFailures: Error[] = [];
   private nextPid = 9000;
 
-  constructor(private readonly mode: "sync" | "async" = "sync") {}
+  constructor(
+    private readonly mode: "sync" | "async" = "sync",
+    private readonly processOptions: {
+      stickyDataListeners?: boolean;
+      stickyExitListeners?: boolean;
+    } = {},
+  ) {}
 
   spawn(input: PtySpawnInput): Effect.Effect<PtyProcess, PtySpawnError> {
     this.spawnInputs.push(input);
@@ -99,7 +117,7 @@ class FakePtyAdapter implements PtyAdapterShape {
         }),
       );
     }
-    const process = new FakePtyProcess(this.nextPid++);
+    const process = new FakePtyProcess(this.nextPid++, this.processOptions);
     this.processes.push(process);
     if (this.mode === "async") {
       return Effect.tryPromise({
@@ -410,6 +428,55 @@ describe("TerminalManager", () => {
     expect(reopened.history).toBe("");
     expect(ptyAdapter.spawnInputs).toHaveLength(2);
     expect(fs.readFileSync(historyLogPath(logsDir), "utf8")).toBe("");
+
+    manager.dispose();
+  });
+
+  it("ignores late runtime callbacks from a replaced terminal process", async () => {
+    const { manager, ptyAdapter } = makeManager(5, {
+      ptyAdapter: new FakePtyAdapter("sync", {
+        stickyDataListeners: true,
+        stickyExitListeners: true,
+      }),
+    });
+    const events: TerminalEvent[] = [];
+    manager.on("event", (event) => {
+      events.push(event);
+    });
+
+    await manager.open(openInput());
+    const firstProcess = ptyAdapter.processes[0];
+    expect(firstProcess).toBeDefined();
+    if (!firstProcess) return;
+
+    const restarted = await manager.restart(restartInput());
+    const secondProcess = ptyAdapter.processes[1];
+    expect(secondProcess).toBeDefined();
+    if (!secondProcess) return;
+
+    firstProcess.emitData("stale output\n");
+    firstProcess.emitExit({ exitCode: 17, signal: 0 });
+    secondProcess.emitData("fresh output\n");
+
+    await waitFor(() => {
+      const outputEvents = events.filter((event) => event.type === "output");
+      return outputEvents.some((event) => event.data.includes("fresh output"));
+    });
+
+    const resumed = await manager.open(openInput());
+
+    expect(restarted.pid).toBe(secondProcess.pid);
+    expect(resumed.status).toBe("running");
+    expect(resumed.pid).toBe(secondProcess.pid);
+    expect(resumed.history).toBe("fresh output\n");
+    expect(
+      events.some(
+        (event) =>
+          event.type === "exited" &&
+          event.exitCode === 17 &&
+          event.terminalId === DEFAULT_TERMINAL_ID,
+      ),
+    ).toBe(false);
 
     manager.dispose();
   });
