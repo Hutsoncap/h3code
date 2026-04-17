@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
 import {
+  DesktopConfirmMessageSchema,
   DesktopNotificationShowResultSchema,
   DesktopMenuAction,
   DesktopShellOpenExternalInputSchema,
@@ -44,7 +45,8 @@ const wsUrl = process.env.T3CODE_DESKTOP_WS_URL ?? null;
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => wsUrl,
   pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
-  confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
+  confirm: (message) =>
+    ipcRenderer.invoke(CONFIRM_CHANNEL, decodeIpcPayload(DesktopConfirmMessageSchema, message)),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   showContextMenu: (items, position) =>
     ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, { items, position }),

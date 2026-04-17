@@ -74,11 +74,13 @@ describe("preload desktop notification bridge", () => {
 
   it("rejects invalid shell bridge inputs before invoking Electron", async () => {
     const desktopBridge = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      confirm: (message: string) => Promise<unknown>;
       openExternal: (url: string) => Promise<unknown>;
       showInFolder: (path: string) => Promise<unknown>;
       shell: { showInFolder: (path: string) => Promise<unknown> };
     };
 
+    expect(() => desktopBridge.confirm("   ")).toThrow();
     expect(() => desktopBridge.openExternal(123 as never)).toThrow();
     expect(() => desktopBridge.showInFolder(123 as never)).toThrow();
     expect(() => desktopBridge.shell.showInFolder(123 as never)).toThrow();
@@ -108,5 +110,22 @@ describe("preload desktop notification bridge", () => {
 
     unsubscribe();
     expect(removeListenerMock).toHaveBeenCalledWith("desktop:menu-action", wrappedListener);
+  });
+
+  it("validates confirm bridge inputs before invoking Electron", async () => {
+    invokeMock.mockResolvedValueOnce(true);
+
+    const desktopBridge = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      confirm: (message: string) => Promise<boolean>;
+    };
+
+    await expect(desktopBridge.confirm(" Delete project?\nThis cannot be undone. ")).resolves.toBe(
+      true,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "desktop:confirm",
+      "Delete project?\nThis cannot be undone.",
+    );
   });
 });
