@@ -4,12 +4,16 @@ import { Schema } from "effect";
 import {
   BrowserNavigateInputSchema,
   ContextMenuRequestSchema,
+  DesktopServerTranscribeVoiceInputSchema,
   DesktopNotificationInputSchema,
   ThreadBrowserStateSchema,
 } from "./ipc";
 
 const decodeContextMenuRequest = Schema.decodeUnknownSync(ContextMenuRequestSchema);
 const decodeBrowserNavigateInput = Schema.decodeUnknownSync(BrowserNavigateInputSchema);
+const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
+  DesktopServerTranscribeVoiceInputSchema,
+);
 const decodeDesktopNotificationInput = Schema.decodeUnknownSync(DesktopNotificationInputSchema);
 const decodeThreadBrowserState = Schema.decodeUnknownSync(ThreadBrowserStateSchema);
 
@@ -58,6 +62,25 @@ describe("DesktopNotificationInputSchema", () => {
         threadId: 42,
       }),
     ).toThrow();
+  });
+});
+
+describe("DesktopServerTranscribeVoiceInputSchema", () => {
+  it("parses desktop voice transcription payloads", () => {
+    const parsed = decodeDesktopServerTranscribeVoiceInput({
+      provider: "codex",
+      cwd: " /tmp/workspace ",
+      threadId: " thread-1 ",
+      mimeType: " audio/wav ",
+      sampleRateHz: 24_000,
+      durationMs: 1_000,
+      audioBase64: " UklGRigAAABXQVZF ",
+    });
+
+    expect(parsed.cwd).toBe("/tmp/workspace");
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.mimeType).toBe("audio/wav");
+    expect(parsed.audioBase64).toBe("UklGRigAAABXQVZF");
   });
 });
 

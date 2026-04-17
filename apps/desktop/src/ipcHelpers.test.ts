@@ -51,6 +51,62 @@ describe("registerValidatedIpcHandler", () => {
     await expect(registered?.({}, { threadId: 42 })).rejects.toThrow();
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("rejects unknown fields when exact validation is enabled in development", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+    const listener = vi.fn();
+
+    registerValidatedIpcHandler(
+      { removeHandler, handle },
+      "desktop:browser-open",
+      BrowserOpenInputSchema,
+      listener,
+      {
+        rejectUnknownFieldsInDevelopment: true,
+        isDevelopment: true,
+      },
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(
+      registered?.({}, { threadId: "thread-1", initialUrl: "https://example.com", extra: true }),
+    ).rejects.toThrow(/Unexpected key/);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("strips unknown fields outside development exact validation", async () => {
+    const removeHandler = vi.fn();
+    const handle = vi.fn();
+    const listener = vi.fn((input: { threadId: string; initialUrl?: string | undefined }) => input);
+
+    registerValidatedIpcHandler(
+      { removeHandler, handle },
+      "desktop:browser-open",
+      BrowserOpenInputSchema,
+      listener,
+      {
+        rejectUnknownFieldsInDevelopment: true,
+        isDevelopment: false,
+      },
+    );
+
+    const registered = handle.mock.calls[0]?.[1] as
+      | ((event: unknown, payload: unknown) => unknown)
+      | undefined;
+    await expect(
+      registered?.({}, { threadId: "thread-1", initialUrl: "https://example.com", extra: true }),
+    ).resolves.toEqual({
+      threadId: "thread-1",
+      initialUrl: "https://example.com",
+    });
+    expect(listener).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      initialUrl: "https://example.com",
+    });
+  });
 });
 
 describe("safeDecodeIpcPayload", () => {

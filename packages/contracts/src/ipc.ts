@@ -35,7 +35,7 @@ import type {
   ProjectWriteFileInput,
   ProjectWriteFileResult,
 } from "./project";
-import type {
+import {
   ServerConfig,
   ServerListWorktreesResult,
   ServerRefreshProvidersResult,
@@ -305,6 +305,12 @@ export const DesktopNotificationInputSchema = Schema.Struct({
   silent: Schema.optional(Schema.Boolean),
   threadId: Schema.optional(ThreadId),
 });
+export const DesktopServerTranscribeVoiceInputSchema = ServerVoiceTranscriptionInput;
+export type DesktopServerTranscribeVoiceInput = typeof DesktopServerTranscribeVoiceInputSchema.Type;
+
+export const DesktopServerTranscribeVoiceResultSchema = ServerVoiceTranscriptionResult;
+export type DesktopServerTranscribeVoiceResult =
+  typeof DesktopServerTranscribeVoiceResultSchema.Type;
 
 export interface DesktopBridge {
   getWsUrl: () => string | null;
@@ -332,8 +338,8 @@ export interface DesktopBridge {
   };
   server?: {
     transcribeVoice: (
-      input: ServerVoiceTranscriptionInput,
-    ) => Promise<ServerVoiceTranscriptionResult>;
+      input: DesktopServerTranscribeVoiceInput,
+    ) => Promise<DesktopServerTranscribeVoiceResult>;
   };
   browser: {
     open: (input: BrowserOpenInput) => Promise<ThreadBrowserState>;

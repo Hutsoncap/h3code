@@ -8,9 +8,12 @@ import * as Crypto from "node:crypto";
 
 import { app, ipcMain, net } from "electron";
 import type {
-  ServerVoiceTranscriptionInput,
-  ServerVoiceTranscriptionResult,
+  DesktopServerTranscribeVoiceInput,
+  DesktopServerTranscribeVoiceResult,
 } from "@t3tools/contracts";
+import { DesktopServerTranscribeVoiceInputSchema } from "@t3tools/contracts";
+
+import { registerValidatedIpcHandler } from "./ipcHelpers";
 
 export const SERVER_TRANSCRIBE_VOICE_CHANNEL = "desktop:server-transcribe-voice";
 
@@ -37,7 +40,7 @@ function isLikelyWavBuffer(buffer: Buffer): boolean {
   );
 }
 
-function decodeDesktopVoiceAudio(input: ServerVoiceTranscriptionInput): Buffer {
+function decodeDesktopVoiceAudio(input: DesktopServerTranscribeVoiceInput): Buffer {
   if (input.mimeType !== "audio/wav") {
     throw new Error("Only WAV audio is supported for voice transcription.");
   }
@@ -266,8 +269,8 @@ function readVoiceResponseErrorMessage(statusCode: number, body: string): string
 // --- IPC entrypoint --------------------------------------------------------
 
 async function transcribeVoiceViaDesktopBridge(
-  input: ServerVoiceTranscriptionInput,
-): Promise<ServerVoiceTranscriptionResult> {
+  input: DesktopServerTranscribeVoiceInput,
+): Promise<DesktopServerTranscribeVoiceResult> {
   const audioBuffer = decodeDesktopVoiceAudio(input);
   const auth = await resolveDesktopVoiceAuth(input.cwd?.trim() || process.cwd());
   const response = await requestDesktopVoiceTranscription({
@@ -290,9 +293,14 @@ async function transcribeVoiceViaDesktopBridge(
 }
 
 export function registerDesktopVoiceTranscriptionHandler(): void {
-  ipcMain.removeHandler(SERVER_TRANSCRIBE_VOICE_CHANNEL);
-  ipcMain.handle(
+  registerValidatedIpcHandler(
+    ipcMain,
     SERVER_TRANSCRIBE_VOICE_CHANNEL,
-    async (_event, input: ServerVoiceTranscriptionInput) => transcribeVoiceViaDesktopBridge(input),
+    DesktopServerTranscribeVoiceInputSchema,
+    transcribeVoiceViaDesktopBridge,
+    {
+      rejectUnknownFieldsInDevelopment: true,
+      isDevelopment: !app.isPackaged,
+    },
   );
 }
