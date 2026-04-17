@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { useWorkspaceStore } from "./workspaceStore";
-
 describe("workspaceStore persistence", () => {
   it("falls back to the current state when persisted workspace payloads are malformed", async () => {
     vi.stubGlobal("localStorage", {

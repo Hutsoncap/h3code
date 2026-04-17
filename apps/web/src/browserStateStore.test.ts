@@ -1,7 +1,7 @@
 import { ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import { selectThreadBrowserHistory, useBrowserStateStore } from "./browserStateStore";
+import { selectThreadBrowserHistory } from "./browserStateStore";
 
 const THREAD_ID = ThreadId.makeUnsafe("thread-1");
 
