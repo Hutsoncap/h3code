@@ -1,0 +1,44 @@
+name: Setup CI Workspace
+description: Prepare Bun/Node, restore caches, and install workspace dependencies.
+
+inputs:
+  cache-playwright:
+    description: Restore the Playwright browser cache.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: package.json
+
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: package.json
+
+    - name: Cache Bun and Turbo
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.bun/install/cache
+          .turbo
+        key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-${{ hashFiles('turbo.json') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-
+
+    - name: Cache Playwright browsers
+      if: ${{ inputs.cache-playwright == 'true' }}
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
