@@ -2,6 +2,7 @@ import {
   type ThreadId,
   type ThreadBrowserState,
   type GitActionProgressEvent,
+  OpenInEditorInput,
   type ServerProviderStatusesUpdatedPayload,
   type TerminalEvent,
   ORCHESTRATION_WS_CHANNELS,
@@ -13,6 +14,7 @@ import {
   WS_METHODS,
   type WsWelcomePayload,
 } from "@t3tools/contracts";
+import { Schema } from "effect";
 
 import { showConfirmDialogFallback } from "./confirmDialogFallback";
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -28,6 +30,7 @@ const gitActionProgressListeners = new Set<(payload: GitActionProgressEvent) => 
 const terminalEventListeners = new Set<(payload: TerminalEvent) => void>();
 const fallbackBrowserStateListeners = new Set<(state: ThreadBrowserState) => void>();
 const fallbackBrowserStates = new Map<ThreadId, ThreadBrowserState>();
+const decodeOpenInEditorInput = Schema.decodeUnknownSync(OpenInEditorInput);
 
 function defaultBrowserState(threadId: ThreadId): ThreadBrowserState {
   return {
@@ -271,7 +274,7 @@ export function createWsNativeApi(): NativeApi {
     },
     shell: {
       openInEditor: (cwd, editor) =>
-        transport.request(WS_METHODS.shellOpenInEditor, { cwd, editor }),
+        transport.request(WS_METHODS.shellOpenInEditor, decodeOpenInEditorInput({ cwd, editor })),
       openExternal: async (url) => {
         if (window.desktopBridge) {
           const opened = await window.desktopBridge.openExternal(url);
