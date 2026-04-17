@@ -13,6 +13,7 @@ import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serve
 import { ProviderAdapterRegistry } from "./provider/Services/ProviderAdapterRegistry";
 import { ProviderUnsupportedError } from "./provider/Errors";
 import { ProviderDiscoveryService } from "./provider/Services/ProviderDiscoveryService";
+import type { ProviderDiscoveryServiceShape } from "./provider/Services/ProviderDiscoveryService";
 
 import {
   DEFAULT_TERMINAL_ID,
@@ -583,6 +584,36 @@ describe("WebSocket Server", () => {
     const scope = serverScope;
     serverScope = null;
     await Effect.runPromise(Scope.close(scope, Exit.void));
+  }
+
+  function createProviderDiscoveryTestLayer(
+    providerDiscoveryService: ProviderDiscoveryServiceShape,
+  ): Layer.Layer<ProviderService | ProviderDiscoveryService | ProviderAdapterRegistry, never> {
+    const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
+    const providerService: ProviderServiceShape = {
+      startSession: unsupported,
+      sendTurn: unsupported,
+      steerTurn: unsupported,
+      startReview: unsupported,
+      forkThread: unsupported,
+      interruptTurn: unsupported,
+      respondToRequest: unsupported,
+      respondToUserInput: unsupported,
+      stopSession: unsupported,
+      listSessions: () => Effect.succeed([]),
+      getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+      rollbackConversation: unsupported,
+      streamEvents: Stream.empty,
+    };
+
+    return Layer.mergeAll(
+      Layer.succeed(ProviderService, providerService),
+      Layer.succeed(ProviderDiscoveryService, providerDiscoveryService),
+      Layer.succeed(ProviderAdapterRegistry, {
+        getByProvider: (provider) => Effect.fail(new ProviderUnsupportedError({ provider })),
+        listProviders: () => Effect.succeed([]),
+      }),
+    );
   }
 
   afterEach(async () => {
@@ -1266,6 +1297,368 @@ describe("WebSocket Server", () => {
     });
     expect(response.error).toBeUndefined();
     expect(openCalls).toEqual([{ cwd: "/my/workspace", editor: "cursor" }]);
+  });
+
+  it("routes provider discovery websocket methods through the injected service", async () => {
+    const calls = {
+      getComposerCapabilities: [] as Array<{ provider: string }>,
+      listCommands: [] as Array<Record<string, unknown>>,
+      listSkills: [] as Array<Record<string, unknown>>,
+      listPlugins: [] as Array<Record<string, unknown>>,
+      readPlugin: [] as Array<Record<string, unknown>>,
+      listModels: [] as Array<Record<string, unknown>>,
+    };
+    const providerDiscoveryService: ProviderDiscoveryServiceShape = {
+      getComposerCapabilities: (input) => {
+        calls.getComposerCapabilities.push(input);
+        return Effect.succeed({
+          provider: "codex" as const,
+          supportsSkillMentions: true,
+          supportsSkillDiscovery: true,
+          supportsNativeSlashCommandDiscovery: true,
+          supportsPluginMentions: true,
+          supportsPluginDiscovery: true,
+          supportsRuntimeModelList: true,
+        });
+      },
+      listCommands: (input) => {
+        calls.listCommands.push(input);
+        return Effect.succeed({
+          commands: [{ name: "/status", description: "Show status" }],
+          source: "test",
+          cached: false,
+        });
+      },
+      listSkills: (input) => {
+        calls.listSkills.push(input);
+        return Effect.succeed({
+          skills: [
+            {
+              name: "ship",
+              description: "Ship code",
+              path: "/skills/ship",
+              enabled: true,
+            },
+          ],
+          source: "test",
+          cached: false,
+        });
+      },
+      listPlugins: (input) => {
+        calls.listPlugins.push(input);
+        return Effect.succeed({
+          marketplaces: [
+            {
+              name: "test-marketplace",
+              path: "/marketplace.json",
+              plugins: [
+                {
+                  id: "plugin/test",
+                  name: "test-plugin",
+                  source: { type: "local", path: "/plugins/test-plugin" },
+                  installed: false,
+                  enabled: false,
+                  installPolicy: "AVAILABLE",
+                  authPolicy: "ON_USE",
+                },
+              ],
+            },
+          ],
+          marketplaceLoadErrors: [],
+          remoteSyncError: null,
+          featuredPluginIds: ["plugin/test"],
+          source: "test",
+          cached: false,
+        });
+      },
+      readPlugin: (input) => {
+        calls.readPlugin.push(input);
+        return Effect.succeed({
+          plugin: {
+            marketplaceName: "test-marketplace",
+            marketplacePath: "/marketplace.json",
+            summary: {
+              id: "plugin/test",
+              name: "test-plugin",
+              source: { type: "local", path: "/plugins/test-plugin" },
+              installed: false,
+              enabled: false,
+              installPolicy: "AVAILABLE",
+              authPolicy: "ON_USE",
+            },
+            description: "Plugin description",
+            skills: [],
+            apps: [],
+            mcpServers: [],
+          },
+          source: "test",
+          cached: false,
+        });
+      },
+      listModels: (input) => {
+        calls.listModels.push(input);
+        return Effect.succeed({
+          models: [{ slug: "gpt-5-codex", name: "GPT-5 Codex" }],
+          source: "test",
+          cached: false,
+        });
+      },
+    };
+
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      providerLayer: createProviderDiscoveryTestLayer(providerDiscoveryService),
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const capabilitiesResponse = await sendRequest(ws, WS_METHODS.providerGetComposerCapabilities, {
+      provider: "codex",
+    });
+    expect(capabilitiesResponse.error).toBeUndefined();
+    expect(capabilitiesResponse.result).toEqual({
+      provider: "codex",
+      supportsSkillMentions: true,
+      supportsSkillDiscovery: true,
+      supportsNativeSlashCommandDiscovery: true,
+      supportsPluginMentions: true,
+      supportsPluginDiscovery: true,
+      supportsRuntimeModelList: true,
+    });
+
+    const commandsResponse = await sendRequest(ws, WS_METHODS.providerListCommands, {
+      provider: "codex",
+      cwd: "/repo",
+      threadId: "thread-1",
+      forceReload: true,
+    });
+    expect(commandsResponse.error).toBeUndefined();
+    expect(commandsResponse.result).toEqual({
+      commands: [{ name: "/status", description: "Show status" }],
+      source: "test",
+      cached: false,
+    });
+
+    const skillsResponse = await sendRequest(ws, WS_METHODS.providerListSkills, {
+      provider: "codex",
+      cwd: "/repo",
+      threadId: "thread-2",
+      forceReload: true,
+    });
+    expect(skillsResponse.error).toBeUndefined();
+    expect(skillsResponse.result).toEqual({
+      skills: [
+        {
+          name: "ship",
+          description: "Ship code",
+          path: "/skills/ship",
+          enabled: true,
+        },
+      ],
+      source: "test",
+      cached: false,
+    });
+
+    const pluginsResponse = await sendRequest(ws, WS_METHODS.providerListPlugins, {
+      provider: "codex",
+      cwd: "/repo",
+      threadId: "thread-3",
+      forceRemoteSync: true,
+      forceReload: true,
+    });
+    expect(pluginsResponse.error).toBeUndefined();
+    expect(pluginsResponse.result).toEqual({
+      marketplaces: [
+        {
+          name: "test-marketplace",
+          path: "/marketplace.json",
+          plugins: [
+            {
+              id: "plugin/test",
+              name: "test-plugin",
+              source: { type: "local", path: "/plugins/test-plugin" },
+              installed: false,
+              enabled: false,
+              installPolicy: "AVAILABLE",
+              authPolicy: "ON_USE",
+            },
+          ],
+        },
+      ],
+      marketplaceLoadErrors: [],
+      remoteSyncError: null,
+      featuredPluginIds: ["plugin/test"],
+      source: "test",
+      cached: false,
+    });
+
+    const readPluginResponse = await sendRequest(ws, WS_METHODS.providerReadPlugin, {
+      provider: "codex",
+      marketplacePath: "/marketplace.json",
+      pluginName: "test-plugin",
+    });
+    expect(readPluginResponse.error).toBeUndefined();
+    expect(readPluginResponse.result).toEqual({
+      plugin: {
+        marketplaceName: "test-marketplace",
+        marketplacePath: "/marketplace.json",
+        summary: {
+          id: "plugin/test",
+          name: "test-plugin",
+          source: { type: "local", path: "/plugins/test-plugin" },
+          installed: false,
+          enabled: false,
+          installPolicy: "AVAILABLE",
+          authPolicy: "ON_USE",
+        },
+        description: "Plugin description",
+        skills: [],
+        apps: [],
+        mcpServers: [],
+      },
+      source: "test",
+      cached: false,
+    });
+
+    const modelsResponse = await sendRequest(ws, WS_METHODS.providerListModels, {
+      provider: "codex",
+    });
+    expect(modelsResponse.error).toBeUndefined();
+    expect(modelsResponse.result).toEqual({
+      models: [{ slug: "gpt-5-codex", name: "GPT-5 Codex" }],
+      source: "test",
+      cached: false,
+    });
+
+    expect(calls.getComposerCapabilities).toEqual([{ provider: "codex" }]);
+    expect(calls.listCommands).toEqual([
+      { provider: "codex", cwd: "/repo", threadId: "thread-1", forceReload: true },
+    ]);
+    expect(calls.listSkills).toEqual([
+      { provider: "codex", cwd: "/repo", threadId: "thread-2", forceReload: true },
+    ]);
+    expect(calls.listPlugins).toEqual([
+      {
+        provider: "codex",
+        cwd: "/repo",
+        threadId: "thread-3",
+        forceRemoteSync: true,
+        forceReload: true,
+      },
+    ]);
+    expect(calls.readPlugin).toEqual([
+      { provider: "codex", marketplacePath: "/marketplace.json", pluginName: "test-plugin" },
+    ]);
+    expect(calls.listModels).toEqual([{ provider: "codex" }]);
+  });
+
+  it("rejects malformed provider discovery websocket requests before routing them", async () => {
+    const callCounts = {
+      getComposerCapabilities: 0,
+      listCommands: 0,
+      listSkills: 0,
+      listPlugins: 0,
+      readPlugin: 0,
+      listModels: 0,
+    };
+    const providerDiscoveryService: ProviderDiscoveryServiceShape = {
+      getComposerCapabilities: () => {
+        callCounts.getComposerCapabilities += 1;
+        return Effect.succeed({
+          provider: "codex" as const,
+          supportsSkillMentions: false,
+          supportsSkillDiscovery: false,
+          supportsNativeSlashCommandDiscovery: false,
+          supportsPluginMentions: false,
+          supportsPluginDiscovery: false,
+          supportsRuntimeModelList: false,
+        });
+      },
+      listCommands: () => {
+        callCounts.listCommands += 1;
+        return Effect.succeed({ commands: [], source: "test", cached: false });
+      },
+      listSkills: () => {
+        callCounts.listSkills += 1;
+        return Effect.succeed({ skills: [], source: "test", cached: false });
+      },
+      listPlugins: () => {
+        callCounts.listPlugins += 1;
+        return Effect.succeed({
+          marketplaces: [],
+          marketplaceLoadErrors: [],
+          remoteSyncError: null,
+          featuredPluginIds: [],
+          source: "test",
+          cached: false,
+        });
+      },
+      readPlugin: () => {
+        callCounts.readPlugin += 1;
+        return Effect.succeed({
+          plugin: {
+            marketplaceName: "test-marketplace",
+            marketplacePath: "/marketplace.json",
+            summary: {
+              id: "plugin/test",
+              name: "test-plugin",
+              source: { type: "local", path: "/plugins/test-plugin" },
+              installed: false,
+              enabled: false,
+              installPolicy: "AVAILABLE",
+              authPolicy: "ON_USE",
+            },
+            skills: [],
+            apps: [],
+            mcpServers: [],
+          },
+          source: "test",
+          cached: false,
+        });
+      },
+      listModels: () => {
+        callCounts.listModels += 1;
+        return Effect.succeed({ models: [], source: "test", cached: false });
+      },
+    };
+
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      providerLayer: createProviderDiscoveryTestLayer(providerDiscoveryService),
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    for (const [method, params] of [
+      [WS_METHODS.providerGetComposerCapabilities, { provider: "invalid-provider" }],
+      [WS_METHODS.providerListCommands, { provider: "codex", cwd: "   " }],
+      [WS_METHODS.providerListSkills, { provider: "codex", cwd: "" }],
+      [WS_METHODS.providerListPlugins, { provider: "codex", forceRemoteSync: "yes" }],
+      [
+        WS_METHODS.providerReadPlugin,
+        { provider: "codex", marketplacePath: "/marketplace.json", pluginName: "   " },
+      ],
+      [WS_METHODS.providerListModels, { provider: "bogus" }],
+    ] as const) {
+      const response = await sendRequest(ws, method, params);
+      expect(response.result).toBeUndefined();
+      expect(response.error?.message).toContain("Invalid request format");
+    }
+
+    expect(callCounts).toEqual({
+      getComposerCapabilities: 0,
+      listCommands: 0,
+      listSkills: 0,
+      listPlugins: 0,
+      readPlugin: 0,
+      listModels: 0,
+    });
   });
 
   it("reads keybindings from the configured state directory", async () => {
