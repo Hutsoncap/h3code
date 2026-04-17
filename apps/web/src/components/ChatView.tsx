@@ -137,7 +137,6 @@ import BranchToolbar from "./BranchToolbar";
 import { ThreadWorktreeHandoffDialog } from "./ThreadWorktreeHandoffDialog";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
-import TerminalWorkspaceTabs from "./TerminalWorkspaceTabs";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from "~/lib/icons";
 import { Button } from "./ui/button";
@@ -203,8 +202,6 @@ import {
 } from "../splitViewStore";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
-import { ChatBodyPane } from "./chat/ChatBodyPane";
-import { ChatHeader } from "./chat/ChatHeader";
 import { ComposerSlashStatusDialog } from "./chat/ComposerSlashStatusDialog";
 import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
@@ -224,9 +221,8 @@ import {
   renderProviderTraitsPicker,
 } from "./chat/composerProviderRegistry";
 import { getComposerTraitSelection } from "./chat/composerTraits";
-import { ProviderHealthBanner } from "./chat/ProviderHealthBanner";
-import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
-import { RateLimitBanner, deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
+import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
+import { ChatThreadPane } from "./chat/ChatThreadPane";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
   appendVoiceTranscriptToPrompt,
@@ -6040,6 +6036,75 @@ export default function ChatView({
     paneScopeId,
     queuedComposerTurns,
   };
+  const terminalWorkspaceTabProps = {
+    activeTab: terminalState.workspaceActiveTab,
+    isWorking,
+    terminalHasRunningActivity: terminalState.runningTerminalIds.length > 0,
+    terminalCount: terminalState.terminalIds.length,
+    workspaceLayout: terminalState.workspaceLayout,
+    onSelectTab: setTerminalWorkspaceTab,
+  };
+  const chatHeaderProps = {
+    activeThreadId: activeThread.id,
+    activeThreadTitle: activeThread.parentThreadId
+      ? resolveSubagentPresentationForThread({
+          thread: activeThread,
+          threads: allThreads,
+        }).fullLabel
+      : activeThread.title,
+    activeProjectName: activeProject?.name,
+    threadBreadcrumbs,
+    hideHandoffControls: terminalWorkspaceTerminalTabActive,
+    isGitRepo,
+    openInCwd: threadWorkspaceCwd,
+    activeProjectScripts: activeProject?.scripts,
+    preferredScriptId: activeProject
+      ? (lastInvokedScriptByProjectId[activeProject.id] ?? null)
+      : null,
+    keybindings,
+    availableEditors,
+    terminalAvailable: activeProject !== undefined,
+    terminalOpen: terminalState.terminalOpen,
+    terminalToggleShortcutLabel,
+    browserToggleShortcutLabel: browserPanelShortcutLabel,
+    diffToggleShortcutLabel: diffPanelShortcutLabel,
+    handoffBadgeLabel,
+    handoffActionLabel,
+    handoffDisabled,
+    handoffActionTargetProvider: handoffTargetProvider,
+    handoffBadgeSourceProvider,
+    handoffBadgeTargetProvider,
+    browserOpen: resolvedBrowserOpen,
+    gitCwd: threadWorkspaceCwd,
+    diffOpen: resolvedDiffOpen,
+    diffDisabledReason,
+    surfaceMode,
+    chatLayoutAction:
+      surfaceMode === "single" && onSplitSurface
+        ? {
+            kind: "split" as const,
+            label: "Split chat",
+            shortcutLabel: chatSplitShortcutLabel,
+            onClick: onSplitSurface,
+          }
+        : surfaceMode === "split" && isFocusedPane && onMaximizeSurface
+          ? {
+              kind: "maximize" as const,
+              label: "Expand this chat",
+              shortcutLabel: null,
+              onClick: onMaximizeSurface,
+            }
+          : null,
+    onRunProjectScript: onRunProjectScriptFromHeader,
+    onAddProjectScript: saveProjectScript,
+    onUpdateProjectScript: updateProjectScript,
+    onDeleteProjectScript: deleteProjectScript,
+    onToggleTerminal: toggleTerminalVisibility,
+    onToggleDiff,
+    onToggleBrowser,
+    onCreateHandoff: onCreateHandoffThread,
+    onNavigateToThread,
+  };
   const branchToolbarNode = isGitRepo ? (
     <BranchToolbar
       threadId={activeThread.id}
@@ -6122,106 +6187,28 @@ export default function ChatView({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      {/* Top bar */}
-      <header
-        className={cn(
-          "border-b border-border px-3 sm:px-5",
-          isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
-          isElectron && settings.sidebarSide === "right" && "pl-[90px] sm:pl-[90px]",
-        )}
-      >
-        <ChatHeader
-          activeThreadId={activeThread.id}
-          activeThreadTitle={
-            activeThread.parentThreadId
-              ? resolveSubagentPresentationForThread({
-                  thread: activeThread,
-                  threads: allThreads,
-                }).fullLabel
-              : activeThread.title
-          }
-          activeProjectName={activeProject?.name}
-          threadBreadcrumbs={threadBreadcrumbs}
-          hideHandoffControls={terminalWorkspaceTerminalTabActive}
-          isGitRepo={isGitRepo}
-          openInCwd={threadWorkspaceCwd}
-          activeProjectScripts={activeProject?.scripts}
-          preferredScriptId={
-            activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-          }
-          keybindings={keybindings}
-          availableEditors={availableEditors}
-          terminalAvailable={activeProject !== undefined}
-          terminalOpen={terminalState.terminalOpen}
-          terminalToggleShortcutLabel={terminalToggleShortcutLabel}
-          browserToggleShortcutLabel={browserPanelShortcutLabel}
-          diffToggleShortcutLabel={diffPanelShortcutLabel}
-          handoffBadgeLabel={handoffBadgeLabel}
-          handoffActionLabel={handoffActionLabel}
-          handoffDisabled={handoffDisabled}
-          handoffActionTargetProvider={handoffTargetProvider}
-          handoffBadgeSourceProvider={handoffBadgeSourceProvider}
-          handoffBadgeTargetProvider={handoffBadgeTargetProvider}
-          browserOpen={resolvedBrowserOpen}
-          gitCwd={threadWorkspaceCwd}
-          diffOpen={resolvedDiffOpen}
-          diffDisabledReason={diffDisabledReason}
-          surfaceMode={surfaceMode}
-          chatLayoutAction={
-            surfaceMode === "single" && onSplitSurface
-              ? {
-                  kind: "split",
-                  label: "Split chat",
-                  shortcutLabel: chatSplitShortcutLabel,
-                  onClick: onSplitSurface,
-                }
-              : surfaceMode === "split" && isFocusedPane && onMaximizeSurface
-                ? {
-                    kind: "maximize",
-                    label: "Expand this chat",
-                    shortcutLabel: null,
-                    onClick: onMaximizeSurface,
-                  }
-                : null
-          }
-          onRunProjectScript={onRunProjectScriptFromHeader}
-          onAddProjectScript={saveProjectScript}
-          onUpdateProjectScript={updateProjectScript}
-          onDeleteProjectScript={deleteProjectScript}
-          onToggleTerminal={toggleTerminalVisibility}
-          onToggleDiff={onToggleDiff}
-          onToggleBrowser={onToggleBrowser}
-          onCreateHandoff={onCreateHandoffThread}
-          onNavigateToThread={onNavigateToThread}
-        />
-      </header>
-
-      {/* Error banner */}
-      <ProviderHealthBanner status={activeProviderStatus} />
-      <ThreadErrorBanner error={activeThread.error} onDismiss={dismissActiveThreadError} />
-      <RateLimitBanner rateLimitStatus={activeRateLimitStatus} />
-      {terminalWorkspaceOpen ? (
-        <TerminalWorkspaceTabs
-          activeTab={terminalState.workspaceActiveTab}
-          isWorking={isWorking}
-          terminalHasRunningActivity={terminalState.runningTerminalIds.length > 0}
-          terminalCount={terminalState.terminalIds.length}
-          workspaceLayout={terminalState.workspaceLayout}
-          onSelectTab={setTerminalWorkspaceTab}
-        />
-      ) : null}
-      <ChatBodyPane
-        branchToolbar={branchToolbarNode}
-        chatComposerPaneProps={chatComposerPaneProps}
-        chatTranscriptPaneProps={chatTranscriptPaneProps}
-        planSidebar={planSidebarNode}
-        pullRequestDialog={pullRequestDialogNode}
+      <ChatThreadPane
+        bodyProps={{
+          branchToolbar: branchToolbarNode,
+          chatComposerPaneProps,
+          chatTranscriptPaneProps,
+          planSidebar: planSidebarNode,
+          pullRequestDialog: pullRequestDialogNode,
+          terminalWorkspaceOpen,
+          terminalWorkspaceTerminalTabActive,
+          workspaceTerminalDrawer,
+        }}
+        headerProps={chatHeaderProps}
+        isElectron={isElectron}
+        rateLimitStatus={activeRateLimitStatus}
+        providerStatus={activeProviderStatus}
+        sidebarSide={settings.sidebarSide}
+        terminalDrawer={terminalDrawerNode}
         terminalWorkspaceOpen={terminalWorkspaceOpen}
-        terminalWorkspaceTerminalTabActive={terminalWorkspaceTerminalTabActive}
-        workspaceTerminalDrawer={workspaceTerminalDrawer}
+        terminalWorkspaceTabProps={terminalWorkspaceTabProps}
+        threadError={activeThread.error}
+        onDismissThreadError={dismissActiveThreadError}
       />
-
-      {terminalDrawerNode}
 
       <ComposerSlashStatusDialog
         open={isSlashStatusDialogOpen}
