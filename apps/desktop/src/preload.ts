@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
 import {
   DesktopNotificationShowResultSchema,
+  DesktopShellOpenExternalInputSchema,
+  DesktopShellShowInFolderInputSchema,
   DesktopUpdateStateSchema,
   ThreadBrowserStateSchema,
 } from "@t3tools/contracts";
@@ -45,10 +47,22 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   showContextMenu: (items, position) =>
     ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, { items, position }),
-  openExternal: (url: string) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
-  showInFolder: (path: string) => ipcRenderer.invoke(SHOW_IN_FOLDER_CHANNEL, path),
+  openExternal: (url) =>
+    ipcRenderer.invoke(
+      OPEN_EXTERNAL_CHANNEL,
+      decodeIpcPayload(DesktopShellOpenExternalInputSchema, url),
+    ),
+  showInFolder: (path) =>
+    ipcRenderer.invoke(
+      SHOW_IN_FOLDER_CHANNEL,
+      decodeIpcPayload(DesktopShellShowInFolderInputSchema, path),
+    ),
   shell: {
-    showInFolder: (path: string) => ipcRenderer.invoke(SHOW_IN_FOLDER_CHANNEL, path),
+    showInFolder: (path) =>
+      ipcRenderer.invoke(
+        SHOW_IN_FOLDER_CHANNEL,
+        decodeIpcPayload(DesktopShellShowInFolderInputSchema, path),
+      ),
   },
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {

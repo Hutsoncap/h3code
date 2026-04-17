@@ -53,4 +53,35 @@ describe("preload desktop notification bridge", () => {
 
     await expect(desktopBridge.notifications.show({ title: "Build complete" })).rejects.toThrow();
   });
+
+  it("validates shell bridge inputs with shared contracts schemas before invoking Electron", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const desktopBridge = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      openExternal: (url: string) => Promise<unknown>;
+      showInFolder: (path: string) => Promise<unknown>;
+      shell: { showInFolder: (path: string) => Promise<unknown> };
+    };
+
+    await desktopBridge.openExternal("https://example.com");
+    await desktopBridge.showInFolder("/tmp/project");
+    await desktopBridge.shell.showInFolder("/tmp/project");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "desktop:open-external", "https://example.com");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "desktop:show-in-folder", "/tmp/project");
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "desktop:show-in-folder", "/tmp/project");
+  });
+
+  it("rejects invalid shell bridge inputs before invoking Electron", async () => {
+    const desktopBridge = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      openExternal: (url: string) => Promise<unknown>;
+      showInFolder: (path: string) => Promise<unknown>;
+      shell: { showInFolder: (path: string) => Promise<unknown> };
+    };
+
+    expect(() => desktopBridge.openExternal(123 as never)).toThrow();
+    expect(() => desktopBridge.showInFolder(123 as never)).toThrow();
+    expect(() => desktopBridge.shell.showInFolder(123 as never)).toThrow();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
 });

@@ -383,6 +383,34 @@ describe("wsNativeApi", () => {
     expect(requestMock).not.toHaveBeenCalled();
   });
 
+  it("validates shell bridge requests before reaching desktop APIs or browser fallback", async () => {
+    const openExternal = vi.fn().mockResolvedValue(true);
+    const showInFolder = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(getWindowForTest(), "desktopBridge", {
+      configurable: true,
+      writable: true,
+      value: {
+        openExternal,
+        showInFolder,
+      },
+    });
+
+    const { createWsNativeApi } = await import("./wsNativeApi");
+    const api = createWsNativeApi();
+
+    await api.shell.openExternal("https://example.com");
+    await api.shell.showInFolder("/tmp/project");
+
+    expect(openExternal).toHaveBeenCalledWith("https://example.com");
+    expect(showInFolder).toHaveBeenCalledWith("/tmp/project");
+
+    await expect(api.shell.openExternal(123 as never)).rejects.toThrow();
+    await expect(api.shell.showInFolder(123 as never)).rejects.toThrow();
+
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(showInFolder).toHaveBeenCalledTimes(1);
+  });
+
   it("uses no client timeout for git.runStackedAction", async () => {
     requestMock.mockResolvedValue({
       action: "commit",

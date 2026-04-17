@@ -314,6 +314,12 @@ export const DesktopServerTranscribeVoiceResultSchema = ServerVoiceTranscription
 export type DesktopServerTranscribeVoiceResult =
   typeof DesktopServerTranscribeVoiceResultSchema.Type;
 
+export const DesktopShellOpenExternalInputSchema = Schema.String;
+export type DesktopShellOpenExternalInput = typeof DesktopShellOpenExternalInputSchema.Type;
+
+export const DesktopShellShowInFolderInputSchema = Schema.String;
+export type DesktopShellShowInFolderInput = typeof DesktopShellShowInFolderInputSchema.Type;
+
 export interface DesktopBridge {
   getWsUrl: () => string | null;
   pickFolder: () => Promise<string | null>;
@@ -323,10 +329,10 @@ export interface DesktopBridge {
     items: readonly ContextMenuItem<T>[],
     position?: { x: number; y: number },
   ) => Promise<T | null>;
-  openExternal: (url: string) => Promise<boolean>;
-  showInFolder: (path: string) => Promise<void>;
+  openExternal: (url: DesktopShellOpenExternalInput) => Promise<boolean>;
+  showInFolder: (path: DesktopShellShowInFolderInput) => Promise<void>;
   shell?: {
-    showInFolder: (path: string) => Promise<void>;
+    showInFolder: (path: DesktopShellShowInFolderInput) => Promise<void>;
   };
   onMenuAction: (listener: (action: string) => void) => () => void;
   getUpdateState: () => Promise<DesktopUpdateState>;
@@ -381,8 +387,8 @@ export interface NativeApi {
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;
-    openExternal: (url: string) => Promise<void>;
-    showInFolder: (path: string) => Promise<void>;
+    openExternal: (url: DesktopShellOpenExternalInput) => Promise<void>;
+    showInFolder: (path: DesktopShellShowInFolderInput) => Promise<void>;
   };
   git: {
     // Existing branch/worktree API

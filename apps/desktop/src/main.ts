@@ -31,6 +31,8 @@ import {
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
   DesktopThemeSchema,
+  DesktopShellOpenExternalInputSchema,
+  DesktopShellShowInFolderInputSchema,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
 
@@ -1359,43 +1361,53 @@ function registerIpcHandlers(): void {
     },
   );
 
-  registerValidatedIpcHandler(ipcMain, OPEN_EXTERNAL_CHANNEL, Schema.String, async (rawUrl) => {
-    const externalUrl = getSafeExternalUrl(rawUrl);
-    if (!externalUrl) {
-      return false;
-    }
-
-    try {
-      await shell.openExternal(externalUrl);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-
-  registerValidatedIpcHandler(ipcMain, SHOW_IN_FOLDER_CHANNEL, Schema.String, async (rawPath) => {
-    if (typeof rawPath !== "string" || rawPath.trim().length === 0) {
-      throw new Error("Missing folder path.");
-    }
-    const resolvedPath = Path.resolve(rawPath);
-
-    let stats: FS.Stats;
-    try {
-      stats = await FS.promises.stat(resolvedPath);
-    } catch {
-      throw new Error(`Folder not found: ${resolvedPath}`);
-    }
-
-    if (stats.isDirectory()) {
-      const errorMessage = await shell.openPath(resolvedPath);
-      if (errorMessage.trim().length > 0) {
-        throw new Error(errorMessage);
+  registerValidatedIpcHandler(
+    ipcMain,
+    OPEN_EXTERNAL_CHANNEL,
+    DesktopShellOpenExternalInputSchema,
+    async (rawUrl) => {
+      const externalUrl = getSafeExternalUrl(rawUrl);
+      if (!externalUrl) {
+        return false;
       }
-      return;
-    }
 
-    shell.showItemInFolder(resolvedPath);
-  });
+      try {
+        await shell.openExternal(externalUrl);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  );
+
+  registerValidatedIpcHandler(
+    ipcMain,
+    SHOW_IN_FOLDER_CHANNEL,
+    DesktopShellShowInFolderInputSchema,
+    async (rawPath) => {
+      if (typeof rawPath !== "string" || rawPath.trim().length === 0) {
+        throw new Error("Missing folder path.");
+      }
+      const resolvedPath = Path.resolve(rawPath);
+
+      let stats: FS.Stats;
+      try {
+        stats = await FS.promises.stat(resolvedPath);
+      } catch {
+        throw new Error(`Folder not found: ${resolvedPath}`);
+      }
+
+      if (stats.isDirectory()) {
+        const errorMessage = await shell.openPath(resolvedPath);
+        if (errorMessage.trim().length > 0) {
+          throw new Error(errorMessage);
+        }
+        return;
+      }
+
+      shell.showItemInFolder(resolvedPath);
+    },
+  );
 
   ipcMain.removeHandler(UPDATE_GET_STATE_CHANNEL);
   ipcMain.handle(UPDATE_GET_STATE_CHANNEL, async () => updateState);

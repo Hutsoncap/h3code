@@ -315,18 +315,22 @@ The gap today: you can view diffs and chat with agents, but you can't open `foo.
 
 Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane runs in parallel with the feature phases and has no fixed sequencing — any agent with spare cycles can pick up an item. Every feature PR must land without regressing these, and some items trail each major feature.
 
-| ID       | Title                                                                                                                                                                                            | Status                                                                                                |
+<<<<<<< HEAD
+| ID | Title | Status |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| **hX1**  | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape               | ✅ #15 — persisted-store migration harness added                                                      |
-| **hX2**  | WebSocket reconnect / session recovery test suite — simulate server restart, partial stream, network flap; verify thread state, browser tabs, and terminal runtimes recover predictably          | ✅ #12 — reconnect/session recovery coverage added                                                    |
-| **hX3**  | Codex + Claude parity regression suite — one shared test matrix that exercises the same prompt/MCP/model flows for both providers; any provider-only feature fails CI                            | ✅ #23 — provider parity approval-flow coverage added                                                 |
-| **hX4**  | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold                           | ✅ #21 — sidebar render-model + perf gate added                                                       |
-| **hX5**  | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | ✅ #14 — browser suspend invariants verified                                                          |
-| **hX6**  | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev                                                                       | 🚧 #18/#22/#29 — voice transcription, notifications, and editor IPC validated; more boundaries remain |
-| **hX7**  | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                            | ✅ #16 — release smoke gates CI + release preflight                                                   |
-| **hX8**  | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage                             | ✅ #26 — provider model resolution parity matrix added                                                |
-| **hX9**  | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge                                   | ✅ #27 — open-in-editor payload validation added                                                      |
-| **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport                                                     | ✅ #28 — shared IPC/browser contract coverage added                                                   |
+| **hX1** | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape | ✅ #15 — persisted-store migration harness added |
+| ID | Title | Status |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **hX1** | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape | ✅ #15 — persisted-store migration harness added |
+| **hX2** | WebSocket reconnect / session recovery test suite — simulate server restart, partial stream, network flap; verify thread state, browser tabs, and terminal runtimes recover predictably | ✅ #12 — reconnect/session recovery coverage added |
+| **hX3** | Codex + Claude parity regression suite — one shared test matrix that exercises the same prompt/MCP/model flows for both providers; any provider-only feature fails CI | ✅ #23 — provider parity approval-flow coverage added |
+| **hX4** | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold | ✅ #21 — sidebar render-model + perf gate added |
+| **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | ✅ #14 — browser suspend invariants verified |
+| **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev | 🚧 worktree: codex/hx6-shell-boundary-validation — #18/#22/#29 — voice transcription, notifications, and editor IPC validated; more boundaries remain |
+| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish | ✅ #16 — release smoke gates CI + release preflight |
+| **hX8** | Provider model resolution parity regression suite — Codex and Claude aliases/display names resolve through the same canonical path and reject cross-provider leakage | ✅ #26 — provider model resolution parity matrix added |
+| **hX9** | Renderer shell.openInEditor request validation — the web/native boundary should decode the editor launch payload before sending it across the websocket bridge | ✅ #27 — open-in-editor payload validation added |
+| **hX10** | Shared IPC/browser contract hardening — add small decode coverage for browser and context-menu payloads without touching ws-native transport | ✅ #28 — shared IPC/browser contract coverage added |
 
 ---
 
@@ -416,4 +420,4 @@ Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narro
 
 _Agents: append items here when you spot adjacent work worth doing but out of scope for your current PR. Include enough context that the next agent can act without re-reading this conversation._
 
-(none yet)
+- 2026-04-17: `codex/hx6-shell-boundary-validation` - add contracts-backed validation for `openExternal` / `showInFolder` across `apps/desktop/src/preload.ts`, `apps/desktop/src/main.ts`, and `apps/web/src/wsNativeApi.ts`.

@@ -9,6 +9,8 @@ import {
   ORCHESTRATION_WS_METHODS,
   type ContextMenuItem,
   type NativeApi,
+  DesktopShellOpenExternalInputSchema,
+  DesktopShellShowInFolderInputSchema,
   ServerConfigUpdatedPayload,
   WS_CHANNELS,
   WS_METHODS,
@@ -31,6 +33,8 @@ const terminalEventListeners = new Set<(payload: TerminalEvent) => void>();
 const fallbackBrowserStateListeners = new Set<(state: ThreadBrowserState) => void>();
 const fallbackBrowserStates = new Map<ThreadId, ThreadBrowserState>();
 const decodeOpenInEditorInput = Schema.decodeUnknownSync(OpenInEditorInput);
+const decodeShellOpenExternalInput = Schema.decodeUnknownSync(DesktopShellOpenExternalInputSchema);
+const decodeShellShowInFolderInput = Schema.decodeUnknownSync(DesktopShellShowInFolderInputSchema);
 
 function defaultBrowserState(threadId: ThreadId): ThreadBrowserState {
   return {
@@ -276,8 +280,9 @@ export function createWsNativeApi(): NativeApi {
       openInEditor: (cwd, editor) =>
         transport.request(WS_METHODS.shellOpenInEditor, decodeOpenInEditorInput({ cwd, editor })),
       openExternal: async (url) => {
+        const validatedUrl = decodeShellOpenExternalInput(url);
         if (window.desktopBridge) {
-          const opened = await window.desktopBridge.openExternal(url);
+          const opened = await window.desktopBridge.openExternal(validatedUrl);
           if (!opened) {
             throw new Error("Unable to open link.");
           }
@@ -286,11 +291,12 @@ export function createWsNativeApi(): NativeApi {
 
         // Some mobile browsers can return null here even when the tab opens.
         // Avoid false negatives and let the browser handle popup policy.
-        window.open(url, "_blank", "noopener,noreferrer");
+        window.open(validatedUrl, "_blank", "noopener,noreferrer");
       },
       showInFolder: async (path) => {
+        const validatedPath = decodeShellShowInFolderInput(path);
         if (window.desktopBridge) {
-          await window.desktopBridge.showInFolder(path);
+          await window.desktopBridge.showInFolder(validatedPath);
         }
         // No-op in browser - this is a desktop-only feature
       },
