@@ -84,4 +84,29 @@ describe("preload desktop notification bridge", () => {
     expect(() => desktopBridge.shell.showInFolder(123 as never)).toThrow();
     expect(invokeMock).not.toHaveBeenCalled();
   });
+
+  it("drops invalid menu actions before they reach web listeners", () => {
+    const desktopBridge = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      onMenuAction: (listener: (action: string) => void) => () => void;
+    };
+    const listener = vi.fn();
+
+    const unsubscribe = desktopBridge.onMenuAction(listener);
+    const wrappedListener = onMock.mock.calls.find(
+      ([channel]) => channel === "desktop:menu-action",
+    )?.[1] as ((event: unknown, action: unknown) => void) | undefined;
+
+    expect(wrappedListener).toBeDefined();
+    wrappedListener?.({}, "toggle-sidebar");
+    wrappedListener?.({}, "notification-open-thread:thread-123");
+    wrappedListener?.({}, "not-a-real-action");
+    wrappedListener?.({}, 123);
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenNthCalledWith(1, "toggle-sidebar");
+    expect(listener).toHaveBeenNthCalledWith(2, "notification-open-thread:thread-123");
+
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith("desktop:menu-action", wrappedListener);
+  });
 });
