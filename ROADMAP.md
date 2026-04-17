@@ -316,15 +316,16 @@ The gap today: you can view diffs and chat with agents, but you can't open `foo.
 Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane runs in parallel with the feature phases and has no fixed sequencing — any agent with spare cycles can pick up an item. Every feature PR must land without regressing these, and some items trail each major feature.
 
 <<<<<<< HEAD
-| ID      | Title                                                                                                                                                                                            | Status                                                                              |
+| ID | Title | Status |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| **hX1** | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape               | ✅ #15 — persisted-store migration harness added                                    |
-| **hX2** | WebSocket reconnect / session recovery test suite — simulate server restart, partial stream, network flap; verify thread state, browser tabs, and terminal runtimes recover predictably          | ✅ #12 — reconnect/session recovery coverage added                                  |
-| **hX3** | Codex + Claude parity regression suite — one shared test matrix that exercises the same prompt/MCP/model flows for both providers; any provider-only feature fails CI                            | 📋 Planned                                                                          |
-| **hX4** | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold                           | 🚧 worktree: h3code-hx4-sidebar-render-budget                                       |
-| **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | ✅ #14 — browser suspend invariants verified                                        |
-| **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev                                                                       | 🚧 #18 — first IPC boundary validated (voice transcription); more boundaries remain |
-| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish                            | ✅ #16 — release smoke gates CI + release preflight                                 |
+| **hX1** | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape | ✅ #15 — persisted-store migration harness added |
+| **hX2** | WebSocket reconnect / session recovery test suite — simulate server restart, partial stream, network flap; verify thread state, browser tabs, and terminal runtimes recover predictably | ✅ #12 — reconnect/session recovery coverage added |
+| **hX3** | Codex + Claude parity regression suite — one shared test matrix that exercises the same prompt/MCP/model flows for both providers; any provider-only feature fails CI | 📋 Planned |
+| **hX4** | Sidebar + workspace render perf budgets — benchmark at 1000 threads / 50 workspaces / 20 pinned items / 100 browser tabs; fail CI on regression beyond a set threshold | 🚧 worktree: h3code-hx4-sidebar-render-budget |
+| **hX5** | Browser suspend-on-idle verification + memory budget — the existing suspend timer at [browserManager.ts](apps/desktop/src/browserManager.ts) must survive every feature PR that touches surfaces | ✅ #14 — browser suspend invariants verified |
+| **hX6** | IPC schema validation at every boundary — make `packages/contracts` the only source of truth; reject unknown fields in dev | 🚧 #18 — first IPC boundary validated (voice transcription); more boundaries remain |
+| **hX7** | Smoke-run the release pipeline on every phase boundary — `bun run release:smoke` now gates both CI and release preflight so packaging regressions fail before publish | ✅ #16 — release smoke gates CI + release preflight |
+
 ---
 
 ## Dependencies map
