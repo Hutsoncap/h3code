@@ -66,7 +66,7 @@ If you are fine with that, proceed.
 
 ## Git Hooks
 
-`bun install` wires up [Lefthook](https://lefthook.dev/) pre-commit hooks via the root `prepare` script. On every `git commit`, Lefthook runs two jobs in parallel against your staged files only:
+`bun install` wires up [Lefthook](https://lefthook.dev/) pre-commit hooks via the root `prepare` script. On every `git commit`, Lefthook runs two jobs serially against your staged files — `oxfmt` first (so `oxlint` reads the already-formatted content), then `oxlint`:
 
 - `oxfmt` formats staged code, config, and docs files in place (JS/TS/JSON/YAML/CSS/HTML/Markdown) and re-stages the fixes.
 - `oxlint --report-unused-disable-directives` runs the same lint pass CI does. The repo's current `.oxlintrc.json` treats every rule as a warning, so violations surface in the commit output without blocking. If the config ever escalates rules to `error`, the hook will block matching commits.
