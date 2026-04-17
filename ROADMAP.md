@@ -47,17 +47,17 @@ Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. 
 
 **These land before any Phase 1 work starts.** The existing `.plans/` directory already identifies the seams the roadmap needs; they are not background cleanup, they are the foundation every subsequent feature PR stands on. Each item below is an existing plan in `.plans/` unless noted; read the linked file for the authoritative spec. This roadmap references them — it does not redefine them.
 
-| ID       | Title                                             | Source                                                                                           | Status                       |
-| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------- |
-| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | 📋 Planned                   |
-| **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md)       | 📋 Planned                   |
-| **p0.3** | Split ChatView.tsx                                | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md)                   | 📋 Planned                   |
-| **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | 📋 Planned                   |
-| **p0.5** | Event-state test expansion                        | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md)               | 📋 Planned                   |
-| **p0.6** | Unify process/session abstraction                 | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | 📋 Planned                   |
-| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | 📋 Planned                   |
-| **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | 🚧 worktree: bold-heisenberg |
-| **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | 📋 Planned                   |
+| ID       | Title                                             | Source                                                                                           | Status                    |
+| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------- |
+| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | 📋 Planned                |
+| **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md)       | 📋 Planned                |
+| **p0.3** | Split ChatView.tsx                                | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md)                   | 📋 Planned                |
+| **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | 📋 Planned                |
+| **p0.5** | Event-state test expansion                        | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md)               | 📋 Planned                |
+| **p0.6** | Unify process/session abstraction                 | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | 📋 Planned                |
+| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | 📋 Planned                |
+| **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | ✅ #2 — lefthook wired up |
+| **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | 📋 Planned                |
 
 ### Why these, why now
 

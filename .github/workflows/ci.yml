@@ -9,7 +9,12 @@ on:
 jobs:
   quality:
     name: Format, Lint, Typecheck, Test, Browser Test, Build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Upstream uses blacksmith-4vcpu-ubuntu-2404 (Blacksmith-hosted runner).
+    # This fork doesn't have the Blacksmith GitHub App installed, so those jobs
+    # would queue forever. Using GitHub-hosted ubuntu-24.04 instead — slower but
+    # actually runs. Swap back to blacksmith-4vcpu-ubuntu-2404 if/when the
+    # Blacksmith app is installed on this repo.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
