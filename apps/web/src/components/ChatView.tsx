@@ -212,6 +212,7 @@ import { ComposerVoiceRecorderBar } from "./chat/ComposerVoiceRecorderBar";
 import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
 import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip";
+import { ChatComposerFooter } from "./chat/ChatComposerFooter";
 import { ActivePlanCard } from "./chat/ActivePlanCard";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
@@ -5917,25 +5918,21 @@ export default function ChatView({
       ) : null}
     </div>
   );
-  const composerFooter = activePendingApproval ? (
-    <div className="flex items-center justify-end gap-2 px-3 pb-2">
-      <ComposerPendingApprovalActions
-        requestId={activePendingApproval.requestId}
-        isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
-        onRespondToApproval={onRespondToApproval}
-      />
-    </div>
-  ) : (
-    <div
-      data-chat-composer-footer="true"
-      className={cn(
-        "flex items-end justify-between px-2.5 pb-2",
-        isComposerFooterCompact ? "gap-1.5" : "flex-wrap gap-1.5 sm:flex-nowrap sm:gap-0",
-      )}
-    >
-      {composerFooterLeftContent}
-      {composerFooterRightContent}
-    </div>
+  const composerFooter = (
+    <ChatComposerFooter
+      activePendingApprovalActions={
+        activePendingApproval ? (
+          <ComposerPendingApprovalActions
+            requestId={activePendingApproval.requestId}
+            isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
+            onRespondToApproval={onRespondToApproval}
+          />
+        ) : null
+      }
+      isComposerFooterCompact={isComposerFooterCompact}
+      leftContent={composerFooterLeftContent}
+      rightContent={composerFooterRightContent}
+    />
   );
 
   // Empty state: no active thread
