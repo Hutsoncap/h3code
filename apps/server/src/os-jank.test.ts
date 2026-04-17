@@ -1,9 +1,11 @@
 // FILE: os-jank.test.ts
 // Purpose: Verifies PATH hydration keeps inherited entries and macOS fallbacks.
 
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-import { fixPath } from "./os-jank";
+import { fixPath, resolveDefaultBaseDir } from "./os-jank";
 
 describe("fixPath", () => {
   it("hydrates PATH on linux using the resolved login shell", () => {
@@ -71,5 +73,44 @@ describe("fixPath", () => {
 
     expect(readPath).not.toHaveBeenCalled();
     expect(env.PATH).toBe("C:/Windows/System32");
+  });
+});
+
+describe("resolveBaseDir", () => {
+  it("renames the legacy .dpcode home to .h3code when no explicit base dir is provided", () => {
+    const tempHome = fs.mkdtempSync(path.join(process.env.TMPDIR ?? "/tmp", "h3code-base-dir-"));
+    const legacyDir = path.join(tempHome, ".dpcode");
+    const canonicalDir = path.join(tempHome, ".h3code");
+    fs.mkdirSync(legacyDir, { recursive: true });
+
+    try {
+      const result = resolveDefaultBaseDir({ homeDir: tempHome });
+      expect(result).toBe(canonicalDir);
+      expect(fs.existsSync(canonicalDir)).toBe(true);
+      expect(fs.existsSync(legacyDir)).toBe(false);
+    } finally {
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to the legacy path when the rename cannot complete", () => {
+    const tempHome = fs.mkdtempSync(path.join(process.env.TMPDIR ?? "/tmp", "h3code-base-dir-"));
+    const legacyDir = path.join(tempHome, ".dpcode");
+    const canonicalDir = path.join(tempHome, ".h3code");
+    fs.mkdirSync(legacyDir, { recursive: true });
+
+    try {
+      const result = resolveDefaultBaseDir({
+        homeDir: tempHome,
+        renameSync: () => {
+          throw new Error("rename blocked");
+        },
+      });
+      expect(result).toBe(legacyDir);
+      expect(fs.existsSync(legacyDir)).toBe(true);
+      expect(fs.existsSync(canonicalDir)).toBe(false);
+    } finally {
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
   });
 });

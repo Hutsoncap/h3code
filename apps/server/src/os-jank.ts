@@ -2,6 +2,7 @@
 // Purpose: Smooths over shell/path differences between packaged app launches and login shells.
 // Exports: PATH hydration plus base-dir helpers used by server startup.
 
+import * as FS from "node:fs";
 import * as OS from "node:os";
 import { Effect, Path } from "effect";
 import {
@@ -13,6 +14,31 @@ import {
 
 function logPathHydrationWarning(message: string, error?: unknown): void {
   console.warn(`[server] ${message}`, error instanceof Error ? error.message : (error ?? ""));
+}
+
+export function resolveDefaultBaseDir(input: {
+  homeDir: string;
+  existsSync?: typeof FS.existsSync;
+  renameSync?: typeof FS.renameSync;
+}): string {
+  const existsSync = input.existsSync ?? FS.existsSync;
+  const renameSync = input.renameSync ?? FS.renameSync;
+  const canonicalBaseDir = `${input.homeDir}/.h3code`;
+  const legacyBaseDir = `${input.homeDir}/.dpcode`;
+
+  if (existsSync(canonicalBaseDir)) {
+    return canonicalBaseDir;
+  }
+  if (existsSync(legacyBaseDir)) {
+    try {
+      renameSync(legacyBaseDir, canonicalBaseDir);
+      return canonicalBaseDir;
+    } catch {
+      return legacyBaseDir;
+    }
+  }
+
+  return canonicalBaseDir;
 }
 
 export function fixPath(
@@ -71,9 +97,9 @@ export const expandHomePath = Effect.fn(function* (input: string) {
 });
 
 export const resolveBaseDir = Effect.fn(function* (raw: string | undefined) {
-  const { join, resolve } = yield* Path.Path;
+  const { resolve } = yield* Path.Path;
   if (!raw || raw.trim().length === 0) {
-    return join(OS.homedir(), ".dpcode");
+    return resolveDefaultBaseDir({ homeDir: OS.homedir() });
   }
   return resolve(yield* expandHomePath(raw.trim()));
 });

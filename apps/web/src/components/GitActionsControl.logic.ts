@@ -237,7 +237,7 @@ export function resolveQuickAction(
     };
   }
 
-  // Worktree with temporary branch (dpcode/xxxxxxxx) that hasn't been pushed yet
+  // Worktree with temporary branch (h3code/xxxxxxxx) that hasn't been pushed yet
   // → prompt user to create a permanent branch name
   if (
     !gitStatus.hasUpstream &&

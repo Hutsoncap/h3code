@@ -6,6 +6,7 @@
 import { type ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { createAliasedStateStorage } from "./lib/storage";
 
 interface PinnedThreadsStoreState {
   pinnedThreadIds: ThreadId[];
@@ -15,7 +16,7 @@ interface PinnedThreadsStoreState {
   prunePinnedThreads: (threadIds: readonly ThreadId[]) => void;
 }
 
-const PINNED_THREADS_STORAGE_KEY = "t3code:pinned-threads:v1";
+const PINNED_THREADS_STORAGE_KEY = "h3code:pinned-threads:v1";
 
 function normalizePinnedThreadIds(threadIds: readonly ThreadId[]): ThreadId[] {
   const seen = new Set<ThreadId>();
@@ -85,7 +86,7 @@ export const usePinnedThreadsStore = create<PinnedThreadsStoreState>()(
     }),
     {
       name: PINNED_THREADS_STORAGE_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
       partialize: (state) => ({
         pinnedThreadIds: normalizePinnedThreadIds(state.pinnedThreadIds),
       }),

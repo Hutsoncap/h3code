@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { getPersistedStorageItem, setPersistedStorageItem } from "../lib/persistedStorage";
 
 type Theme = "light" | "dark" | "system";
 type ThemeSnapshot = {
@@ -6,7 +7,7 @@ type ThemeSnapshot = {
   systemDark: boolean;
 };
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = "h3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
@@ -31,7 +32,7 @@ function getSystemDark(): boolean {
 function getStored(): Theme {
   if (!hasThemeStorage()) return DEFAULT_THEME_SNAPSHOT.theme;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = getPersistedStorageItem(localStorage, STORAGE_KEY);
     if (raw === "light" || raw === "dark" || raw === "system") return raw;
   } catch {
     return DEFAULT_THEME_SNAPSHOT.theme;
@@ -130,7 +131,7 @@ export function useTheme() {
   const setTheme = useCallback((next: Theme) => {
     if (!hasThemeStorage()) return;
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      setPersistedStorageItem(localStorage, STORAGE_KEY, next);
     } catch {
       return;
     }

@@ -7,6 +7,7 @@ import type { ThreadId, TurnId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { ChatRightPanel } from "./diffRouteSearch";
+import { createAliasedStateStorage } from "./lib/storage";
 
 export interface SingleChatPanelState {
   panel: ChatRightPanel | null;
@@ -22,7 +23,7 @@ interface SingleChatPanelStore {
   clearThreadPanelState: (threadId: ThreadId) => void;
 }
 
-const SINGLE_CHAT_PANEL_STORAGE_KEY = "t3code:single-chat-panel-state:v1";
+const SINGLE_CHAT_PANEL_STORAGE_KEY = "h3code:single-chat-panel-state:v1";
 
 export function createDefaultSingleChatPanelState(): SingleChatPanelState {
   return {
@@ -81,7 +82,7 @@ export const useSingleChatPanelStore = create<SingleChatPanelStore>()(
     }),
     {
       name: SINGLE_CHAT_PANEL_STORAGE_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
     },
   ),
 );

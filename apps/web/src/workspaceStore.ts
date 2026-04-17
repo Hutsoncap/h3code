@@ -5,6 +5,7 @@
 import { type ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { createAliasedStateStorage } from "./lib/storage";
 import {
   DEFAULT_WORKSPACE_LAYOUT_PRESET_ID,
   getWorkspaceLayoutPreset,
@@ -31,7 +32,7 @@ interface WorkspaceStoreState {
   reorderWorkspace: (workspaceId: string, nextIndex: number) => void;
 }
 
-const WORKSPACE_STORE_STORAGE_KEY = "t3code:workspace-pages:v2";
+const WORKSPACE_STORE_STORAGE_KEY = "h3code:workspace-pages:v2";
 
 function randomWorkspaceId(): string {
   if (typeof crypto.randomUUID === "function") {
@@ -234,7 +235,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
     {
       name: WORKSPACE_STORE_STORAGE_KEY,
       version: 2,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
       partialize: (state) => ({
         homeDir: state.homeDir,
         workspacePages: state.workspacePages,

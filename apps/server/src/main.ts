@@ -155,7 +155,7 @@ const ServerConfigLive = (input: CliInput) =>
 
       const devUrl = Option.getOrElse(input.devUrl, () => env.devUrl);
       const baseDir = yield* resolveBaseDir(Option.getOrUndefined(input.t3Home) ?? env.t3Home);
-      // Import legacy ~/.t3 state before runtime paths are derived under ~/.dpcode.
+      // Import legacy ~/.t3 state before runtime paths are derived under ~/.h3code.
       yield* migrateLegacyHomeIfNeeded({
         baseDir,
         homeDir: OS.homedir(),
@@ -273,7 +273,7 @@ const makeServerProgram = (input: CliInput) =>
         ? `http://${formatHostForUrl(config.host)}:${config.port}`
         : localUrl;
     const { authToken, devUrl, ...safeConfig } = config;
-    yield* Effect.logInfo("DP Code running", {
+    yield* Effect.logInfo("H3 Code running", {
       ...safeConfig,
       devUrl: devUrl?.toString(),
       authEnabled: Boolean(authToken),
@@ -311,7 +311,7 @@ const hostFlag = Flag.string("host").pipe(
   Flag.optional,
 );
 const t3HomeFlag = Flag.string("home-dir").pipe(
-  Flag.withDescription("Base directory for all DP Code data (equivalent to T3CODE_HOME)."),
+  Flag.withDescription("Base directory for all H3 Code data (equivalent to T3CODE_HOME)."),
   Flag.optional,
 );
 const devUrlFlag = Flag.string("dev-url").pipe(
@@ -353,6 +353,6 @@ export const t3Cli = Command.make("t3", {
   autoBootstrapProjectFromCwd: autoBootstrapProjectFromCwdFlag,
   logWebSocketEvents: logWebSocketEventsFlag,
 }).pipe(
-  Command.withDescription("Run the DP Code server."),
+  Command.withDescription("Run the H3 Code server."),
   Command.withHandler((input) => Effect.scoped(makeServerProgram(input))),
 );

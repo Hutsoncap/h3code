@@ -1978,11 +1978,11 @@ The local stash entry was kept for recovery.`,
 
       const preservedLocalStash = yield* stashWorkingTree(
         input.cwd,
-        `dpcode preserve local handoff ${randomUUID()}`,
+        `h3code preserve local handoff ${randomUUID()}`,
       );
       const sourceStash = yield* stashWorkingTree(
         input.worktreePath,
-        `dpcode handoff to local ${randomUUID()}`,
+        `h3code handoff to local ${randomUUID()}`,
       );
 
       yield* gitCore
@@ -2145,7 +2145,7 @@ The local stash entry was kept for recovery.`,
 
     const sourceStash = yield* stashWorkingTree(
       input.cwd,
-      `dpcode handoff to worktree ${randomUUID()}`,
+      `h3code handoff to worktree ${randomUUID()}`,
     );
     const sourceBranch = currentLocalStatus.branch ?? input.currentBranch ?? null;
     const sourceHeadRef = yield* readHeadRef(input.cwd);
