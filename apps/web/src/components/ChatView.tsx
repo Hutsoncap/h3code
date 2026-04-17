@@ -204,9 +204,6 @@ import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/Provider
 import { ComposerCommandItem, ComposerCommandMenu } from "./chat/ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./chat/ComposerPendingApprovalActions";
 import { ComposerExtrasMenu } from "./chat/ComposerExtrasMenu";
-import { ComposerPendingApprovalPanel } from "./chat/ComposerPendingApprovalPanel";
-import { ComposerPendingUserInputPanel } from "./chat/ComposerPendingUserInputPanel";
-import { ComposerPlanFollowUpBanner } from "./chat/ComposerPlanFollowUpBanner";
 import { ComposerVoiceButton } from "./chat/ComposerVoiceButton";
 import { ComposerVoiceRecorderBar } from "./chat/ComposerVoiceRecorderBar";
 import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
@@ -214,6 +211,7 @@ import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ComposerImageAttachmentChip } from "./chat/ComposerImageAttachmentChip";
 import { ChatComposerFooter } from "./chat/ChatComposerFooter";
 import { ChatActivePlanCard } from "./chat/ChatActivePlanCard";
+import { ChatComposerStatusBanner } from "./chat/ChatComposerStatusBanner";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -5580,26 +5578,24 @@ export default function ChatView({
       onOpenSidebar={() => setPlanSidebarOpen(true)}
     />
   );
-  const composerStatusBanner = activePendingApproval ? (
-    <ComposerPendingApprovalPanel
-      approval={activePendingApproval}
-      pendingCount={pendingApprovals.length}
-    />
-  ) : pendingUserInputs.length > 0 ? (
-    <ComposerPendingUserInputPanel
+  const composerStatusBanner = (
+    <ChatComposerStatusBanner
+      activePendingApproval={activePendingApproval}
+      pendingApprovalsCount={pendingApprovals.length}
       pendingUserInputs={pendingUserInputs}
       respondingRequestIds={respondingRequestIds}
-      answers={activePendingDraftAnswers}
-      questionIndex={activePendingQuestionIndex}
-      onToggleOption={onToggleActivePendingUserInputOption}
-      onAdvance={onAdvanceActivePendingUserInput}
+      activePendingDraftAnswers={activePendingDraftAnswers}
+      activePendingQuestionIndex={activePendingQuestionIndex}
+      onToggleActivePendingUserInputOption={onToggleActivePendingUserInputOption}
+      onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
+      showPlanFollowUpPrompt={showPlanFollowUpPrompt}
+      planTitle={
+        showPlanFollowUpPrompt && activeProposedPlan
+          ? (proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null)
+          : null
+      }
     />
-  ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-    <ComposerPlanFollowUpBanner
-      key={activeProposedPlan.id}
-      planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
-    />
-  ) : null;
+  );
   const composerCommandMenuNode =
     composerMenuOpen && !isComposerApprovalState ? (
       <div className="absolute inset-x-0 bottom-full z-20 mb-2 px-1">
