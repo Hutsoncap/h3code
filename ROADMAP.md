@@ -331,6 +331,10 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX12** | Orchestration revert integration stabilization — wait for turn-processing quiescence before checkpoint-revert assertions so Claude rollback coverage stops racing runtime tail work              | ✅ #41 — orchestration revert timing stabilized                                                                                                                                                                                               |
 | **hX13** | WebSocket push-bus delivery semantics — cover targeted isolation, closed-client skips, and sequence continuity so server pushes remain predictable under reconnect churn                         | ✅ #45 — push-bus targeted delivery, closed-client skips, and sequence continuity verified                                                                                                                                                    |
 
+Current hardening sub-slice:
+
+- 🚧 worktree: `codex/hx14-protocol-parsing-hardening` — codex app-server JSON-RPC shape hardening
+
 ---
 
 ## Dependencies map

@@ -112,7 +112,9 @@ export function isResponse(value: unknown): value is JsonRpcResponse {
   const candidate = value as Record<string, unknown>;
   const hasId = typeof candidate.id === "string" || typeof candidate.id === "number";
   const hasMethod = typeof candidate.method === "string";
-  return hasId && !hasMethod;
+  const hasResult = "result" in candidate;
+  const hasError = readObject(candidate, "error") !== undefined;
+  return hasId && !hasMethod && (hasResult || hasError);
 }
 
 export function readRouteFields(params: unknown): {
