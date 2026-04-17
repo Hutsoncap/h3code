@@ -1372,6 +1372,44 @@ describe("store read model sync", () => {
     }
   });
 
+  it("falls back to the initial persisted renderer state when the payload is malformed", async () => {
+    const storage = new Map<string, string>();
+    const fakeWindow = {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+        },
+        clear: () => {
+          storage.clear();
+        },
+      },
+      addEventListener: vi.fn(),
+    };
+    storage.set(
+      "h3code:renderer-state:v8",
+      JSON.stringify({
+        expandedProjectCwds: "not-an-array",
+        projectNamesByCwd: [],
+      }),
+    );
+    vi.stubGlobal("window", fakeWindow);
+    try {
+      vi.resetModules();
+
+      const freshStore = await import("./store");
+
+      expect(freshStore.useStore.getState().projects).toEqual([]);
+      expect(freshStore.useStore.getState().threads).toEqual([]);
+      expect(freshStore.useStore.getState().threadsHydrated).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reuses normalized thread objects when the incoming snapshot is unchanged", () => {
     const readModel = {
       snapshotSequence: 1,

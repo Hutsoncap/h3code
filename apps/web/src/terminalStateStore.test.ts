@@ -1,5 +1,5 @@
 import { ThreadId } from "@t3tools/contracts";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { collectTerminalIdsFromLayout } from "./terminalPaneLayout";
 import { selectThreadTerminalState, useTerminalStateStore } from "./terminalStateStore";
@@ -216,6 +216,59 @@ describe("terminalStateStore actions", () => {
         terminalIds: ["default", "terminal-2", "terminal-3", "terminal-4", "terminal-5"],
       },
     ]);
+  });
+
+  it("falls back to empty persisted terminal state when the stored payload is malformed", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useTerminalStateStore: freshUseTerminalStateStore } =
+        await import("./terminalStateStore");
+      const persistApi = freshUseTerminalStateStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseTerminalStateStore.getState>,
+          ) => ReturnType<typeof freshUseTerminalStateStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          terminalStateByThreadId: {
+            [THREAD_ID]: {
+              entryPoint: "chat",
+              terminalOpen: true,
+              presentationMode: "drawer",
+              workspaceLayout: "both",
+              workspaceActiveTab: "terminal",
+              terminalHeight: 280,
+              terminalIds: ["default"],
+              terminalLabelsById: {},
+              terminalTitleOverridesById: {},
+              terminalCliKindsById: {},
+              terminalAttentionStatesById: {},
+              runningTerminalIds: [],
+              activeTerminalId: "default",
+              terminalGroups: "not-an-array",
+              activeTerminalGroupId: "group-default",
+            },
+          },
+        },
+        freshUseTerminalStateStore.getInitialState(),
+      );
+
+      expect(mergedState.terminalStateByThreadId).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("creates new terminals in a separate group", () => {

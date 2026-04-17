@@ -26,6 +26,7 @@ import { Debouncer } from "@tanstack/react-pacer";
 import { hasLiveTurnTailWork } from "./session-logic";
 import { deriveThreadSummaryMetadata } from "@t3tools/shared/threadSummary";
 import { getPersistedStorageItem } from "./lib/persistedStorage";
+import { decodePersistedJsonOrNull, PersistedRendererStateSchema } from "./persistenceSchema";
 
 // ── State ────────────────────────────────────────────────────────────
 
@@ -112,11 +113,8 @@ function readPersistedState(): AppState {
       ...LEGACY_PERSISTED_STATE_KEYS,
     ]);
     if (!raw) return initialState;
-    const parsed = JSON.parse(raw) as {
-      expandedProjectCwds?: string[];
-      projectOrderCwds?: string[];
-      projectNamesByCwd?: Record<string, string>;
-    };
+    const parsed = decodePersistedJsonOrNull(PersistedRendererStateSchema, raw);
+    if (!parsed) return initialState;
     persistedExpandedProjectCwds.clear();
     persistedProjectOrderCwds.length = 0;
     persistedProjectNamesByCwd.clear();

@@ -9,6 +9,11 @@ import type { ThreadBrowserState, ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
+import {
+  decodePersistedStateOrNull,
+  type PersistedBrowserState,
+  PersistedBrowserStateSchema,
+} from "./persistenceSchema";
 
 const BROWSER_STATE_STORAGE_KEY = "h3code:browser-state:v1";
 const BROWSER_HISTORY_LIMIT = 12;
@@ -49,6 +54,46 @@ function upsertRecentHistoryEntry(
     url: normalizedUrl,
   });
   return nextEntries.slice(0, BROWSER_HISTORY_LIMIT);
+}
+
+function normalizePersistedBrowserState(persistedState: unknown): PersistedBrowserState {
+  const decoded = decodePersistedStateOrNull(PersistedBrowserStateSchema, persistedState);
+  if (!decoded) {
+    return {
+      threadStatesByThreadId: {},
+      recentHistoryByThreadId: {},
+    };
+  }
+
+  const threadStatesByThreadId = Object.fromEntries(
+    Object.values(decoded.threadStatesByThreadId)
+      .filter((state) => state.threadId.trim().length > 0)
+      .map((state) => [
+        state.threadId,
+        {
+          ...state,
+          tabs: state.tabs.map((tab) => ({ ...tab })),
+        } satisfies ThreadBrowserState,
+      ]),
+  );
+  const recentHistoryByThreadId = Object.fromEntries(
+    Object.entries(decoded.recentHistoryByThreadId)
+      .map(
+        ([threadId, entries]) =>
+          [
+            threadId.trim(),
+            entries.map((entry) => ({
+              ...entry,
+            })),
+          ] as const,
+      )
+      .filter(([threadId]) => threadId.length > 0),
+  );
+
+  return {
+    threadStatesByThreadId,
+    recentHistoryByThreadId,
+  };
 }
 
 export const useBrowserStateStore = create<BrowserStateStore>()(
@@ -101,6 +146,14 @@ export const useBrowserStateStore = create<BrowserStateStore>()(
     {
       name: BROWSER_STATE_STORAGE_KEY,
       storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
+      merge: (persistedState, currentState) => {
+        const normalized = normalizePersistedBrowserState(persistedState);
+        return {
+          ...currentState,
+          threadStatesByThreadId: normalized.threadStatesByThreadId,
+          recentHistoryByThreadId: normalized.recentHistoryByThreadId,
+        };
+      },
     },
   ),
 );

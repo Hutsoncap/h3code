@@ -8,6 +8,10 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { ChatRightPanel } from "./diffRouteSearch";
 import { createAliasedStateStorage } from "./lib/storage";
+import {
+  decodePersistedStateOrNull,
+  PersistedSingleChatPanelStoreStateSchema,
+} from "./persistenceSchema";
 
 export interface SingleChatPanelState {
   panel: ChatRightPanel | null;
@@ -39,6 +43,31 @@ const DEFAULT_SINGLE_CHAT_PANEL_STATE = createDefaultSingleChatPanelState();
 
 function getDefaultSingleChatPanelState(): SingleChatPanelState {
   return DEFAULT_SINGLE_CHAT_PANEL_STATE;
+}
+
+function normalizePersistedSingleChatPanelState(
+  persistedState: unknown,
+): Record<string, SingleChatPanelState | undefined> {
+  const decoded = decodePersistedStateOrNull(
+    PersistedSingleChatPanelStoreStateSchema,
+    persistedState,
+  );
+  if (!decoded) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(decoded.panelStateByThreadId).map(([threadId, panelState]) => [
+      threadId,
+      {
+        panel: panelState.panel,
+        diffTurnId: panelState.diffTurnId,
+        diffFilePath: panelState.diffFilePath,
+        hasOpenedPanel: panelState.hasOpenedPanel,
+        lastOpenPanel: panelState.lastOpenPanel,
+      },
+    ]),
+  );
 }
 
 export const useSingleChatPanelStore = create<SingleChatPanelStore>()(
@@ -83,6 +112,10 @@ export const useSingleChatPanelStore = create<SingleChatPanelStore>()(
     {
       name: SINGLE_CHAT_PANEL_STORAGE_KEY,
       storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        panelStateByThreadId: normalizePersistedSingleChatPanelState(persistedState),
+      }),
     },
   ),
 );

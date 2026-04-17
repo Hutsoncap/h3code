@@ -7,6 +7,7 @@ import { type ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
+import { decodePersistedStateOrNull, PersistedPinnedThreadsStateSchema } from "./persistenceSchema";
 
 interface PinnedThreadsStoreState {
   pinnedThreadIds: ThreadId[];
@@ -92,7 +93,7 @@ export const usePinnedThreadsStore = create<PinnedThreadsStoreState>()(
       }),
       merge: (persistedState, currentState) => {
         const candidate =
-          (persistedState as Partial<Pick<PinnedThreadsStoreState, "pinnedThreadIds">> | undefined)
+          decodePersistedStateOrNull(PersistedPinnedThreadsStateSchema, persistedState)
             ?.pinnedThreadIds ?? [];
         return {
           ...currentState,
