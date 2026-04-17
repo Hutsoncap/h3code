@@ -62,31 +62,38 @@ describe("singleChatPanelStore", () => {
     );
   });
 
-  it("falls back to empty panel history when persisted payloads are malformed", () => {
-    const persistApi = useSingleChatPanelStore.persist as unknown as {
-      getOptions: () => {
-        merge: (
-          persistedState: unknown,
-          currentState: ReturnType<typeof useSingleChatPanelStore.getState>,
-        ) => ReturnType<typeof useSingleChatPanelStore.getState>;
+  it("falls back to empty panel history when persisted payloads are malformed", async () => {
+    vi.resetModules();
+    try {
+      const { useSingleChatPanelStore: freshUseSingleChatPanelStore } =
+        await import("./singleChatPanelStore");
+      const persistApi = freshUseSingleChatPanelStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseSingleChatPanelStore.getState>,
+          ) => ReturnType<typeof freshUseSingleChatPanelStore.getState>;
+        };
       };
-    };
 
-    const mergedState = persistApi.getOptions().merge(
-      {
-        panelStateByThreadId: {
-          [THREAD_A]: {
-            panel: "diff",
-            diffTurnId: TURN_ID,
-            diffFilePath: "src/app.tsx",
-            hasOpenedPanel: "yes",
-            lastOpenPanel: "diff",
+      const mergedState = persistApi.getOptions().merge(
+        {
+          panelStateByThreadId: {
+            [THREAD_A]: {
+              panel: "diff",
+              diffTurnId: TURN_ID,
+              diffFilePath: "src/app.tsx",
+              hasOpenedPanel: "yes",
+              lastOpenPanel: "diff",
+            },
           },
         },
-      },
-      useSingleChatPanelStore.getInitialState(),
-    );
+        freshUseSingleChatPanelStore.getInitialState(),
+      );
 
-    expect(mergedState.panelStateByThreadId).toEqual({});
+      expect(mergedState.panelStateByThreadId).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

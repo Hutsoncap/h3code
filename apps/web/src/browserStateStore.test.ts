@@ -1,5 +1,5 @@
 import { ThreadId } from "@t3tools/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { selectThreadBrowserHistory, useBrowserStateStore } from "./browserStateStore";
 
@@ -22,33 +22,48 @@ describe("browserStateStore selectors", () => {
     expect(first).toEqual([]);
   });
 
-  it("falls back to empty browser state when persisted payloads are malformed", () => {
-    const persistApi = useBrowserStateStore.persist as unknown as {
-      getOptions: () => {
-        merge: (
-          persistedState: unknown,
-          currentState: ReturnType<typeof useBrowserStateStore.getState>,
-        ) => ReturnType<typeof useBrowserStateStore.getState>;
+  it("falls back to empty browser state when persisted payloads are malformed", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useBrowserStateStore: freshUseBrowserStateStore } =
+        await import("./browserStateStore");
+      const persistApi = freshUseBrowserStateStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseBrowserStateStore.getState>,
+          ) => ReturnType<typeof freshUseBrowserStateStore.getState>;
+        };
       };
-    };
 
-    const mergedState = persistApi.getOptions().merge(
-      {
-        threadStatesByThreadId: {
-          [THREAD_ID]: {
-            threadId: THREAD_ID,
-            open: true,
-            activeTabId: null,
-            tabs: "not-an-array",
-            lastError: null,
+      const mergedState = persistApi.getOptions().merge(
+        {
+          threadStatesByThreadId: {
+            [THREAD_ID]: {
+              threadId: THREAD_ID,
+              open: true,
+              activeTabId: null,
+              tabs: "not-an-array",
+              lastError: null,
+            },
           },
+          recentHistoryByThreadId: "not-an-object",
         },
-        recentHistoryByThreadId: "not-an-object",
-      },
-      useBrowserStateStore.getInitialState(),
-    );
+        freshUseBrowserStateStore.getInitialState(),
+      );
 
-    expect(mergedState.threadStatesByThreadId).toEqual({});
-    expect(mergedState.recentHistoryByThreadId).toEqual({});
+      expect(mergedState.threadStatesByThreadId).toEqual({});
+      expect(mergedState.recentHistoryByThreadId).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resolvePreferredSplitViewIdForThread, useSplitViewStore } from "./splitViewStore";
 
@@ -152,13 +152,15 @@ describe("splitViewStore", () => {
     ).toBe(newerSplitId);
   });
 
-  it("rebuilds the source-thread mapping from valid persisted split views", () => {
-    const persistApi = useSplitViewStore.persist as unknown as {
+  it("rebuilds the source-thread mapping from valid persisted split views", async () => {
+    vi.resetModules();
+    const { useSplitViewStore: freshUseSplitViewStore } = await import("./splitViewStore");
+    const persistApi = freshUseSplitViewStore.persist as unknown as {
       getOptions: () => {
         merge: (
           persistedState: unknown,
-          currentState: ReturnType<typeof useSplitViewStore.getState>,
-        ) => ReturnType<typeof useSplitViewStore.getState>;
+          currentState: ReturnType<typeof freshUseSplitViewStore.getState>,
+        ) => ReturnType<typeof freshUseSplitViewStore.getState>;
       };
     };
 
@@ -195,7 +197,7 @@ describe("splitViewStore", () => {
           [THREAD_C]: "stale-split-id",
         },
       },
-      useSplitViewStore.getInitialState(),
+      freshUseSplitViewStore.getInitialState(),
     );
 
     expect(mergedState.splitViewsById["split-1"]).toMatchObject({
