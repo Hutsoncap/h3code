@@ -4,6 +4,7 @@ import { Schema } from "effect";
 import {
   BrowserOpenInputSchema,
   BrowserNavigateInputSchema,
+  BrowserSetPanelBoundsInputSchema,
   BrowserTabInputSchema,
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
@@ -18,6 +19,7 @@ const decodeBrowserOpenInput = Schema.decodeUnknownSync(BrowserOpenInputSchema);
 const decodeContextMenuRequest = Schema.decodeUnknownSync(ContextMenuRequestSchema);
 const decodeContextMenuPosition = Schema.decodeUnknownSync(ContextMenuPositionSchema);
 const decodeBrowserNavigateInput = Schema.decodeUnknownSync(BrowserNavigateInputSchema);
+const decodeBrowserSetPanelBoundsInput = Schema.decodeUnknownSync(BrowserSetPanelBoundsInputSchema);
 const decodeBrowserThreadInput = Schema.decodeUnknownSync(BrowserThreadInputSchema);
 const decodeBrowserTabInput = Schema.decodeUnknownSync(BrowserTabInputSchema);
 const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
@@ -61,6 +63,49 @@ describe("BrowserNavigateInputSchema", () => {
     expect(() =>
       decodeBrowserNavigateInput({
         threadId: "thread-1",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("BrowserSetPanelBoundsInputSchema", () => {
+  it("parses nullable panel bounds payloads", () => {
+    const parsed = decodeBrowserSetPanelBoundsInput({
+      threadId: " thread-1 ",
+      bounds: {
+        x: 24,
+        y: 48,
+        width: 1280,
+        height: 720,
+      },
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.bounds).toEqual({
+      x: 24,
+      y: 48,
+      width: 1280,
+      height: 720,
+    });
+
+    const parsedWithoutBounds = decodeBrowserSetPanelBoundsInput({
+      threadId: "thread-1",
+      bounds: null,
+    });
+
+    expect(parsedWithoutBounds.bounds).toBeNull();
+  });
+
+  it("rejects malformed panel bounds", () => {
+    expect(() =>
+      decodeBrowserSetPanelBoundsInput({
+        threadId: "thread-1",
+        bounds: {
+          x: 24,
+          y: 48,
+          width: "1280",
+          height: 720,
+        },
       }),
     ).toThrow();
   });
