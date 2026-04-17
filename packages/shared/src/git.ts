@@ -2,8 +2,15 @@
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
  * Strips quotes, collapses separators, limits to 64 chars.
  */
-export const WORKTREE_BRANCH_PREFIX = "dpcode";
-const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(`^${WORKTREE_BRANCH_PREFIX}\\/[0-9a-f]{8}$`);
+export const WORKTREE_BRANCH_PREFIX = "h3code";
+const LEGACY_WORKTREE_BRANCH_PREFIXES = ["dpcode"] as const;
+const TEMP_WORKTREE_BRANCH_PREFIXES = [
+  WORKTREE_BRANCH_PREFIX,
+  ...LEGACY_WORKTREE_BRANCH_PREFIXES,
+] as const;
+const TEMP_WORKTREE_BRANCH_PATTERNS = TEMP_WORKTREE_BRANCH_PREFIXES.map(
+  (prefix) => new RegExp(`^${prefix}\\/[0-9a-f]{8}$`),
+);
 
 export function sanitizeBranchFragment(raw: string): string {
   const normalized = raw
@@ -64,12 +71,30 @@ export function resolveAutoFeatureBranchName(
 }
 
 export function isTemporaryWorktreeBranch(branch: string): boolean {
-  return TEMP_WORKTREE_BRANCH_PATTERN.test(branch.trim().toLowerCase());
+  const normalized = branch.trim().toLowerCase();
+  return TEMP_WORKTREE_BRANCH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 export function buildTemporaryWorktreeBranchName(): string {
   const token = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toLowerCase();
   return `${WORKTREE_BRANCH_PREFIX}/${token}`;
+}
+
+export function stripTemporaryWorktreeBranchPrefix(branch: string): string {
+  const normalized = branch
+    .trim()
+    .toLowerCase()
+    .replace(/^refs\/heads\//, "")
+    .replace(/['"`]/g, "");
+
+  for (const prefix of TEMP_WORKTREE_BRANCH_PREFIXES) {
+    const prefixWithSlash = `${prefix}/`;
+    if (normalized.startsWith(prefixWithSlash)) {
+      return normalized.slice(prefixWithSlash.length);
+    }
+  }
+
+  return normalized;
 }
 
 // Preserve semantic thread branches when transient worktree placeholders briefly
