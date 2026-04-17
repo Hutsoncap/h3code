@@ -151,4 +151,59 @@ describe("splitViewStore", () => {
       }),
     ).toBe(newerSplitId);
   });
+
+  it("rebuilds the source-thread mapping from valid persisted split views", () => {
+    const persistApi = useSplitViewStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useSplitViewStore.getState>,
+        ) => ReturnType<typeof useSplitViewStore.getState>;
+      };
+    };
+
+    const mergedState = persistApi.getOptions().merge(
+      {
+        splitViewsById: {
+          "split-1": {
+            id: "split-1",
+            sourceThreadId: THREAD_A,
+            ownerProjectId: PROJECT_ID,
+            leftThreadId: THREAD_A,
+            rightThreadId: THREAD_B,
+            focusedPane: "right",
+            ratio: 0.9,
+            leftPanel: {
+              panel: null,
+              diffTurnId: null,
+              diffFilePath: null,
+              hasOpenedPanel: false,
+              lastOpenPanel: "browser",
+            },
+            rightPanel: {
+              panel: "diff",
+              diffTurnId: TURN_ID,
+              diffFilePath: "src/right.ts",
+              hasOpenedPanel: true,
+              lastOpenPanel: "diff",
+            },
+            createdAt: "2026-04-17T09:00:00.000Z",
+            updatedAt: "2026-04-17T09:01:00.000Z",
+          },
+        },
+        splitViewIdBySourceThreadId: {
+          [THREAD_C]: "stale-split-id",
+        },
+      },
+      useSplitViewStore.getInitialState(),
+    );
+
+    expect(mergedState.splitViewsById["split-1"]).toMatchObject({
+      sourceThreadId: THREAD_A,
+      ratio: 0.75,
+    });
+    expect(mergedState.splitViewIdBySourceThreadId).toEqual({
+      [THREAD_A]: "split-1",
+    });
+  });
 });

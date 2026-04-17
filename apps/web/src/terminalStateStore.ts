@@ -11,6 +11,10 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
 import {
+  decodePersistedStateOrNull,
+  PersistedTerminalStateStoreStateSchema,
+} from "./persistenceSchema";
+import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,
   DEFAULT_THREAD_TERMINAL_ID,
   MAX_TERMINALS_PER_GROUP,
@@ -448,6 +452,30 @@ function normalizeThreadTerminalState(state: ThreadTerminalState): ThreadTermina
     activeTerminalGroupId: resolvedActiveTerminalGroupId,
   };
   return threadTerminalStateEqual(state, normalized) ? state : normalized;
+}
+
+function normalizePersistedTerminalStateStoreState(
+  persistedState: unknown,
+): Record<ThreadId, ThreadTerminalState> {
+  const decoded = decodePersistedStateOrNull(
+    PersistedTerminalStateStoreStateSchema,
+    persistedState,
+  );
+  if (!decoded) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(decoded.terminalStateByThreadId)
+      .map(
+        ([threadId, state]) =>
+          [
+            threadId.trim(),
+            normalizeThreadTerminalState(state as unknown as ThreadTerminalState),
+          ] as const,
+      )
+      .filter(([threadId]) => threadId.length > 0),
+  ) as Record<ThreadId, ThreadTerminalState>;
 }
 
 function isDefaultThreadTerminalState(state: ThreadTerminalState): boolean {
@@ -1366,6 +1394,10 @@ export const useTerminalStateStore = create<TerminalStateStoreState>()(
       storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
       partialize: (state) => ({
         terminalStateByThreadId: state.terminalStateByThreadId,
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        terminalStateByThreadId: normalizePersistedTerminalStateStoreState(persistedState),
       }),
     },
   ),

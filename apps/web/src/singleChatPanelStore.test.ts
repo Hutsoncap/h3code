@@ -61,4 +61,32 @@ describe("singleChatPanelStore", () => {
       selector(useSingleChatPanelStore.getState()),
     );
   });
+
+  it("falls back to empty panel history when persisted payloads are malformed", () => {
+    const persistApi = useSingleChatPanelStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useSingleChatPanelStore.getState>,
+        ) => ReturnType<typeof useSingleChatPanelStore.getState>;
+      };
+    };
+
+    const mergedState = persistApi.getOptions().merge(
+      {
+        panelStateByThreadId: {
+          [THREAD_A]: {
+            panel: "diff",
+            diffTurnId: TURN_ID,
+            diffFilePath: "src/app.tsx",
+            hasOpenedPanel: "yes",
+            lastOpenPanel: "diff",
+          },
+        },
+      },
+      useSingleChatPanelStore.getInitialState(),
+    );
+
+    expect(mergedState.panelStateByThreadId).toEqual({});
+  });
 });

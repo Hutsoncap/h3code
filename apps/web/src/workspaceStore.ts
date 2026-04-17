@@ -7,6 +7,10 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
 import {
+  decodePersistedStateOrNull,
+  PersistedWorkspaceStoreStateSchema,
+} from "./persistenceSchema";
+import {
   DEFAULT_WORKSPACE_LAYOUT_PRESET_ID,
   getWorkspaceLayoutPreset,
   type WorkspaceLayoutPresetId,
@@ -241,11 +245,22 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
         workspacePages: state.workspacePages,
       }),
       merge: (persistedState, currentState) => {
-        const candidate = (persistedState as Partial<WorkspaceStoreState> | undefined) ?? {};
-        const workspacePages = normalizeWorkspacePages(candidate.workspacePages ?? []);
+        const candidate = decodePersistedStateOrNull(
+          PersistedWorkspaceStoreStateSchema,
+          persistedState,
+        );
+        const workspacePages = normalizeWorkspacePages(
+          (candidate?.workspacePages ?? []).map((workspace) => ({
+            id: workspace.id,
+            title: workspace.title,
+            layoutPresetId: workspace.layoutPresetId as WorkspaceLayoutPresetId,
+            createdAt: workspace.createdAt,
+            updatedAt: workspace.updatedAt,
+          })),
+        );
         return {
           ...currentState,
-          homeDir: candidate.homeDir?.trim() ?? null,
+          homeDir: candidate?.homeDir?.trim() ?? null,
           workspacePages,
         };
       },

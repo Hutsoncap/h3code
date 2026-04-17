@@ -10,6 +10,10 @@ import { createAliasedStateStorage } from "./lib/storage";
 import { randomUUID } from "./lib/utils";
 import { type ChatRightPanel } from "./diffRouteSearch";
 import { removeThreadFromSplitView } from "./splitView.logic";
+import {
+  decodePersistedStateOrNull,
+  PersistedSplitViewStoreStateSchema,
+} from "./persistenceSchema";
 
 export type SplitViewId = string;
 export type SplitViewPane = "left" | "right";
@@ -100,6 +104,75 @@ function createSplitView(input: CreateSplitViewInput): SplitView {
 
 function resolveUpdatedAt(): string {
   return new Date().toISOString();
+}
+
+function normalizePersistedPanePanelState(panelState: {
+  panel: ChatRightPanel | null;
+  diffTurnId: TurnId | null;
+  diffFilePath: string | null;
+  hasOpenedPanel: boolean;
+  lastOpenPanel: ChatRightPanel;
+}): SplitViewPanePanelState {
+  return {
+    panel: panelState.panel,
+    diffTurnId: panelState.diffTurnId,
+    diffFilePath: panelState.diffFilePath,
+    hasOpenedPanel: panelState.hasOpenedPanel,
+    lastOpenPanel: panelState.lastOpenPanel,
+  };
+}
+
+function normalizePersistedSplitViewStoreState(persistedState: unknown): SplitViewStoreState {
+  const decoded = decodePersistedStateOrNull(PersistedSplitViewStoreStateSchema, persistedState);
+  if (!decoded) {
+    return {
+      splitViewsById: {},
+      splitViewIdBySourceThreadId: {},
+    };
+  }
+
+  const splitViewsById = Object.fromEntries(
+    Object.entries(decoded.splitViewsById)
+      .map(([splitViewId, splitView]) => {
+        const normalizedId = splitViewId.trim() || splitView.id.trim();
+        const normalizedSourceThreadId = splitView.sourceThreadId.trim();
+        const normalizedOwnerProjectId = splitView.ownerProjectId.trim();
+        const normalizedLeftThreadId = splitView.leftThreadId?.trim() ?? "";
+        const normalizedRightThreadId = splitView.rightThreadId?.trim() ?? "";
+        if (
+          normalizedId.length === 0 ||
+          normalizedSourceThreadId.length === 0 ||
+          normalizedOwnerProjectId.length === 0
+        ) {
+          return null;
+        }
+        return [
+          normalizedId,
+          {
+            ...splitView,
+            id: normalizedId,
+            sourceThreadId: normalizedSourceThreadId as ThreadId,
+            ownerProjectId: normalizedOwnerProjectId as ProjectId,
+            leftThreadId:
+              normalizedLeftThreadId.length > 0 ? (normalizedLeftThreadId as ThreadId) : null,
+            rightThreadId:
+              normalizedRightThreadId.length > 0 ? (normalizedRightThreadId as ThreadId) : null,
+            ratio: clampRatio(splitView.ratio),
+            leftPanel: normalizePersistedPanePanelState(splitView.leftPanel),
+            rightPanel: normalizePersistedPanePanelState(splitView.rightPanel),
+          } satisfies SplitView,
+        ] as const;
+      })
+      .filter((entry): entry is readonly [string, SplitView] => entry !== null),
+  );
+  const splitViewIdBySourceThreadId = Object.fromEntries(
+    Object.values(splitViewsById).map((splitView) => [splitView.sourceThreadId, splitView.id]),
+  );
+
+  return {
+    splitViewsById,
+    splitViewIdBySourceThreadId,
+  };
 }
 
 function updateSplitView(
@@ -330,6 +403,10 @@ export const useSplitViewStore = create<SplitViewStore>()(
     {
       name: SPLIT_VIEW_STORAGE_KEY,
       storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedSplitViewStoreState(persistedState),
+      }),
     },
   ),
 );

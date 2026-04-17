@@ -218,6 +218,44 @@ describe("terminalStateStore actions", () => {
     ]);
   });
 
+  it("falls back to empty persisted terminal state when the stored payload is malformed", () => {
+    const persistApi = useTerminalStateStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useTerminalStateStore.getState>,
+        ) => ReturnType<typeof useTerminalStateStore.getState>;
+      };
+    };
+
+    const mergedState = persistApi.getOptions().merge(
+      {
+        terminalStateByThreadId: {
+          [THREAD_ID]: {
+            entryPoint: "chat",
+            terminalOpen: true,
+            presentationMode: "drawer",
+            workspaceLayout: "both",
+            workspaceActiveTab: "terminal",
+            terminalHeight: 280,
+            terminalIds: ["default"],
+            terminalLabelsById: {},
+            terminalTitleOverridesById: {},
+            terminalCliKindsById: {},
+            terminalAttentionStatesById: {},
+            runningTerminalIds: [],
+            activeTerminalId: "default",
+            terminalGroups: "not-an-array",
+            activeTerminalGroupId: "group-default",
+          },
+        },
+      },
+      useTerminalStateStore.getInitialState(),
+    );
+
+    expect(mergedState.terminalStateByThreadId).toEqual({});
+  });
+
   it("creates new terminals in a separate group", () => {
     useTerminalStateStore.getState().newTerminal(THREAD_ID, "terminal-2");
 
