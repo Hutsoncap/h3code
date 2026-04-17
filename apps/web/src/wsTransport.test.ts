@@ -253,4 +253,46 @@ describe("WsTransport", () => {
     await expect(requestPromise).rejects.toThrow("WebSocket connection closed.");
     transport.dispose();
   });
+
+  it("reconnects and flushes requests queued while the socket is down", async () => {
+    vi.useFakeTimers();
+
+    const transport = new WsTransport("ws://localhost:3020");
+    const firstSocket = getSocket();
+    firstSocket.open();
+
+    expect(transport.getState()).toBe("open");
+
+    firstSocket.close();
+
+    expect(transport.getState()).toBe("closed");
+    expect(sockets).toHaveLength(1);
+
+    const requestPromise = transport.request("projects.list");
+    expect(firstSocket.sent).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(sockets).toHaveLength(2);
+    const secondSocket = getSocket();
+    expect(secondSocket).not.toBe(firstSocket);
+    expect(transport.getState()).toBe("reconnecting");
+    expect(secondSocket.sent).toHaveLength(0);
+
+    secondSocket.open();
+
+    expect(transport.getState()).toBe("open");
+    expect(secondSocket.sent).toHaveLength(1);
+
+    const requestEnvelope = JSON.parse(secondSocket.sent[0] ?? "{}") as { id: string };
+    secondSocket.serverMessage(
+      JSON.stringify({
+        id: requestEnvelope.id,
+        result: { projects: [] },
+      }),
+    );
+
+    await expect(requestPromise).resolves.toEqual({ projects: [] });
+    transport.dispose();
+  });
 });
