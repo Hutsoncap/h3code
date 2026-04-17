@@ -10,10 +10,14 @@ import { createServer } from "./wsServer";
 import WebSocket from "ws";
 import { deriveServerPaths, ServerConfig, type ServerConfigShape } from "./config";
 import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
-import { ProviderAdapterRegistry } from "./provider/Services/ProviderAdapterRegistry";
-import { ProviderUnsupportedError } from "./provider/Errors";
+import {
+  ProviderAdapterRegistry,
+  type ProviderAdapterRegistryShape,
+} from "./provider/Services/ProviderAdapterRegistry";
+import { ProviderUnsupportedError, type ProviderAdapterError } from "./provider/Errors";
 import { ProviderDiscoveryService } from "./provider/Services/ProviderDiscoveryService";
 import type { ProviderDiscoveryServiceShape } from "./provider/Services/ProviderDiscoveryService";
+import type { ProviderAdapterShape } from "./provider/Services/ProviderAdapter.ts";
 
 import {
   DEFAULT_TERMINAL_ID,
@@ -448,6 +452,15 @@ function compileKeybindings(bindings: KeybindingsConfig): ResolvedKeybindingsCon
 
 const DEFAULT_RESOLVED_KEYBINDINGS = compileKeybindings([...DEFAULT_KEYBINDINGS]);
 const VALID_EDITOR_IDS = new Set(EDITORS.map((editor) => editor.id));
+const VALID_SERVER_TRANSCRIBE_VOICE_INPUT = {
+  provider: "codex" as const,
+  cwd: "/repo",
+  threadId: "thread-voice-1",
+  mimeType: "audio/webm",
+  sampleRateHz: 16_000,
+  durationMs: 1_200,
+  audioBase64: "Zm9v",
+};
 
 function expectAvailableEditors(value: unknown): void {
   expect(Array.isArray(value)).toBe(true);
@@ -464,6 +477,84 @@ function ensureParentDir(filePath: string): void {
 function deriveServerPathsSync(baseDir: string, devUrl: URL | undefined) {
   return Effect.runSync(
     deriveServerPaths(baseDir, devUrl).pipe(Effect.provide(NodeServices.layer)),
+  );
+}
+
+function unsupportedProviderCall<T>(
+  message = "Unsupported provider call in test",
+): Effect.Effect<T> {
+  return Effect.die(new Error(message)) as Effect.Effect<T>;
+}
+
+function createUnsupportedProviderDiscoveryService(): ProviderDiscoveryServiceShape {
+  return {
+    getComposerCapabilities: () =>
+      unsupportedProviderCall("Unsupported provider discovery call in test"),
+    listCommands: () => unsupportedProviderCall("Unsupported provider discovery call in test"),
+    listSkills: () => unsupportedProviderCall("Unsupported provider discovery call in test"),
+    listPlugins: () => unsupportedProviderCall("Unsupported provider discovery call in test"),
+    readPlugin: () => unsupportedProviderCall("Unsupported provider discovery call in test"),
+    listModels: () => unsupportedProviderCall("Unsupported provider discovery call in test"),
+  };
+}
+
+function createProviderAdapterTestStub(
+  overrides: Partial<ProviderAdapterShape<ProviderAdapterError>> = {},
+): ProviderAdapterShape<ProviderAdapterError> {
+  return {
+    provider: "codex",
+    capabilities: { sessionModelSwitch: "unsupported" },
+    startSession: () => unsupportedProviderCall(),
+    sendTurn: () => unsupportedProviderCall(),
+    interruptTurn: () => unsupportedProviderCall(),
+    respondToRequest: () => unsupportedProviderCall(),
+    respondToUserInput: () => unsupportedProviderCall(),
+    stopSession: () => unsupportedProviderCall(),
+    listSessions: () => Effect.succeed([]),
+    hasSession: () => Effect.succeed(false),
+    readThread: () => unsupportedProviderCall(),
+    rollbackThread: () => unsupportedProviderCall(),
+    stopAll: () => unsupportedProviderCall(),
+    streamEvents: Stream.empty,
+    ...overrides,
+  };
+}
+
+function createProviderTestLayer(
+  options: {
+    providerDiscoveryService?: ProviderDiscoveryServiceShape;
+    providerAdapterRegistry?: ProviderAdapterRegistryShape;
+  } = {},
+): Layer.Layer<ProviderService | ProviderDiscoveryService | ProviderAdapterRegistry, never> {
+  const providerService: ProviderServiceShape = {
+    startSession: () => unsupportedProviderCall(),
+    sendTurn: () => unsupportedProviderCall(),
+    steerTurn: () => unsupportedProviderCall(),
+    startReview: () => unsupportedProviderCall(),
+    forkThread: () => unsupportedProviderCall(),
+    interruptTurn: () => unsupportedProviderCall(),
+    respondToRequest: () => unsupportedProviderCall(),
+    respondToUserInput: () => unsupportedProviderCall(),
+    stopSession: () => unsupportedProviderCall(),
+    listSessions: () => Effect.succeed([]),
+    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    rollbackConversation: () => unsupportedProviderCall(),
+    streamEvents: Stream.empty,
+  };
+
+  return Layer.mergeAll(
+    Layer.succeed(ProviderService, providerService),
+    Layer.succeed(
+      ProviderDiscoveryService,
+      options.providerDiscoveryService ?? createUnsupportedProviderDiscoveryService(),
+    ),
+    Layer.succeed(
+      ProviderAdapterRegistry,
+      options.providerAdapterRegistry ?? {
+        getByProvider: (provider) => Effect.fail(new ProviderUnsupportedError({ provider })),
+        listProviders: () => Effect.succeed([]),
+      },
+    ),
   );
 }
 
@@ -589,31 +680,7 @@ describe("WebSocket Server", () => {
   function createProviderDiscoveryTestLayer(
     providerDiscoveryService: ProviderDiscoveryServiceShape,
   ): Layer.Layer<ProviderService | ProviderDiscoveryService | ProviderAdapterRegistry, never> {
-    const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
-    const providerService: ProviderServiceShape = {
-      startSession: unsupported,
-      sendTurn: unsupported,
-      steerTurn: unsupported,
-      startReview: unsupported,
-      forkThread: unsupported,
-      interruptTurn: unsupported,
-      respondToRequest: unsupported,
-      respondToUserInput: unsupported,
-      stopSession: unsupported,
-      listSessions: () => Effect.succeed([]),
-      getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
-      rollbackConversation: unsupported,
-      streamEvents: Stream.empty,
-    };
-
-    return Layer.mergeAll(
-      Layer.succeed(ProviderService, providerService),
-      Layer.succeed(ProviderDiscoveryService, providerDiscoveryService),
-      Layer.succeed(ProviderAdapterRegistry, {
-        getByProvider: (provider) => Effect.fail(new ProviderUnsupportedError({ provider })),
-        listProviders: () => Effect.succeed([]),
-      }),
-    );
+    return createProviderTestLayer({ providerDiscoveryService });
   }
 
   afterEach(async () => {
@@ -1272,6 +1339,164 @@ describe("WebSocket Server", () => {
     const response = await sendRequest(ws, WS_METHODS.serverRefreshProviders);
     expect(response.error).toBeUndefined();
     expect(response.result).toEqual({ providers: refreshedProviders });
+  });
+
+  it("routes server.transcribeVoice through the injected adapter registry", async () => {
+    const transcribeCalls: Array<typeof VALID_SERVER_TRANSCRIBE_VOICE_INPUT> = [];
+    const providerLayer = createProviderTestLayer({
+      providerAdapterRegistry: {
+        getByProvider: (provider) =>
+          Effect.succeed(
+            createProviderAdapterTestStub({
+              provider,
+              transcribeVoice: (input) => {
+                transcribeCalls.push(input as typeof VALID_SERVER_TRANSCRIBE_VOICE_INPUT);
+                return Effect.succeed({ text: "hello from voice" });
+              },
+            }),
+          ),
+        listProviders: () => Effect.succeed(["codex"]),
+      },
+    });
+
+    server = await createTestServer({ cwd: "/my/workspace", providerLayer });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(
+      ws,
+      WS_METHODS.serverTranscribeVoice,
+      VALID_SERVER_TRANSCRIBE_VOICE_INPUT,
+    );
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({ text: "hello from voice" });
+    expect(transcribeCalls).toEqual([VALID_SERVER_TRANSCRIBE_VOICE_INPUT]);
+  });
+
+  it("rejects malformed server.transcribeVoice websocket requests before routing them", async () => {
+    const getByProvider: ProviderAdapterRegistryShape["getByProvider"] = vi.fn((provider) =>
+      Effect.succeed(
+        createProviderAdapterTestStub({
+          provider,
+          transcribeVoice: () => Effect.succeed({ text: "should not be called" }),
+        }),
+      ),
+    );
+    const providerLayer = createProviderTestLayer({
+      providerAdapterRegistry: {
+        getByProvider,
+        listProviders: () => Effect.succeed(["codex"]),
+      },
+    });
+
+    server = await createTestServer({ cwd: "/my/workspace", providerLayer });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    for (const params of [
+      { ...VALID_SERVER_TRANSCRIBE_VOICE_INPUT, provider: "bogus" },
+      { ...VALID_SERVER_TRANSCRIBE_VOICE_INPUT, cwd: "   " },
+      { ...VALID_SERVER_TRANSCRIBE_VOICE_INPUT, sampleRateHz: -1 },
+      { ...VALID_SERVER_TRANSCRIBE_VOICE_INPUT, unexpected: true },
+    ] as const) {
+      const response = await sendRequest(ws, WS_METHODS.serverTranscribeVoice, params);
+      expect(response.result).toBeUndefined();
+      expect(response.error?.message).toContain("Invalid request format");
+    }
+
+    expect(getByProvider).not.toHaveBeenCalled();
+  });
+
+  it("returns an unavailable error when the requested provider does not implement voice transcription", async () => {
+    const getByProvider: ProviderAdapterRegistryShape["getByProvider"] = vi.fn((provider) =>
+      Effect.fail(new ProviderUnsupportedError({ provider })),
+    );
+    const providerLayer = createProviderTestLayer({
+      providerAdapterRegistry: {
+        getByProvider,
+        listProviders: () => Effect.succeed([]),
+      },
+    });
+
+    server = await createTestServer({ cwd: "/my/workspace", providerLayer });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(
+      ws,
+      WS_METHODS.serverTranscribeVoice,
+      VALID_SERVER_TRANSCRIBE_VOICE_INPUT,
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error).toEqual({
+      message: "Voice transcription is unavailable for provider 'codex'.",
+    });
+    expect(getByProvider).toHaveBeenCalledWith("codex");
+  });
+
+  it("returns an unavailable error when the adapter runtime does not expose transcribeVoice", async () => {
+    const providerLayer = createProviderTestLayer({
+      providerAdapterRegistry: {
+        getByProvider: (provider) => Effect.succeed(createProviderAdapterTestStub({ provider })),
+        listProviders: () => Effect.succeed(["codex"]),
+      },
+    });
+
+    server = await createTestServer({ cwd: "/my/workspace", providerLayer });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(
+      ws,
+      WS_METHODS.serverTranscribeVoice,
+      VALID_SERVER_TRANSCRIBE_VOICE_INPUT,
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error).toEqual({
+      message: "Voice transcription is unavailable for provider 'codex'.",
+    });
+  });
+
+  it("normalizes non-Error voice transcription adapter failures", async () => {
+    const providerLayer = createProviderTestLayer({
+      providerAdapterRegistry: {
+        getByProvider: (provider) =>
+          Effect.succeed(
+            createProviderAdapterTestStub({
+              provider,
+              transcribeVoice: () => Effect.die("adapter-broke-with-string"),
+            }),
+          ),
+        listProviders: () => Effect.succeed(["codex"]),
+      },
+    });
+
+    server = await createTestServer({ cwd: "/my/workspace", providerLayer });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(
+      ws,
+      WS_METHODS.serverTranscribeVoice,
+      VALID_SERVER_TRANSCRIBE_VOICE_INPUT,
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error).toEqual({ message: "Voice transcription failed." });
   });
 
   it("routes shell.openInEditor through the injected open service", async () => {
