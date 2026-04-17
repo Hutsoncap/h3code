@@ -333,6 +333,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX14** | Codex app-server JSON-RPC shape hardening — reject malformed response envelopes before they are misclassified as valid app-server replies                                                        | ✅ #47 — codex protocol response parsing hardened                                                                                                                                                                                                                       |
 | **hX15** | WebSocket transport stale-socket invariants — ignore superseded socket events and preserve queued pre-open requests across reconnect churn without widening server-side scope                    | ✅ #48 — stale-socket reconnect invariants verified                                                                                                                                                                                                                     |
 | **hX16** | Voice transcription websocket boundary validation — reject malformed transcribe requests early and normalize unsupported-provider/runtime plus adapter-failure cases at the ws/native edge       | ✅ #49 — transcribe voice websocket boundary hardened                                                                                                                                                                                                                   |
+| **hX18** | IPC contract coverage for browser panel bounds — exercise `BrowserSetPanelBoundsInputSchema` so malformed bounds are rejected before runtime code depends on them                                | 🚧 worktree: `codex/hx18-ipc-contract-coverage`                                                                                                                                                                                                                         |
 
 ---
 
@@ -365,11 +366,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-<<<<<<< Updated upstream
-Hardening lane (hX1–hX15) — runs continuously in parallel with all phases,
-=======
-Hardening lane (hX1–hX13, hX16) — runs continuously in parallel with all phases,
->>>>>>> Stashed changes
+Hardening lane (hX1–hX18) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
