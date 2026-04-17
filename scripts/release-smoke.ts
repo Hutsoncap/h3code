@@ -4,7 +4,15 @@
 // Depends on: update-release-package-versions.ts and merge-mac-update-manifests.ts.
 
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +30,24 @@ const workspaceFiles = [
   "packages/shared/package.json",
   "scripts/package.json",
 ] as const;
+
+function resolveBunExecutable(): string {
+  const candidatePaths = [
+    process.env.BUN,
+    process.env.npm_execpath,
+    process.env.BUN_INSTALL ? join(process.env.BUN_INSTALL, "bin", "bun") : undefined,
+    process.env.HOME ? join(process.env.HOME, ".bun", "bin", "bun") : undefined,
+    process.env.USERPROFILE ? join(process.env.USERPROFILE, ".bun", "bin", "bun.exe") : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidatePath of candidatePaths) {
+    if (existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return "bun";
+}
 
 function copyWorkspaceManifestFixture(targetRoot: string): void {
   for (const relativePath of workspaceFiles) {
@@ -81,6 +107,7 @@ function assertContains(haystack: string, needle: string, message: string): void
 }
 
 const tempRoot = mkdtempSync(join(tmpdir(), "t3-release-smoke-"));
+const bunExecutable = resolveBunExecutable();
 
 try {
   copyWorkspaceManifestFixture(tempRoot);
@@ -99,7 +126,7 @@ try {
     },
   );
 
-  execFileSync("bun", ["install", "--lockfile-only", "--ignore-scripts"], {
+  execFileSync(bunExecutable, ["install", "--lockfile-only", "--ignore-scripts"], {
     cwd: tempRoot,
     stdio: "inherit",
   });
