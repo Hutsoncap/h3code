@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
+import { DesktopUpdateStateSchema, ThreadBrowserStateSchema } from "@t3tools/contracts";
+import { safeDecodeIpcPayload } from "./ipcHelpers";
 import { SERVER_TRANSCRIBE_VOICE_CHANNEL } from "./voiceTranscription";
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
@@ -37,7 +39,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
   confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
-  showContextMenu: (items, position) => ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, items, position),
+  showContextMenu: (items, position) =>
+    ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, { items, position }),
   openExternal: (url: string) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
   showInFolder: (path: string) => ipcRenderer.invoke(SHOW_IN_FOLDER_CHANNEL, path),
   shell: {
@@ -60,8 +63,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   installUpdate: () => ipcRenderer.invoke(UPDATE_INSTALL_CHANNEL),
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
-      if (typeof state !== "object" || state === null) return;
-      listener(state as Parameters<typeof listener>[0]);
+      const parsedState = safeDecodeIpcPayload(DesktopUpdateStateSchema, state);
+      if (!parsedState) return;
+      listener(parsedState);
     };
 
     ipcRenderer.on(UPDATE_STATE_CHANNEL, wrappedListener);
@@ -92,8 +96,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     openDevTools: (input) => ipcRenderer.invoke(BROWSER_OPEN_DEVTOOLS_CHANNEL, input),
     onState: (listener) => {
       const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
-        if (typeof state !== "object" || state === null) return;
-        listener(state as Parameters<typeof listener>[0]);
+        const parsedState = safeDecodeIpcPayload(ThreadBrowserStateSchema, state);
+        if (!parsedState) return;
+        listener({
+          ...parsedState,
+          tabs: parsedState.tabs.map((tab) => ({ ...tab })),
+        });
       };
 
       ipcRenderer.on(BROWSER_STATE_CHANNEL, wrappedListener);

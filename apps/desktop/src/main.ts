@@ -20,24 +20,26 @@ import {
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import * as Effect from "effect/Effect";
-import type {
-  BrowserNavigateInput,
-  BrowserNewTabInput,
-  BrowserOpenInput,
-  BrowserSetPanelBoundsInput,
-  BrowserTabInput,
-  BrowserThreadInput,
-  DesktopTheme,
-  DesktopUpdateActionResult,
-  DesktopUpdateState,
+import { Schema } from "effect";
+import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
+import {
+  BrowserNavigateInputSchema,
+  BrowserNewTabInputSchema,
+  BrowserOpenInputSchema,
+  BrowserSetPanelBoundsInputSchema,
+  BrowserTabInputSchema,
+  BrowserThreadInputSchema,
+  ContextMenuRequestSchema,
+  DesktopNotificationInputSchema,
+  DesktopThemeSchema,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
 
-import type { ContextMenuItem } from "@t3tools/contracts";
 import { NetService } from "@t3tools/shared/Net";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { isBackendReadinessAborted, waitForHttpReady } from "./backendReadiness";
 import { showDesktopConfirmDialog } from "./confirmDialog";
+import { registerValidatedIpcHandler } from "./ipcHelpers";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
 import { registerDesktopVoiceTranscriptionHandler } from "./voiceTranscription";
@@ -187,14 +189,6 @@ function getSafeExternalUrl(rawUrl: unknown): string | null {
   }
 
   return parsedUrl.toString();
-}
-
-function getSafeTheme(rawTheme: unknown): DesktopTheme | null {
-  if (rawTheme === "light" || rawTheme === "dark" || rawTheme === "system") {
-    return rawTheme;
-  }
-
-  return null;
 }
 
 // Wait for the desktop backend to accept HTTP connections before packaged startup continues.
@@ -790,9 +784,9 @@ function clearUnreadNotificationBadge(): void {
 // Show a native OS notification and refocus the app window when the alert is clicked.
 function showDesktopNotification(input: {
   title: string;
-  body?: string;
-  silent?: boolean;
-  threadId?: string;
+  body?: string | undefined;
+  silent?: boolean | undefined;
+  threadId?: string | undefined;
 }): boolean {
   const title = typeof input.title === "string" ? input.title.trim() : "";
   const body = typeof input.body === "string" ? input.body.trim() : "";
@@ -1258,37 +1252,25 @@ function registerIpcHandlers(): void {
     return result.filePaths[0] ?? null;
   });
 
-  ipcMain.removeHandler(CONFIRM_CHANNEL);
-  ipcMain.handle(CONFIRM_CHANNEL, async (_event, message: unknown) => {
-    if (typeof message !== "string") {
-      return false;
-    }
-
+  registerValidatedIpcHandler(ipcMain, CONFIRM_CHANNEL, Schema.String, async (message) => {
     const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
     return showDesktopConfirmDialog(message, owner);
   });
 
-  ipcMain.removeHandler(SET_THEME_CHANNEL);
-  ipcMain.handle(SET_THEME_CHANNEL, async (_event, rawTheme: unknown) => {
-    const theme = getSafeTheme(rawTheme);
-    if (!theme) {
-      return;
-    }
-
+  registerValidatedIpcHandler(ipcMain, SET_THEME_CHANNEL, DesktopThemeSchema, async (theme) => {
     nativeTheme.themeSource = theme;
   });
 
-  ipcMain.removeHandler(CONTEXT_MENU_CHANNEL);
-  ipcMain.handle(
+  registerValidatedIpcHandler(
+    ipcMain,
     CONTEXT_MENU_CHANNEL,
-    async (_event, items: ContextMenuItem[], position?: { x: number; y: number }) => {
-      const normalizedItems = items
-        .filter((item) => typeof item.id === "string" && typeof item.label === "string")
-        .map((item) => ({
-          id: item.id,
-          label: item.label,
-          destructive: item.destructive === true,
-        }));
+    ContextMenuRequestSchema,
+    async ({ items, position }) => {
+      const normalizedItems = items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        destructive: item.destructive === true,
+      }));
       if (normalizedItems.length === 0) {
         return null;
       }
@@ -1339,8 +1321,7 @@ function registerIpcHandlers(): void {
     },
   );
 
-  ipcMain.removeHandler(OPEN_EXTERNAL_CHANNEL);
-  ipcMain.handle(OPEN_EXTERNAL_CHANNEL, async (_event, rawUrl: unknown) => {
+  registerValidatedIpcHandler(ipcMain, OPEN_EXTERNAL_CHANNEL, Schema.String, async (rawUrl) => {
     const externalUrl = getSafeExternalUrl(rawUrl);
     if (!externalUrl) {
       return false;
@@ -1354,8 +1335,7 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.removeHandler(SHOW_IN_FOLDER_CHANNEL);
-  ipcMain.handle(SHOW_IN_FOLDER_CHANNEL, async (_event, rawPath: unknown) => {
+  registerValidatedIpcHandler(ipcMain, SHOW_IN_FOLDER_CHANNEL, Schema.String, async (rawPath) => {
     if (typeof rawPath !== "string" || rawPath.trim().length === 0) {
       throw new Error("Missing folder path.");
     }
@@ -1418,89 +1398,108 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(NOTIFICATIONS_IS_SUPPORTED_CHANNEL);
   ipcMain.handle(NOTIFICATIONS_IS_SUPPORTED_CHANNEL, async () => Notification.isSupported());
 
-  ipcMain.removeHandler(NOTIFICATIONS_SHOW_CHANNEL);
-  ipcMain.handle(
+  registerValidatedIpcHandler(
+    ipcMain,
     NOTIFICATIONS_SHOW_CHANNEL,
-    async (
-      _event,
-      input:
-        | { title?: unknown; body?: unknown; silent?: unknown; threadId?: unknown }
-        | null
-        | undefined,
-    ) =>
-      showDesktopNotification({
-        title: typeof input?.title === "string" ? input.title : "",
-        body: typeof input?.body === "string" ? input.body : "",
-        silent: input?.silent === true,
-        ...(typeof input?.threadId === "string" ? { threadId: input.threadId } : {}),
-      }),
+    DesktopNotificationInputSchema,
+    async (input) => showDesktopNotification(input),
   );
   registerDesktopVoiceTranscriptionHandler();
 
-  ipcMain.removeHandler(BROWSER_OPEN_CHANNEL);
-  ipcMain.handle(BROWSER_OPEN_CHANNEL, async (_event, input: BrowserOpenInput) =>
-    browserManager.open(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_OPEN_CHANNEL,
+    BrowserOpenInputSchema,
+    async (input) => browserManager.open(input),
   );
 
-  ipcMain.removeHandler(BROWSER_CLOSE_CHANNEL);
-  ipcMain.handle(BROWSER_CLOSE_CHANNEL, async (_event, input: BrowserThreadInput) =>
-    browserManager.close(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_CLOSE_CHANNEL,
+    BrowserThreadInputSchema,
+    async (input) => browserManager.close(input),
   );
 
-  ipcMain.removeHandler(BROWSER_HIDE_CHANNEL);
-  ipcMain.handle(BROWSER_HIDE_CHANNEL, async (_event, input: BrowserThreadInput) => {
-    browserManager.hide(input);
-  });
-
-  ipcMain.removeHandler(BROWSER_GET_STATE_CHANNEL);
-  ipcMain.handle(BROWSER_GET_STATE_CHANNEL, async (_event, input: BrowserThreadInput) =>
-    browserManager.getState(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_HIDE_CHANNEL,
+    BrowserThreadInputSchema,
+    async (input) => {
+      browserManager.hide(input);
+    },
   );
 
-  ipcMain.removeHandler(BROWSER_SET_BOUNDS_CHANNEL);
-  ipcMain.handle(BROWSER_SET_BOUNDS_CHANNEL, async (_event, input: BrowserSetPanelBoundsInput) =>
-    browserManager.setPanelBounds(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_GET_STATE_CHANNEL,
+    BrowserThreadInputSchema,
+    async (input) => browserManager.getState(input),
   );
 
-  ipcMain.removeHandler(BROWSER_NAVIGATE_CHANNEL);
-  ipcMain.handle(BROWSER_NAVIGATE_CHANNEL, async (_event, input: BrowserNavigateInput) =>
-    browserManager.navigate(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_SET_BOUNDS_CHANNEL,
+    BrowserSetPanelBoundsInputSchema,
+    async (input) => browserManager.setPanelBounds(input),
   );
 
-  ipcMain.removeHandler(BROWSER_RELOAD_CHANNEL);
-  ipcMain.handle(BROWSER_RELOAD_CHANNEL, async (_event, input: BrowserTabInput) =>
-    browserManager.reload(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_NAVIGATE_CHANNEL,
+    BrowserNavigateInputSchema,
+    async (input) => browserManager.navigate(input),
   );
 
-  ipcMain.removeHandler(BROWSER_GO_BACK_CHANNEL);
-  ipcMain.handle(BROWSER_GO_BACK_CHANNEL, async (_event, input: BrowserTabInput) =>
-    browserManager.goBack(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_RELOAD_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => browserManager.reload(input),
   );
 
-  ipcMain.removeHandler(BROWSER_GO_FORWARD_CHANNEL);
-  ipcMain.handle(BROWSER_GO_FORWARD_CHANNEL, async (_event, input: BrowserTabInput) =>
-    browserManager.goForward(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_GO_BACK_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => browserManager.goBack(input),
   );
 
-  ipcMain.removeHandler(BROWSER_NEW_TAB_CHANNEL);
-  ipcMain.handle(BROWSER_NEW_TAB_CHANNEL, async (_event, input: BrowserNewTabInput) =>
-    browserManager.newTab(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_GO_FORWARD_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => browserManager.goForward(input),
   );
 
-  ipcMain.removeHandler(BROWSER_CLOSE_TAB_CHANNEL);
-  ipcMain.handle(BROWSER_CLOSE_TAB_CHANNEL, async (_event, input: BrowserTabInput) =>
-    browserManager.closeTab(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_NEW_TAB_CHANNEL,
+    BrowserNewTabInputSchema,
+    async (input) => browserManager.newTab(input),
   );
 
-  ipcMain.removeHandler(BROWSER_SELECT_TAB_CHANNEL);
-  ipcMain.handle(BROWSER_SELECT_TAB_CHANNEL, async (_event, input: BrowserTabInput) =>
-    browserManager.selectTab(input),
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_CLOSE_TAB_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => browserManager.closeTab(input),
   );
 
-  ipcMain.removeHandler(BROWSER_OPEN_DEVTOOLS_CHANNEL);
-  ipcMain.handle(BROWSER_OPEN_DEVTOOLS_CHANNEL, async (_event, input: BrowserTabInput) => {
-    browserManager.openDevTools(input);
-  });
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_SELECT_TAB_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => browserManager.selectTab(input),
+  );
+
+  registerValidatedIpcHandler(
+    ipcMain,
+    BROWSER_OPEN_DEVTOOLS_CHANNEL,
+    BrowserTabInputSchema,
+    async (input) => {
+      browserManager.openDevTools(input);
+    },
+  );
 }
 
 function getIconOption(): { icon: string } | Record<string, never> {

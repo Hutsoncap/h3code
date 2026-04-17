@@ -49,7 +49,7 @@ Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. 
 
 | ID       | Title                                             | Source                                                                                           | Status                                      |
 | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | 📋 Planned                                  |
+| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | 🚧 worktree: h3code-p0.1-typed-ipc          |
 | **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md)       | 📋 Planned                                  |
 | **p0.3** | Split ChatView.tsx                                | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md)                   | 📋 Planned                                  |
 | **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | 📋 Planned                                  |
