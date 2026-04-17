@@ -12,6 +12,7 @@ import { resolvePreferredSplitViewIdForThread, useSplitViewStore } from "../spli
 import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
 import type { Thread } from "../types";
+import { parseDesktopNotificationInput } from "./desktopNotificationInput";
 import {
   buildTerminalAttentionCopy,
   buildTerminalCompletionCopy,
@@ -94,7 +95,9 @@ async function showSystemThreadNotification(
     if (!supported) {
       return false;
     }
-    return window.desktopBridge.notifications.show({ title, body, silent: false, threadId });
+    return window.desktopBridge.notifications.show(
+      parseDesktopNotificationInput({ title, body, silent: false, threadId }),
+    );
   }
 
   if (readBrowserNotificationPermissionState() !== "granted") {
