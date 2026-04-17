@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 import { Schema } from "effect";
 
 import {
+  BrowserOpenInputSchema,
   BrowserNavigateInputSchema,
+  BrowserTabInputSchema,
+  BrowserThreadInputSchema,
   ContextMenuRequestSchema,
+  ContextMenuPositionSchema,
   DesktopNotificationInputSchema,
   DesktopNotificationShowResultSchema,
   DesktopServerTranscribeVoiceInputSchema,
   ThreadBrowserStateSchema,
 } from "./ipc";
 
+const decodeBrowserOpenInput = Schema.decodeUnknownSync(BrowserOpenInputSchema);
 const decodeContextMenuRequest = Schema.decodeUnknownSync(ContextMenuRequestSchema);
+const decodeContextMenuPosition = Schema.decodeUnknownSync(ContextMenuPositionSchema);
 const decodeBrowserNavigateInput = Schema.decodeUnknownSync(BrowserNavigateInputSchema);
+const decodeBrowserThreadInput = Schema.decodeUnknownSync(BrowserThreadInputSchema);
+const decodeBrowserTabInput = Schema.decodeUnknownSync(BrowserTabInputSchema);
 const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
   DesktopServerTranscribeVoiceInputSchema,
 );
@@ -55,6 +63,60 @@ describe("BrowserNavigateInputSchema", () => {
         threadId: "thread-1",
       }),
     ).toThrow();
+  });
+});
+
+describe("BrowserOpenInputSchema", () => {
+  it("parses browser open payloads with optional initial urls", () => {
+    const parsed = decodeBrowserOpenInput({
+      threadId: " thread-1 ",
+      initialUrl: "https://example.com",
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.initialUrl).toBe("https://example.com");
+  });
+
+  it("parses browser open payloads without an initial url", () => {
+    const parsed = decodeBrowserOpenInput({
+      threadId: "thread-1",
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.initialUrl).toBeUndefined();
+  });
+});
+
+describe("BrowserThreadInputSchema", () => {
+  it("parses thread-scoped browser payloads", () => {
+    const parsed = decodeBrowserThreadInput({
+      threadId: " thread-1 ",
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+  });
+});
+
+describe("BrowserTabInputSchema", () => {
+  it("parses browser tab payloads", () => {
+    const parsed = decodeBrowserTabInput({
+      threadId: " thread-1 ",
+      tabId: " tab-1 ",
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.tabId).toBe(" tab-1 ");
+  });
+});
+
+describe("ContextMenuPositionSchema", () => {
+  it("parses pointer coordinates", () => {
+    const parsed = decodeContextMenuPosition({
+      x: 10.5,
+      y: 20,
+    });
+
+    expect(parsed).toEqual({ x: 10.5, y: 20 });
   });
 });
 
