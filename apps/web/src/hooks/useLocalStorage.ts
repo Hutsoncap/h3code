@@ -32,7 +32,14 @@ const encode = <T, E>(schema: Schema.Codec<T, E>, value: T) =>
 
 export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E>): T | null => {
   const item = getPersistedStorageItem(isomorphicLocalStorage, key);
-  return item ? decode(schema, item) : null;
+  if (!item) return null;
+
+  try {
+    return decode(schema, item);
+  } catch {
+    removePersistedStorageItem(isomorphicLocalStorage, key);
+    return null;
+  }
 };
 
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
