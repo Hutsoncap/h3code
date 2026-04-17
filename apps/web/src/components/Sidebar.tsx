@@ -130,22 +130,16 @@ import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 import {
   describeAddProjectError,
-  buildProjectThreadTree,
   extractDuplicateProjectCreateProjectId,
   findWorkspaceRootMatch,
   getFallbackThreadIdAfterDelete,
-  getPinnedThreadsForSidebar,
   getNextVisibleSidebarThreadId,
-  getVisibleSidebarEntriesForPreview,
-  getUnpinnedThreadsForSidebar,
-  resolveProjectStatusIndicator,
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   isDuplicateProjectCreateError,
   shouldPrunePinnedThreads,
   shouldClearThreadSelectionOnMouseDown,
-  sortProjectsForSidebar,
   sortThreadsForSidebar,
 } from "./Sidebar.logic";
 import { resolveSubagentPresentationForThread } from "../lib/subagentPresentation";
@@ -174,6 +168,7 @@ import {
 import { useTemporaryThreadStore } from "../temporaryThreadStore";
 import { usePinnedThreadsStore } from "../pinnedThreadsStore";
 import { useWorkspaceStore, workspaceThreadId } from "../workspaceStore";
+import { buildSidebarRenderModel, type SidebarProjectRenderModel } from "./sidebar/renderModel";
 import type {
   SidebarSearchAction,
   SidebarSearchProject,
@@ -323,23 +318,6 @@ type SidebarSplitPreview = {
   provider: "codex" | "claudeAgent";
   threadId: ThreadId | null;
 };
-
-type SidebarProjectEntry =
-  | {
-      kind: "thread";
-      rowId: ThreadId;
-      rootRowId: ThreadId;
-      thread: SidebarThreadSummary;
-      depth: number;
-      childCount: number;
-      isExpanded: boolean;
-    }
-  | {
-      kind: "split";
-      rowId: ThreadId;
-      rootRowId: ThreadId;
-      splitView: SplitView;
-    };
 
 function renderSubagentLabel(input: {
   threadId: string;
@@ -844,10 +822,6 @@ export default function Sidebar() {
     [splitViewsById],
   );
   const pinnedThreadIdSet = useMemo(() => new Set(pinnedThreadIds), [pinnedThreadIds]);
-  const pinnedThreads = useMemo(
-    () => getPinnedThreadsForSidebar(sidebarDisplayThreads, pinnedThreadIds),
-    [pinnedThreadIds, sidebarDisplayThreads],
-  );
   const projectCwdById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.cwd] as const)),
     [projects],
@@ -2284,10 +2258,6 @@ export default function Sidebar() {
     () => new Map(threads.map((thread) => [thread.id, thread] as const)),
     [threads],
   );
-  const splitViewBySourceThreadId = useMemo(
-    () => new Map(splitViews.map((splitView) => [splitView.sourceThreadId, splitView] as const)),
-    [splitViews],
-  );
   const resolveSplitPreview = useCallback(
     (threadId: ThreadId | null): SidebarSplitPreview => {
       const thread = threadId ? (threadById.get(threadId) ?? null) : null;
@@ -2331,10 +2301,35 @@ export default function Sidebar() {
     [cancelProjectRename, renameProjectLocally],
   );
 
-  const sortedProjects = useMemo(
-    () => sortProjectsForSidebar(projects, sidebarThreads, appSettings.sidebarProjectSortOrder),
-    [appSettings.sidebarProjectSortOrder, projects, sidebarThreads],
+  const sidebarRenderModel = useMemo(
+    () =>
+      buildSidebarRenderModel({
+        projects,
+        sidebarThreads,
+        sidebarDisplayThreads,
+        splitViews,
+        pinnedThreadIds,
+        activeSidebarThreadId: activeSidebarThreadId ?? undefined,
+        expandedThreadListsByProject,
+        expandedSubagentParentIds,
+        projectSortOrder: appSettings.sidebarProjectSortOrder,
+        threadSortOrder: appSettings.sidebarThreadSortOrder,
+        previewLimit: THREAD_PREVIEW_LIMIT,
+      }),
+    [
+      activeSidebarThreadId,
+      appSettings.sidebarProjectSortOrder,
+      appSettings.sidebarThreadSortOrder,
+      expandedSubagentParentIds,
+      expandedThreadListsByProject,
+      pinnedThreadIds,
+      projects,
+      sidebarDisplayThreads,
+      sidebarThreads,
+      splitViews,
+    ],
   );
+  const { pinnedThreads, projectRenderModels, visibleSidebarThreadIds } = sidebarRenderModel;
   const allProjectsExpanded = useMemo(
     () => projects.length > 0 && projects.every((project) => project.expanded),
     [projects],
@@ -2436,83 +2431,6 @@ export default function Sidebar() {
     [activateThread, rangeSelectTo, toggleSubagentParent, toggleThreadSelection],
   );
 
-  const visibleSidebarThreadIds = useMemo(() => {
-    const visibleThreadIds = pinnedThreads.map((thread) => thread.id);
-
-    for (const project of sortedProjects) {
-      const projectThreads = sortThreadsForSidebar(
-        getUnpinnedThreadsForSidebar(
-          sidebarDisplayThreads.filter((thread) => thread.projectId === project.id),
-          pinnedThreadIds,
-        ),
-        appSettings.sidebarThreadSortOrder,
-      );
-      const projectThreadTree = buildProjectThreadTree({
-        threads: projectThreads,
-        expandedParentThreadIds: expandedSubagentParentIds,
-      });
-      const projectSplitViews = splitViews.filter(
-        (splitView) =>
-          splitView.ownerProjectId === project.id &&
-          !pinnedThreadIdSet.has(splitView.sourceThreadId),
-      );
-      const replacedThreadIds = new Set(
-        projectSplitViews.map((splitView) => splitView.sourceThreadId),
-      );
-      const orderedEntries = projectThreadTree.map((row) => ({
-        rowId: splitViewBySourceThreadId.get(row.thread.id)?.sourceThreadId ?? row.thread.id,
-        rootRowId: row.rootThreadId,
-      }));
-      for (const splitView of projectSplitViews) {
-        if (
-          replacedThreadIds.has(splitView.sourceThreadId) &&
-          orderedEntries.some((entry) => entry.rowId === splitView.sourceThreadId)
-        ) {
-          continue;
-        }
-        if (!orderedEntries.some((entry) => entry.rowId === splitView.sourceThreadId)) {
-          orderedEntries.push({
-            rowId: splitView.sourceThreadId,
-            rootRowId: splitView.sourceThreadId,
-          });
-        }
-      }
-
-      const { visibleEntries } = getVisibleSidebarEntriesForPreview({
-        entries: orderedEntries,
-        activeEntryId: activeSidebarThreadId ?? undefined,
-        isExpanded: expandedThreadListsByProject.has(project.id),
-        previewLimit: THREAD_PREVIEW_LIMIT,
-      });
-      const activeEntryId =
-        activeSidebarThreadId &&
-        orderedEntries.some((entry) => entry.rowId === activeSidebarThreadId)
-          ? activeSidebarThreadId
-          : null;
-      if (!project.expanded) {
-        if (activeEntryId) {
-          visibleThreadIds.push(activeEntryId);
-        }
-        continue;
-      }
-
-      visibleThreadIds.push(...visibleEntries.map((entry) => entry.rowId));
-    }
-
-    return visibleThreadIds;
-  }, [
-    activeSidebarThreadId,
-    appSettings.sidebarThreadSortOrder,
-    expandedSubagentParentIds,
-    expandedThreadListsByProject,
-    pinnedThreadIdSet,
-    pinnedThreadIds,
-    pinnedThreads,
-    sidebarDisplayThreads,
-    splitViewBySourceThreadId,
-    splitViews,
-    sortedProjects,
-  ]);
   const isManualProjectSorting = appSettings.sidebarProjectSortOrder === "manual";
 
   // Pinned rows should show the user-facing project label, not the raw folder basename.
@@ -3050,82 +2968,18 @@ export default function Sidebar() {
   }
 
   function renderProjectItem(
-    project: (typeof sortedProjects)[number],
+    projectModel: SidebarProjectRenderModel,
     dragHandleProps: SortableProjectHandleProps | null,
   ) {
+    const {
+      hasHiddenEntries: hasHiddenThreads,
+      orderedProjectThreadIds,
+      project,
+      projectStatus,
+    } = projectModel;
     const isRenamingProject = renamingProjectId === project.id;
-    const allProjectThreads = sortThreadsForSidebar(
-      sidebarDisplayThreads.filter((thread) => thread.projectId === project.id),
-      appSettings.sidebarThreadSortOrder,
-    );
-    const projectThreads = getUnpinnedThreadsForSidebar(allProjectThreads, pinnedThreadIds);
-    const activeThreadId = activeSidebarThreadId ?? undefined;
-    const projectThreadTree = buildProjectThreadTree({
-      threads: projectThreads,
-      expandedParentThreadIds: expandedSubagentParentIds,
-    });
-    const projectSplitViews = splitViews.filter(
-      (splitView) =>
-        splitView.ownerProjectId === project.id && !pinnedThreadIdSet.has(splitView.sourceThreadId),
-    );
-    const projectStatus = resolveProjectStatusIndicator(
-      allProjectThreads.map((thread) =>
-        resolveThreadStatusPill({
-          thread,
-          hasPendingApprovals: thread.hasPendingApprovals,
-          hasPendingUserInput: thread.hasPendingUserInput,
-        }),
-      ),
-    );
     const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
-    const replacedThreadIds = new Set(
-      projectSplitViews.map((splitView) => splitView.sourceThreadId),
-    );
-    const orderedEntries: SidebarProjectEntry[] = projectThreadTree.map(
-      ({ thread, depth, rootThreadId, childCount, isExpanded }) => {
-        const splitView = splitViewBySourceThreadId.get(thread.id);
-        if (!splitView) {
-          return {
-            kind: "thread",
-            rowId: thread.id,
-            rootRowId: rootThreadId,
-            thread,
-            depth,
-            childCount,
-            isExpanded,
-          };
-        }
-        return {
-          kind: "split",
-          rowId: splitView.sourceThreadId,
-          rootRowId: rootThreadId,
-          splitView,
-        };
-      },
-    );
-    for (const splitView of projectSplitViews) {
-      if (replacedThreadIds.has(splitView.sourceThreadId)) continue;
-      orderedEntries.push({
-        kind: "split",
-        rowId: splitView.sourceThreadId,
-        rootRowId: splitView.sourceThreadId,
-        splitView,
-      });
-    }
-    const activeEntry =
-      activeThreadId === undefined
-        ? null
-        : (orderedEntries.find((entry) => entry.rowId === activeThreadId) ?? null);
-    const { hasHiddenEntries: hasHiddenThreads, visibleEntries: renderedEntries } =
-      getVisibleSidebarEntriesForPreview({
-        entries: orderedEntries,
-        activeEntryId: activeEntry?.rowId,
-        isExpanded: isThreadListExpanded,
-        previewLimit: THREAD_PREVIEW_LIMIT,
-      });
-    const pinnedCollapsedEntry = !project.expanded && activeEntry ? activeEntry : null;
-    const visibleEntries = pinnedCollapsedEntry ? [pinnedCollapsedEntry] : renderedEntries;
-    const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
+    const visibleEntries = projectModel.visibleEntries;
     const renderSplitRow = (splitView: SplitView) => {
       const leftPreview = resolveSplitPreview(splitView.leftThreadId);
       const rightPreview = resolveSplitPreview(splitView.rightThreadId);
@@ -4308,12 +4162,15 @@ export default function Sidebar() {
                   >
                     <SidebarMenu className="gap-3">
                       <SortableContext
-                        items={sortedProjects.map((project) => project.id)}
+                        items={projectRenderModels.map(({ project }) => project.id)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {sortedProjects.map((project) => (
-                          <SortableProjectItem key={project.id} projectId={project.id}>
-                            {(dragHandleProps) => renderProjectItem(project, dragHandleProps)}
+                        {projectRenderModels.map((projectModel) => (
+                          <SortableProjectItem
+                            key={projectModel.project.id}
+                            projectId={projectModel.project.id}
+                          >
+                            {(dragHandleProps) => renderProjectItem(projectModel, dragHandleProps)}
                           </SortableProjectItem>
                         ))}
                       </SortableContext>
@@ -4321,9 +4178,9 @@ export default function Sidebar() {
                   </DndContext>
                 ) : (
                   <SidebarMenu ref={attachProjectListAutoAnimateRef} className="gap-3">
-                    {sortedProjects.map((project) => (
-                      <SidebarMenuItem key={project.id} className="rounded-md">
-                        {renderProjectItem(project, null)}
+                    {projectRenderModels.map((projectModel) => (
+                      <SidebarMenuItem key={projectModel.project.id} className="rounded-md">
+                        {renderProjectItem(projectModel, null)}
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
