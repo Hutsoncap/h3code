@@ -40,7 +40,7 @@ export const makeServerReadiness = Effect.gen(function* () {
     Effect.gen(function* () {
       status[key] = true;
       yield* Deferred.succeed(deferred, undefined);
-    }).pipe(Effect.asVoid, Effect.orDie);
+    }).pipe(Effect.asVoid);
 
   return {
     awaitServerReady: Effect.all([
