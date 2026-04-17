@@ -203,9 +203,8 @@ import {
 } from "../splitViewStore";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
+import { ChatBodyPane } from "./chat/ChatBodyPane";
 import { ChatHeader } from "./chat/ChatHeader";
-import { ChatComposerPane } from "./chat/ChatComposerPane";
-import { ChatTranscriptPane } from "./chat/ChatTranscriptPane";
 import { ComposerSlashStatusDialog } from "./chat/ComposerSlashStatusDialog";
 import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
@@ -5976,6 +5975,151 @@ export default function ChatView({
     );
   }
 
+  const chatTranscriptPaneProps = {
+    activeThreadId: activeThread.id,
+    hasMessages: timelineEntries.length > 0,
+    isWorking,
+    activeTurnInProgress,
+    activeTurnStartedAt: activeWorkStartedAt,
+    messagesScrollElement,
+    setMessagesBottomAnchorRef,
+    setMessagesScrollContainerRef,
+    timelineEntries,
+    completionDividerBeforeEntryId,
+    completionSummary,
+    turnDiffSummaryByAssistantMessageId,
+    nowIso,
+    expandedWorkGroups,
+    onToggleWorkGroup,
+    onOpenTurnDiff,
+    onOpenThread: onNavigateToThread,
+    revertTurnCountByUserMessageId,
+    onRevertUserMessage,
+    isRevertingCheckpoint,
+    onExpandTimelineImage,
+    onTimelineHeightChange,
+    markdownCwd: threadWorkspaceCwd ?? undefined,
+    resolvedTheme,
+    chatFontSizePx: settings.chatFontSizePx,
+    timestampFormat,
+    workspaceRoot: activeProject?.cwd ?? undefined,
+    emptyStateProjectName: activeProject?.name,
+    terminalWorkspaceTerminalTabActive,
+    onMessagesScroll,
+    onMessagesClickCapture,
+    onMessagesWheel,
+    onMessagesPointerDown,
+    onMessagesPointerUp,
+    onMessagesPointerCancel,
+    onMessagesTouchStart,
+    onMessagesTouchMove,
+    onMessagesTouchEnd,
+    scrollButtonVisible: showScrollToBottom,
+    onScrollToBottom,
+  };
+  const chatComposerPaneProps = {
+    activePlanCard: composerActivePlanCard,
+    bottomPaddingClassName: isGitRepo ? "pb-1" : "pb-2.5 sm:pb-3",
+    composerCommandMenu: composerCommandMenuNode,
+    composerFooter,
+    composerFormRef,
+    composerFrameClassName: composerProviderState.composerFrameClassName,
+    composerImageAttachments: composerImageAttachmentsNode,
+    composerPromptEditor: composerPromptEditorNode,
+    composerStatusBanner,
+    composerSurfaceClassName: composerProviderState.composerSurfaceClassName,
+    isDragOverComposer,
+    onComposerDragEnter,
+    onComposerDragLeave,
+    onComposerDragOver,
+    onComposerDrop,
+    onEditQueuedComposerTurn,
+    onRemoveQueuedComposerTurn: removeQueuedComposerTurn,
+    onSend,
+    onSteerQueuedComposerTurn,
+    paneScopeId,
+    queuedComposerTurns,
+  };
+  const branchToolbarNode = isGitRepo ? (
+    <BranchToolbar
+      threadId={activeThread.id}
+      onEnvModeChange={onEnvModeChange}
+      envLocked={envLocked}
+      runtimeMode={runtimeMode}
+      onRuntimeModeChange={handleRuntimeModeChange}
+      onHandoffToWorktree={onHandoffToWorktree}
+      onHandoffToLocal={onHandoffToLocal}
+      handoffBusy={handoffBusy}
+      onComposerFocusRequest={scheduleComposerFocus}
+      contextWindow={activeContextWindow}
+      cumulativeCostUsd={activeCumulativeCostUsd}
+      {...(canCheckoutPullRequestIntoThread
+        ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+        : {})}
+    />
+  ) : null;
+  const pullRequestDialogNode = pullRequestDialogState ? (
+    <PullRequestThreadDialog
+      key={pullRequestDialogState.key}
+      open
+      cwd={activeProject?.cwd ?? null}
+      initialReference={pullRequestDialogState.initialReference}
+      onOpenChange={(open) => {
+        if (!open) {
+          closePullRequestDialog();
+        }
+      }}
+      onPrepared={handlePreparedPullRequestThread}
+    />
+  ) : null;
+  const workspaceTerminalDrawer = terminalWorkspaceOpen ? (
+    <div
+      aria-hidden={!terminalWorkspaceTerminalTabActive}
+      className={cn(
+        "absolute inset-0 min-h-0 min-w-0 transition-all duration-200 ease-out",
+        terminalWorkspaceTerminalTabActive
+          ? "translate-y-0 opacity-100"
+          : "pointer-events-none translate-y-1 opacity-0",
+      )}
+    >
+      <ThreadTerminalDrawer
+        key={`${activeThread.id}-workspace`}
+        {...terminalDrawerProps}
+        presentationMode="workspace"
+        isVisible={terminalWorkspaceTerminalTabActive}
+        onTogglePresentationMode={
+          terminalState.workspaceLayout === "both" ? collapseTerminalWorkspace : undefined
+        }
+      />
+    </div>
+  ) : null;
+  const planSidebarNode = planSidebarOpen ? (
+    <PlanSidebar
+      activePlan={activePlan}
+      activeProposedPlan={sidebarProposedPlan}
+      markdownCwd={threadWorkspaceCwd ?? undefined}
+      workspaceRoot={activeProject?.cwd ?? undefined}
+      timestampFormat={timestampFormat}
+      onClose={() => {
+        setPlanSidebarOpen(false);
+        // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
+        const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
+        if (turnKey) {
+          planSidebarDismissedForTurnRef.current = turnKey;
+        }
+      }}
+    />
+  ) : null;
+  const terminalDrawerNode =
+    !terminalState.terminalOpen || !activeProject || terminalWorkspaceOpen ? null : (
+      <ThreadTerminalDrawer
+        key={activeThread.id}
+        {...terminalDrawerProps}
+        presentationMode="drawer"
+        onTogglePresentationMode={expandTerminalWorkspace}
+      />
+    );
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       {/* Top bar */}
@@ -6066,177 +6210,18 @@ export default function ChatView({
           onSelectTab={setTerminalWorkspaceTab}
         />
       ) : null}
-      {/* Main content area with optional plan sidebar */}
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {/* Chat column */}
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div
-            aria-hidden={terminalWorkspaceTerminalTabActive}
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-              terminalWorkspaceTerminalTabActive ? "pointer-events-none invisible" : "",
-            )}
-          >
-            <ChatTranscriptPane
-              activeThreadId={activeThread.id}
-              hasMessages={timelineEntries.length > 0}
-              isWorking={isWorking}
-              activeTurnInProgress={activeTurnInProgress}
-              activeTurnStartedAt={activeWorkStartedAt}
-              messagesScrollElement={messagesScrollElement}
-              setMessagesBottomAnchorRef={setMessagesBottomAnchorRef}
-              setMessagesScrollContainerRef={setMessagesScrollContainerRef}
-              timelineEntries={timelineEntries}
-              completionDividerBeforeEntryId={completionDividerBeforeEntryId}
-              completionSummary={completionSummary}
-              turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
-              nowIso={nowIso}
-              expandedWorkGroups={expandedWorkGroups}
-              onToggleWorkGroup={onToggleWorkGroup}
-              onOpenTurnDiff={onOpenTurnDiff}
-              onOpenThread={onNavigateToThread}
-              revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
-              onRevertUserMessage={onRevertUserMessage}
-              isRevertingCheckpoint={isRevertingCheckpoint}
-              onExpandTimelineImage={onExpandTimelineImage}
-              onTimelineHeightChange={onTimelineHeightChange}
-              markdownCwd={threadWorkspaceCwd ?? undefined}
-              resolvedTheme={resolvedTheme}
-              chatFontSizePx={settings.chatFontSizePx}
-              timestampFormat={timestampFormat}
-              workspaceRoot={activeProject?.cwd ?? undefined}
-              emptyStateProjectName={activeProject?.name}
-              terminalWorkspaceTerminalTabActive={terminalWorkspaceTerminalTabActive}
-              onMessagesScroll={onMessagesScroll}
-              onMessagesClickCapture={onMessagesClickCapture}
-              onMessagesWheel={onMessagesWheel}
-              onMessagesPointerDown={onMessagesPointerDown}
-              onMessagesPointerUp={onMessagesPointerUp}
-              onMessagesPointerCancel={onMessagesPointerCancel}
-              onMessagesTouchStart={onMessagesTouchStart}
-              onMessagesTouchMove={onMessagesTouchMove}
-              onMessagesTouchEnd={onMessagesTouchEnd}
-              scrollButtonVisible={showScrollToBottom}
-              onScrollToBottom={onScrollToBottom}
-            />
+      <ChatBodyPane
+        branchToolbar={branchToolbarNode}
+        chatComposerPaneProps={chatComposerPaneProps}
+        chatTranscriptPaneProps={chatTranscriptPaneProps}
+        planSidebar={planSidebarNode}
+        pullRequestDialog={pullRequestDialogNode}
+        terminalWorkspaceOpen={terminalWorkspaceOpen}
+        terminalWorkspaceTerminalTabActive={terminalWorkspaceTerminalTabActive}
+        workspaceTerminalDrawer={workspaceTerminalDrawer}
+      />
 
-            {/* Input bar */}
-            <ChatComposerPane
-              activePlanCard={composerActivePlanCard}
-              bottomPaddingClassName={isGitRepo ? "pb-1" : "pb-2.5 sm:pb-3"}
-              composerCommandMenu={composerCommandMenuNode}
-              composerFooter={composerFooter}
-              composerFormRef={composerFormRef}
-              composerFrameClassName={composerProviderState.composerFrameClassName}
-              composerImageAttachments={composerImageAttachmentsNode}
-              composerPromptEditor={composerPromptEditorNode}
-              composerStatusBanner={composerStatusBanner}
-              composerSurfaceClassName={composerProviderState.composerSurfaceClassName}
-              isDragOverComposer={isDragOverComposer}
-              onComposerDragEnter={onComposerDragEnter}
-              onComposerDragLeave={onComposerDragLeave}
-              onComposerDragOver={onComposerDragOver}
-              onComposerDrop={onComposerDrop}
-              onEditQueuedComposerTurn={onEditQueuedComposerTurn}
-              onRemoveQueuedComposerTurn={removeQueuedComposerTurn}
-              onSend={onSend}
-              onSteerQueuedComposerTurn={onSteerQueuedComposerTurn}
-              paneScopeId={paneScopeId}
-              queuedComposerTurns={queuedComposerTurns}
-            />
-
-            {isGitRepo && (
-              <BranchToolbar
-                threadId={activeThread.id}
-                onEnvModeChange={onEnvModeChange}
-                envLocked={envLocked}
-                runtimeMode={runtimeMode}
-                onRuntimeModeChange={handleRuntimeModeChange}
-                onHandoffToWorktree={onHandoffToWorktree}
-                onHandoffToLocal={onHandoffToLocal}
-                handoffBusy={handoffBusy}
-                onComposerFocusRequest={scheduleComposerFocus}
-                contextWindow={activeContextWindow}
-                cumulativeCostUsd={activeCumulativeCostUsd}
-                {...(canCheckoutPullRequestIntoThread
-                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                  : {})}
-              />
-            )}
-            {pullRequestDialogState ? (
-              <PullRequestThreadDialog
-                key={pullRequestDialogState.key}
-                open
-                cwd={activeProject?.cwd ?? null}
-                initialReference={pullRequestDialogState.initialReference}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    closePullRequestDialog();
-                  }
-                }}
-                onPrepared={handlePreparedPullRequestThread}
-              />
-            ) : null}
-          </div>
-
-          {terminalWorkspaceOpen ? (
-            <div
-              aria-hidden={!terminalWorkspaceTerminalTabActive}
-              className={cn(
-                "absolute inset-0 min-h-0 min-w-0 transition-all duration-200 ease-out",
-                terminalWorkspaceTerminalTabActive
-                  ? "translate-y-0 opacity-100"
-                  : "pointer-events-none translate-y-1 opacity-0",
-              )}
-            >
-              <ThreadTerminalDrawer
-                key={`${activeThread.id}-workspace`}
-                {...terminalDrawerProps}
-                presentationMode="workspace"
-                isVisible={terminalWorkspaceTerminalTabActive}
-                onTogglePresentationMode={
-                  terminalState.workspaceLayout === "both" ? collapseTerminalWorkspace : undefined
-                }
-              />
-            </div>
-          ) : null}
-        </div>
-        {/* end chat column */}
-
-        {/* Plan sidebar */}
-        {planSidebarOpen ? (
-          <PlanSidebar
-            activePlan={activePlan}
-            activeProposedPlan={sidebarProposedPlan}
-            markdownCwd={threadWorkspaceCwd ?? undefined}
-            workspaceRoot={activeProject?.cwd ?? undefined}
-            timestampFormat={timestampFormat}
-            onClose={() => {
-              setPlanSidebarOpen(false);
-              // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
-              const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
-              if (turnKey) {
-                planSidebarDismissedForTurnRef.current = turnKey;
-              }
-            }}
-          />
-        ) : null}
-      </div>
-      {/* end horizontal flex container */}
-
-      {(() => {
-        if (!terminalState.terminalOpen || !activeProject || terminalWorkspaceOpen) {
-          return null;
-        }
-        return (
-          <ThreadTerminalDrawer
-            key={activeThread.id}
-            {...terminalDrawerProps}
-            presentationMode="drawer"
-            onTogglePresentationMode={expandTerminalWorkspace}
-          />
-        );
-      })()}
+      {terminalDrawerNode}
 
       <ComposerSlashStatusDialog
         open={isSlashStatusDialogOpen}
