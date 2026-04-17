@@ -33,6 +33,10 @@ class MockWebSocket {
   }
 
   close() {
+    this.serverClose();
+  }
+
+  serverClose() {
     this.readyState = MockWebSocket.CLOSED;
     this.emit("close");
   }
@@ -81,6 +85,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.WebSocket = originalWebSocket;
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -293,6 +298,115 @@ describe("WsTransport", () => {
     );
 
     await expect(requestPromise).resolves.toEqual({ projects: [] });
+    transport.dispose();
+  });
+
+  it("keeps queued requests when the websocket closes before opening", async () => {
+    vi.useFakeTimers();
+
+    const transport = new WsTransport("ws://localhost:3020");
+    const firstSocket = getSocket();
+
+    const requestPromise = transport.request("projects.list");
+    expect(firstSocket.sent).toHaveLength(0);
+
+    firstSocket.serverClose();
+
+    expect(transport.getState()).toBe("closed");
+    expect(sockets).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(sockets).toHaveLength(2);
+    const secondSocket = getSocket();
+    secondSocket.open();
+
+    expect(transport.getState()).toBe("open");
+    expect(secondSocket.sent).toHaveLength(1);
+
+    const requestEnvelope = JSON.parse(secondSocket.sent[0] ?? "{}") as { id: string };
+    secondSocket.serverMessage(
+      JSON.stringify({
+        id: requestEnvelope.id,
+        result: { projects: [] },
+      }),
+    );
+
+    await expect(requestPromise).resolves.toEqual({ projects: [] });
+    transport.dispose();
+  });
+
+  it("ignores messages from stale sockets after reconnect", async () => {
+    vi.useFakeTimers();
+
+    const transport = new WsTransport("ws://localhost:3020");
+    const firstSocket = getSocket();
+    firstSocket.open();
+
+    const listener = vi.fn();
+    transport.subscribe(WS_CHANNELS.serverConfigUpdated, listener);
+
+    firstSocket.close();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const secondSocket = getSocket();
+    secondSocket.open();
+
+    firstSocket.serverMessage(
+      JSON.stringify({
+        type: "push",
+        sequence: 1,
+        channel: WS_CHANNELS.serverConfigUpdated,
+        data: { issues: ["stale"], providers: [] },
+      }),
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(transport.getLatestPush(WS_CHANNELS.serverConfigUpdated)).toBeNull();
+
+    secondSocket.serverMessage(
+      JSON.stringify({
+        type: "push",
+        sequence: 2,
+        channel: WS_CHANNELS.serverConfigUpdated,
+        data: { issues: [], providers: [] },
+      }),
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(transport.getLatestPush(WS_CHANNELS.serverConfigUpdated)).toEqual({
+      type: "push",
+      sequence: 2,
+      channel: WS_CHANNELS.serverConfigUpdated,
+      data: { issues: [], providers: [] },
+    });
+
+    transport.dispose();
+  });
+
+  it("ignores stale close events once a newer socket is open", async () => {
+    vi.useFakeTimers();
+
+    const transport = new WsTransport("ws://localhost:3020");
+    const firstSocket = getSocket();
+    firstSocket.open();
+
+    firstSocket.close();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const secondSocket = getSocket();
+    secondSocket.open();
+
+    expect(transport.getState()).toBe("open");
+    expect(sockets).toHaveLength(2);
+
+    firstSocket.serverClose();
+
+    expect(transport.getState()).toBe("open");
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(sockets).toHaveLength(2);
     transport.dispose();
   });
 });

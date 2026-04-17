@@ -330,6 +330,7 @@ Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane ru
 | **hX11** | Sidebar search highlight determinism — extract duplicate-match highlighting into a pure helper and cover repeated-token rendering so palette updates stay stable under rerenders                 | ✅ #40 — sidebar search highlights stabilized                                                                                                                                                                                                                           |
 | **hX12** | Orchestration revert integration stabilization — wait for turn-processing quiescence before checkpoint-revert assertions so Claude rollback coverage stops racing runtime tail work              | ✅ #41 — orchestration revert timing stabilized                                                                                                                                                                                                                         |
 | **hX13** | WebSocket push-bus delivery semantics — cover targeted isolation, closed-client skips, and sequence continuity so server pushes remain predictable under reconnect churn                         | ✅ #45 — push-bus targeted delivery, closed-client skips, and sequence continuity verified                                                                                                                                                                              |
+| **hX15** | WebSocket transport stale-socket invariants — ignore superseded socket events and preserve queued pre-open requests across reconnect churn without widening server-side scope                    | 🚧 worktree: `codex/hx15-wstransport-hardening`                                                                                                                                                                                                                         |
 
 Current hardening sub-slice:
 
@@ -366,7 +367,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX13) — runs continuously in parallel with all phases,
+Hardening lane (hX1–hX15) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).

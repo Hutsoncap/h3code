@@ -52,6 +52,7 @@ function asError(value: unknown, fallback: string): Error {
 
 export class WsTransport {
   private ws: WebSocket | null = null;
+  private currentSocket: WebSocket | null = null;
   private nextId = 1;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly listeners = new Map<string, Set<(message: WsPush) => void>>();
@@ -165,8 +166,10 @@ export class WsTransport {
     }
     this.pending.clear();
     this.outboundQueue.length = 0;
-    this.ws?.close();
+    const socket = this.currentSocket;
+    this.currentSocket = null;
     this.ws = null;
+    socket?.close();
   }
 
   private connect() {
@@ -176,8 +179,12 @@ export class WsTransport {
 
     this.state = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
     const ws = new WebSocket(this.url);
+    this.currentSocket = ws;
 
     ws.addEventListener("open", () => {
+      if (this.currentSocket !== ws || this.disposed) {
+        return;
+      }
       this.ws = ws;
       this.state = "open";
       this.reconnectAttempt = 0;
@@ -185,11 +192,24 @@ export class WsTransport {
     });
 
     ws.addEventListener("message", (event) => {
+      if (this.currentSocket !== ws) {
+        return;
+      }
       this.handleMessage(event.data);
     });
 
     ws.addEventListener("close", () => {
-      if (this.ws === ws) {
+      const ownsConnectionAttempt = this.currentSocket === ws;
+      const ownsOpenSocket = this.ws === ws;
+      if (!ownsConnectionAttempt && !ownsOpenSocket) {
+        return;
+      }
+
+      if (ownsConnectionAttempt) {
+        this.currentSocket = null;
+      }
+
+      if (ownsOpenSocket) {
         this.ws = null;
         this.outboundQueue.length = 0;
         for (const [id, pending] of this.pending.entries()) {
@@ -209,6 +229,9 @@ export class WsTransport {
     });
 
     ws.addEventListener("error", (event) => {
+      if (this.currentSocket !== ws && this.ws !== ws) {
+        return;
+      }
       // Log WebSocket errors for debugging (close event will follow)
       console.warn("WebSocket connection error", { type: event.type, url: this.url });
     });
