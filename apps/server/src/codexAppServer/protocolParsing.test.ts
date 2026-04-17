@@ -18,7 +18,10 @@ describe("protocolParsing", () => {
     expect(isServerNotification({ id: 1, method: "thread/started" })).toBe(false);
 
     expect(isResponse({ id: 1, result: {} })).toBe(true);
+    expect(isResponse({ id: 1, error: { message: "boom" } })).toBe(true);
     expect(isResponse({ id: 1, method: "thread/read" })).toBe(false);
+    expect(isResponse({ id: 1 })).toBe(false);
+    expect(isResponse({ id: 1, error: "boom" })).toBe(false);
   });
 
   it("reads route ids from nested params payloads", () => {
