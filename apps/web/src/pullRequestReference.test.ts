@@ -19,6 +19,9 @@ describe("parsePullRequestReference", () => {
 
   it("accepts references wrapped by autolink or prose punctuation", () => {
     expect(parsePullRequestReference("<https://github.com/pingdotgg/t3code/pull/0042>")).toBe("42");
+    expect(parsePullRequestReference("<https://github.com/pingdotgg/t3code/pull/0042>,")).toBe(
+      "42",
+    );
     expect(parsePullRequestReference("#0042,")).toBe("42");
     expect(parsePullRequestReference("https://github.com/pingdotgg/t3code/pull/0042).")).toBe("42");
   });
