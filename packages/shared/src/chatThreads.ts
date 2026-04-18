@@ -53,5 +53,6 @@ export function sanitizeGeneratedThreadTitle(raw: string): string {
 }
 
 export function isGenericChatThreadTitle(title: string | null | undefined): boolean {
-  return normalizeTitleWhitespace(title ?? "") === GENERIC_CHAT_THREAD_TITLE;
+  const normalized = normalizeTitleWhitespace(title ?? "").replace(/^['"`]+|['"`]+$/g, "");
+  return normalized === GENERIC_CHAT_THREAD_TITLE;
 }
