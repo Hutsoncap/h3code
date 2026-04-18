@@ -53,6 +53,23 @@ function trimWorkspaceTitle(title: string): string {
   return title.trim().replace(/\s+/g, " ");
 }
 
+function normalizeWorkspaceHomeDir(homeDir: string | null | undefined): string | null {
+  const trimmed = homeDir?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      return unquoted || null;
+    }
+  }
+
+  return trimmed;
+}
+
 function nextWorkspaceTitle(
   workspacePages: readonly WorkspacePage[],
   excludeWorkspaceId?: string | undefined,
@@ -142,7 +159,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
       workspacePages: [createWorkspacePage([])],
       setHomeDir: (homeDir) =>
         set((state) => {
-          const normalizedHomeDir = homeDir?.trim() ?? null;
+          const normalizedHomeDir = normalizeWorkspaceHomeDir(homeDir);
           if (state.homeDir === normalizedHomeDir) {
             return state;
           }
@@ -260,7 +277,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
         );
         return {
           ...currentState,
-          homeDir: candidate?.homeDir?.trim() ?? null,
+          homeDir: normalizeWorkspaceHomeDir(candidate?.homeDir),
           workspacePages,
         };
       },
