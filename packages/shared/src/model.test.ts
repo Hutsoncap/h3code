@@ -19,6 +19,7 @@ import {
   resolveSelectableModel,
   resolveModelSlug,
   resolveModelSlugForProvider,
+  trimOrNull,
   getDefaultEffort,
   hasEffortLevel,
 } from "./model";
@@ -32,6 +33,8 @@ describe("normalizeModelSlug", () => {
   it("returns null for empty or missing values", () => {
     expect(normalizeModelSlug("")).toBeNull();
     expect(normalizeModelSlug("   ")).toBeNull();
+    expect(normalizeModelSlug(' "   " ')).toBeNull();
+    expect(normalizeModelSlug(" '   ' ")).toBeNull();
     expect(normalizeModelSlug(null)).toBeNull();
     expect(normalizeModelSlug(undefined)).toBeNull();
   });
@@ -50,6 +53,20 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("sonnet", "claudeAgent")).toBe("claude-sonnet-4-6");
     expect(normalizeModelSlug("opus-4.6", "claudeAgent")).toBe("claude-opus-4-6");
     expect(normalizeModelSlug("claude-haiku-4-5-20251001", "claudeAgent")).toBe("claude-haiku-4-5");
+  });
+});
+
+describe("trimOrNull", () => {
+  it("returns null for blank or quote-wrapped blank values", () => {
+    expect(trimOrNull("")).toBeNull();
+    expect(trimOrNull("   ")).toBeNull();
+    expect(trimOrNull(' "   " ')).toBeNull();
+    expect(trimOrNull(" '   ' ")).toBeNull();
+  });
+
+  it("preserves nonblank trimmed values", () => {
+    expect(trimOrNull("  gpt-5.4  ")).toBe("gpt-5.4");
+    expect(trimOrNull(' "gpt-5.4" ')).toBe('"gpt-5.4"');
   });
 });
 
