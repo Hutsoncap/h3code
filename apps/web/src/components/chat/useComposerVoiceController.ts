@@ -17,6 +17,19 @@ import {
   sanitizeVoiceErrorMessage,
 } from "../ChatView.logic";
 
+const VOICE_RECORDER_ACTION_ARM_DELAY_MS = 250;
+
+function warnVoiceGuard(event: string, details?: Record<string, unknown>) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+  if (details) {
+    console.warn(`[voice] ${event}`, details);
+    return;
+  }
+  console.warn(`[voice] ${event}`);
+}
+
 interface UseComposerVoiceControllerOptions {
   activeProject: Project | undefined;
   activeThreadId: ThreadId | null;
@@ -34,6 +47,7 @@ interface UseComposerVoiceControllerResult {
   voiceWaveformLevels: readonly number[];
   voiceRecordingDurationLabel: string;
   showVoiceNotesControl: boolean;
+  toggleComposerVoiceRecording: () => void;
   startComposerVoiceRecording: () => Promise<void>;
   submitComposerVoiceRecording: () => Promise<void>;
   cancelComposerVoiceRecording: () => void;
@@ -65,6 +79,7 @@ export function useComposerVoiceController(
   const voiceTranscriptionRequestIdRef = useRef(0);
   const voiceThreadIdRef = useRef(threadId);
   const voiceProviderRef = useRef<ProviderKind>(selectedProvider);
+  const voiceRecordingStartedAtRef = useRef<number | null>(null);
   voiceThreadIdRef.current = threadId;
   voiceProviderRef.current = selectedProvider;
 
@@ -90,6 +105,7 @@ export function useComposerVoiceController(
 
   useEffect(() => {
     voiceTranscriptionRequestIdRef.current += 1;
+    voiceRecordingStartedAtRef.current = null;
     void cancelVoiceRecording();
     setIsVoiceTranscribing(false);
   }, [cancelVoiceRecording, threadId]);
@@ -98,10 +114,22 @@ export function useComposerVoiceController(
     if (canStartVoiceNotes || !isVoiceRecording) {
       return;
     }
+    warnVoiceGuard("cancelled active voice recording because voice became unavailable", {
+      authStatus: activeProviderStatus?.authStatus ?? null,
+      voiceTranscriptionAvailable: activeProviderStatus?.voiceTranscriptionAvailable ?? null,
+      isVoiceRecording,
+    });
     voiceTranscriptionRequestIdRef.current += 1;
+    voiceRecordingStartedAtRef.current = null;
     void cancelVoiceRecording();
     setIsVoiceTranscribing(false);
-  }, [canStartVoiceNotes, cancelVoiceRecording, isVoiceRecording]);
+  }, [
+    activeProviderStatus?.authStatus,
+    activeProviderStatus?.voiceTranscriptionAvailable,
+    canStartVoiceNotes,
+    cancelVoiceRecording,
+    isVoiceRecording,
+  ]);
 
   const startComposerVoiceRecording = useCallback(async () => {
     if (!activeProject) {
@@ -131,6 +159,7 @@ export function useComposerVoiceController(
 
     try {
       await startVoiceRecording();
+      voiceRecordingStartedAtRef.current = performance.now();
     } catch (error) {
       toastManager.add({
         type: "error",
@@ -148,6 +177,20 @@ export function useComposerVoiceController(
 
   const submitComposerVoiceRecording = useCallback(async () => {
     if (!activeProject || !isVoiceRecording) {
+      return;
+    }
+    const recordedForMs =
+      voiceRecordingStartedAtRef.current === null
+        ? null
+        : Math.round(performance.now() - voiceRecordingStartedAtRef.current);
+    if (
+      recordedForMs !== null &&
+      recordedForMs >= 0 &&
+      recordedForMs < VOICE_RECORDER_ACTION_ARM_DELAY_MS
+    ) {
+      warnVoiceGuard("ignored recorder action immediately after start", {
+        recordedForMs,
+      });
       return;
     }
 
@@ -208,7 +251,7 @@ export function useComposerVoiceController(
       }
       toastManager.add({
         type: "error",
-        title: authExpired ? "Sign in to ChatGPT again" : "Voice transcription failed",
+        title: authExpired ? "Sign in to ChatGPT again" : "Couldn't transcribe voice note",
         description: authExpired
           ? "Voice transcription uses your ChatGPT session in Codex. That session was rejected, so sign in again there and retry."
           : description,
@@ -223,6 +266,7 @@ export function useComposerVoiceController(
       });
     } finally {
       if (isCurrentVoiceRequest()) {
+        voiceRecordingStartedAtRef.current = null;
         setIsVoiceTranscribing(false);
       }
     }
@@ -239,10 +283,41 @@ export function useComposerVoiceController(
   ]);
 
   const cancelComposerVoiceRecording = useCallback(() => {
+    const recordedForMs =
+      voiceRecordingStartedAtRef.current === null
+        ? null
+        : Math.round(performance.now() - voiceRecordingStartedAtRef.current);
+    if (
+      recordedForMs !== null &&
+      recordedForMs >= 0 &&
+      recordedForMs < VOICE_RECORDER_ACTION_ARM_DELAY_MS
+    ) {
+      warnVoiceGuard("ignored recorder action immediately after start", {
+        recordedForMs,
+      });
+      return;
+    }
     voiceTranscriptionRequestIdRef.current += 1;
+    voiceRecordingStartedAtRef.current = null;
     setIsVoiceTranscribing(false);
     void cancelVoiceRecording();
   }, [cancelVoiceRecording]);
+
+  const toggleComposerVoiceRecording = useCallback(() => {
+    if (isVoiceTranscribing) {
+      return;
+    }
+    if (isVoiceRecording) {
+      void submitComposerVoiceRecording();
+      return;
+    }
+    void startComposerVoiceRecording();
+  }, [
+    isVoiceRecording,
+    isVoiceTranscribing,
+    startComposerVoiceRecording,
+    submitComposerVoiceRecording,
+  ]);
 
   return {
     isVoiceRecording,
@@ -250,6 +325,7 @@ export function useComposerVoiceController(
     voiceWaveformLevels,
     voiceRecordingDurationLabel,
     showVoiceNotesControl,
+    toggleComposerVoiceRecording,
     startComposerVoiceRecording,
     submitComposerVoiceRecording,
     cancelComposerVoiceRecording,
