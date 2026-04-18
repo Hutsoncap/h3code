@@ -357,7 +357,7 @@ export function buildTerminalCompletionCopy(candidate: CompletedTerminalCandidat
   title: string;
   body: string;
 } {
-  const terminalLabel = candidate.title.trim() || "Terminal";
+  const terminalLabel = trimOrNull(candidate.title) ?? "Terminal";
   return {
     title: "Terminal task completed",
     body: `${terminalLabel} finished working.`,
@@ -368,7 +368,7 @@ export function buildTerminalAttentionCopy(candidate: TerminalAttentionCandidate
   title: string;
   body: string;
 } {
-  const terminalLabel = candidate.title.trim() || "Terminal";
+  const terminalLabel = trimOrNull(candidate.title) ?? "Terminal";
   return {
     title: "Terminal input needed",
     body: `${terminalLabel} needs your attention.`,
