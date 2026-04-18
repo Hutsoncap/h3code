@@ -131,6 +131,55 @@ describe("buildBrowserAddressSuggestions", () => {
     expect(suggestions.some((suggestion) => suggestion.url === "about:blank")).toBe(false);
     expect(suggestions.some((suggestion) => suggestion.url === "https://openai.com/")).toBe(true);
   });
+
+  it("treats quote-wrapped blank queries as empty", () => {
+    const suggestions = buildBrowserAddressSuggestions({
+      query: ' "   " ',
+      activeTabId: "tab-1",
+      tabs: [
+        {
+          id: "tab-1",
+          title: "New tab",
+          url: "about:blank",
+          faviconUrl: null,
+          lastCommittedUrl: null,
+        },
+        {
+          id: "tab-2",
+          title: "OpenAI",
+          url: "https://openai.com/",
+          faviconUrl: null,
+          lastCommittedUrl: "https://openai.com/",
+        },
+      ],
+      recentHistory: [
+        {
+          url: "https://news.ycombinator.com/",
+          title: "Hacker News",
+          tabId: "tab-3",
+        },
+      ],
+    });
+
+    expect(suggestions).toEqual([
+      {
+        id: "tab:tab-2",
+        kind: "tab",
+        title: "OpenAI",
+        detail: "https://openai.com/",
+        url: "https://openai.com/",
+        tabId: "tab-2",
+        faviconUrl: null,
+      },
+      {
+        id: "history:https://news.ycombinator.com/",
+        kind: "history",
+        title: "Hacker News",
+        detail: "https://news.ycombinator.com/",
+        url: "https://news.ycombinator.com/",
+      },
+    ]);
+  });
 });
 
 describe("resolveBrowserChromeStatus", () => {

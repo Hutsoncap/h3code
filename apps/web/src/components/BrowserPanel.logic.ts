@@ -112,7 +112,7 @@ export function normalizeBrowserAddressInput(input: string): string {
 }
 
 function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase();
+  return trimOrNull(value)?.toLowerCase() ?? "";
 }
 
 function displaySuggestionUrl(value: string): string {
