@@ -143,10 +143,6 @@ import {
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
-  confirmTerminalTabClose,
-  resolveTerminalCloseTitle,
-} from "~/lib/terminalCloseConfirmation";
-import {
   getCustomModelOptionsByProvider,
   getCustomModelsByProvider,
   getProviderStartOptions,
@@ -201,6 +197,7 @@ import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBinding
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
+import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
@@ -212,7 +209,6 @@ import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
   appendVoiceTranscriptToPrompt,
   shouldStartActiveTurnLayoutGrace,
-  shouldAutoDeleteTerminalThreadOnLastClose,
   buildExpiredTerminalContextToastCopy,
   buildLocalDraftThread,
   cloneComposerImageForRetry,
@@ -2030,28 +2026,63 @@ export default function ChatView({
     },
     [activeThread, composerCursor, composerTerminalContexts, insertComposerDraftTerminalContext],
   );
-  const toggleTerminalVisibility = useCallback(() => {
-    if (!activeThreadId) return;
-    if (!terminalState.terminalOpen) {
-      setTerminalPresentationMode("drawer");
-    }
-    setTerminalOpen(!terminalState.terminalOpen);
-  }, [activeThreadId, setTerminalOpen, setTerminalPresentationMode, terminalState.terminalOpen]);
-  const expandTerminalWorkspace = useCallback(() => {
-    if (!activeThreadId) return;
-    setTerminalPresentationMode("workspace");
-    setTerminalWorkspaceLayout("both");
-    setTerminalWorkspaceTab("terminal");
-  }, [
+  const resolveNextSplitViewThreadAfterTerminalDelete = useCallback((splitViewId: string) => {
+    const nextSplitView = useSplitViewStore.getState().splitViewsById[splitViewId];
+    const nextThreadId = nextSplitView ? resolveSplitViewFocusedThreadId(nextSplitView) : null;
+    return nextSplitView && nextThreadId
+      ? { splitViewId: nextSplitView.id, threadId: nextThreadId }
+      : null;
+  }, []);
+  const navigateToSplitViewThreadAfterTerminalDelete = useCallback(
+    async (nextThreadId: ThreadId, splitViewId: string) => {
+      await navigate({
+        to: "/$threadId",
+        params: { threadId: nextThreadId },
+        replace: true,
+        search: () => ({ splitViewId }),
+      });
+    },
+    [navigate],
+  );
+  const navigateHomeAfterTerminalDelete = useCallback(async () => {
+    await navigate({ to: "/", replace: true });
+  }, [navigate]);
+  const {
+    toggleTerminalVisibility,
+    expandTerminalWorkspace,
+    collapseTerminalWorkspace,
+    closeTerminal,
+    closeActiveWorkspaceView,
+  } = useChatTerminalActionBindings({
+    activeThread,
     activeThreadId,
+    activeSplitViewId: activeSplitView?.id ?? null,
+    closeTerminalState,
+    clearTerminalState,
+    closeWorkspaceChat,
+    confirmTerminalTabCloseEnabled: settings.confirmTerminalTabClose,
+    isServerThread,
+    removeThreadFromSplitViews,
+    resolveNextSplitViewThread: resolveNextSplitViewThreadAfterTerminalDelete,
+    setTerminalOpen,
     setTerminalPresentationMode,
     setTerminalWorkspaceLayout,
     setTerminalWorkspaceTab,
-  ]);
-  const collapseTerminalWorkspace = useCallback(() => {
-    if (!activeThreadId) return;
-    setTerminalPresentationMode("drawer");
-  }, [activeThreadId, setTerminalPresentationMode]);
+    syncServerReadModel,
+    terminalState: {
+      activeTerminalId: terminalState.activeTerminalId,
+      entryPoint: terminalState.entryPoint,
+      terminalIds: terminalState.terminalIds,
+      terminalLabelsById: terminalState.terminalLabelsById,
+      terminalOpen: terminalState.terminalOpen,
+      terminalTitleOverridesById: terminalState.terminalTitleOverridesById,
+      workspaceActiveTab: terminalState.workspaceActiveTab,
+      workspaceLayout: terminalState.workspaceLayout,
+    },
+    terminalWorkspaceOpen,
+    navigateHome: navigateHomeAfterTerminalDelete,
+    navigateToThread: navigateToSplitViewThreadAfterTerminalDelete,
+  });
   // Desktop accelerators like Cmd+T can be claimed by Electron before the page sees keydown.
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;
@@ -2068,125 +2099,6 @@ export default function ChatView({
       unsubscribe?.();
     };
   }, [createTerminalFromShortcut, isFocusedPane]);
-  const closeTerminal = useCallback(
-    async (terminalId: string) => {
-      const api = readNativeApi();
-      if (!activeThreadId || !api) return;
-      const isFinalTerminal = terminalState.terminalIds.length <= 1;
-      const shouldDeletePlaceholderTerminalThread = shouldAutoDeleteTerminalThreadOnLastClose({
-        isLastTerminal: isFinalTerminal,
-        isServerThread,
-        terminalEntryPoint: terminalState.entryPoint,
-        thread: activeThread,
-      });
-      const confirmed = await confirmTerminalTabClose({
-        api,
-        enabled: settings.confirmTerminalTabClose,
-        terminalTitle: resolveTerminalCloseTitle({
-          terminalId,
-          terminalLabelsById: terminalState.terminalLabelsById,
-          terminalTitleOverridesById: terminalState.terminalTitleOverridesById,
-        }),
-        willDeleteThread: shouldDeletePlaceholderTerminalThread,
-      });
-      if (!confirmed) {
-        return;
-      }
-      const fallbackExitWrite = () =>
-        api.terminal
-          .write({ threadId: activeThreadId, terminalId, data: "exit\n" })
-          .catch(() => undefined);
-      if ("close" in api.terminal && typeof api.terminal.close === "function") {
-        void (async () => {
-          if (isFinalTerminal) {
-            await api.terminal
-              .clear({ threadId: activeThreadId, terminalId })
-              .catch(() => undefined);
-          }
-          await api.terminal.close({
-            threadId: activeThreadId,
-            terminalId,
-            deleteHistory: true,
-          });
-        })().catch(() => fallbackExitWrite());
-      } else {
-        void fallbackExitWrite();
-      }
-      closeTerminalState(terminalId);
-      if (!shouldDeletePlaceholderTerminalThread) {
-        return;
-      }
-      void (async () => {
-        try {
-          await api.orchestration.dispatchCommand({
-            type: "thread.delete",
-            commandId: newCommandId(),
-            threadId: activeThreadId,
-          });
-          const snapshot = await api.orchestration.getSnapshot();
-          syncServerReadModel(snapshot);
-          useComposerDraftStore.getState().clearDraftThread(activeThreadId);
-          clearTerminalState();
-          removeThreadFromSplitViews(activeThreadId);
-          if (activeSplitView) {
-            const nextSplitView = useSplitViewStore.getState().splitViewsById[activeSplitView.id];
-            const nextThreadId = nextSplitView
-              ? resolveSplitViewFocusedThreadId(nextSplitView)
-              : null;
-            if (nextSplitView && nextThreadId) {
-              await navigate({
-                to: "/$threadId",
-                params: { threadId: nextThreadId },
-                replace: true,
-                search: () => ({ splitViewId: nextSplitView.id }),
-              });
-              return;
-            }
-          }
-          await navigate({ to: "/", replace: true });
-        } catch (error) {
-          console.error("Failed to delete empty terminal thread after closing its last terminal", {
-            threadId: activeThreadId,
-            error,
-          });
-        }
-      })();
-    },
-    [
-      activeThread,
-      activeThreadId,
-      activeSplitView,
-      clearTerminalState,
-      closeTerminalState,
-      isServerThread,
-      navigate,
-      removeThreadFromSplitViews,
-      syncServerReadModel,
-      settings.confirmTerminalTabClose,
-      terminalState.entryPoint,
-      terminalState.terminalIds.length,
-      terminalState.terminalLabelsById,
-      terminalState.terminalTitleOverridesById,
-    ],
-  );
-  const closeActiveWorkspaceView = useCallback(() => {
-    if (!activeThreadId || !terminalWorkspaceOpen) {
-      return;
-    }
-    if (terminalState.workspaceLayout === "both" && terminalState.workspaceActiveTab === "chat") {
-      closeWorkspaceChat();
-      return;
-    }
-    closeTerminal(terminalState.activeTerminalId);
-  }, [
-    activeThreadId,
-    closeTerminal,
-    closeWorkspaceChat,
-    terminalState.activeTerminalId,
-    terminalState.workspaceActiveTab,
-    terminalState.workspaceLayout,
-    terminalWorkspaceOpen,
-  ]);
   const terminalDrawerProps = useMemo(
     () => ({
       threadId,
