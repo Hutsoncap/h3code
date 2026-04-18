@@ -740,9 +740,10 @@ function setThreadTerminalMetadata(
     return normalized;
   }
   const currentLabel = normalized.terminalLabelsById[terminalId] ?? "";
-  const currentTitleOverride = normalized.terminalTitleOverridesById[terminalId]?.trim() ?? "";
+  const currentTitleOverride = trimOrNull(normalized.terminalTitleOverridesById[terminalId]) ?? "";
   const currentCliKind = normalized.terminalCliKindsById[terminalId] ?? null;
   const nextCliKind = metadata.cliKind ?? currentCliKind;
+  const normalizedLabel = trimOrNull(metadata.label) ?? "";
   const nextLabel =
     currentTitleOverride.length > 0
       ? currentLabel
@@ -753,8 +754,8 @@ function setThreadTerminalMetadata(
             terminalLabelsById: normalized.terminalLabelsById,
             terminalTitleOverridesById: normalized.terminalTitleOverridesById,
           })
-        : metadata.label.trim().length > 0
-          ? metadata.label.trim()
+        : normalizedLabel.length > 0
+          ? normalizedLabel
           : currentLabel;
   if (currentLabel === nextLabel && currentCliKind === nextCliKind) {
     return normalized;
@@ -796,7 +797,7 @@ function setThreadTerminalCliKind(
     nextCliKindsById[terminalId] = cliKind;
   }
 
-  const currentTitleOverride = normalized.terminalTitleOverridesById[terminalId]?.trim() ?? "";
+  const currentTitleOverride = trimOrNull(normalized.terminalTitleOverridesById[terminalId]) ?? "";
   const terminalLabelsById =
     cliKind !== null && currentTitleOverride.length === 0
       ? {
@@ -826,7 +827,7 @@ function setThreadTerminalTitleOverride(
   if (!normalized.terminalIds.includes(terminalId)) {
     return normalized;
   }
-  const normalizedTitleOverride = titleOverride?.trim() ?? "";
+  const normalizedTitleOverride = trimOrNull(titleOverride) ?? "";
   const currentTitleOverride = normalized.terminalTitleOverridesById[terminalId] ?? "";
   if (currentTitleOverride === normalizedTitleOverride) {
     return normalized;
