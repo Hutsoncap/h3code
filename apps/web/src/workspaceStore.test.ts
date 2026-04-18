@@ -144,6 +144,50 @@ describe("workspaceStore persistence", () => {
     }
   });
 
+  it("drops quote-wrapped blank persisted workspace ids during merge", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useWorkspaceStore: freshUseWorkspaceStore } = await import("./workspaceStore");
+      const persistApi = freshUseWorkspaceStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseWorkspaceStore.getState>,
+          ) => ReturnType<typeof freshUseWorkspaceStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          homeDir: null,
+          workspacePages: [
+            {
+              id: ' "   " ',
+              title: "Should disappear",
+              layoutPresetId: "single-terminal",
+              createdAt: "2026-04-05T10:00:00.000Z",
+              updatedAt: "2026-04-05T10:00:00.000Z",
+            },
+          ],
+        },
+        freshUseWorkspaceStore.getInitialState(),
+      );
+
+      expect(mergedState.workspacePages).toHaveLength(1);
+      expect(mergedState.workspacePages[0]?.title).toBe("Workspace 1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("treats quote-wrapped blank rename requests as absent", async () => {
     vi.stubGlobal("localStorage", {
       getItem: () => null,
@@ -161,6 +205,28 @@ describe("workspaceStore persistence", () => {
       freshUseWorkspaceStore.getState().renameWorkspace(workspaceId, ' "   " ');
 
       expect(freshUseWorkspaceStore.getState().workspacePages[0]?.title).toBe("Workspace 1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("ignores quote-wrapped blank workspace ids from runtime updates", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useWorkspaceStore: freshUseWorkspaceStore } = await import("./workspaceStore");
+
+      const initialPages = freshUseWorkspaceStore.getState().workspacePages;
+      freshUseWorkspaceStore.getState().ensureWorkspacePage(' "   " ');
+
+      expect(freshUseWorkspaceStore.getState().workspacePages).toEqual(initialPages);
     } finally {
       vi.unstubAllGlobals();
     }
