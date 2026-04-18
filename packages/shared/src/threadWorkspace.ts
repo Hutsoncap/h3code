@@ -19,8 +19,23 @@ export interface NormalizeWorkspaceRootForComparisonOptions {
   readonly platform?: string;
 }
 
-function hasMaterializedWorktreePath(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+function normalizeOptionalMetadataValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (unquoted.length === 0) {
+        return null;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 function isLikelyWindowsWorkspaceRoot(value: string, platform?: string): boolean {
@@ -75,28 +90,30 @@ export function deriveAssociatedWorktreeMetadata(input: {
   associatedWorktreeBranch?: string | null;
   associatedWorktreeRef?: string | null;
 }): AssociatedWorktreeMetadata {
-  const materializedWorktreePath = hasMaterializedWorktreePath(input.worktreePath)
-    ? input.worktreePath
-    : null;
+  const materializedWorktreePath = normalizeOptionalMetadataValue(input.worktreePath);
+  const normalizedBranch = normalizeOptionalMetadataValue(input.branch);
+  const associatedWorktreePath = normalizeOptionalMetadataValue(input.associatedWorktreePath);
+  const associatedWorktreeBranch = normalizeOptionalMetadataValue(input.associatedWorktreeBranch);
+  const associatedWorktreeRef = normalizeOptionalMetadataValue(input.associatedWorktreeRef);
 
   return {
     associatedWorktreePath:
       input.associatedWorktreePath !== undefined
-        ? input.associatedWorktreePath
+        ? associatedWorktreePath
         : materializedWorktreePath,
     associatedWorktreeBranch:
       input.associatedWorktreeBranch !== undefined
-        ? input.associatedWorktreeBranch
+        ? associatedWorktreeBranch
         : materializedWorktreePath
-          ? (input.branch ?? null)
+          ? normalizedBranch
           : null,
     associatedWorktreeRef:
       input.associatedWorktreeRef !== undefined
-        ? input.associatedWorktreeRef
+        ? associatedWorktreeRef
         : input.associatedWorktreeBranch !== undefined
-          ? input.associatedWorktreeBranch
+          ? associatedWorktreeBranch
           : materializedWorktreePath
-            ? (input.branch ?? null)
+            ? normalizedBranch
             : null,
   };
 }
@@ -109,28 +126,30 @@ export function deriveAssociatedWorktreeMetadataPatch(input: {
   associatedWorktreeRef?: string | null;
 }): AssociatedWorktreeMetadataPatch {
   const patch: AssociatedWorktreeMetadataPatch = {};
-  const materializedWorktreePath = hasMaterializedWorktreePath(input.worktreePath)
-    ? input.worktreePath
-    : null;
+  const materializedWorktreePath = normalizeOptionalMetadataValue(input.worktreePath);
+  const normalizedBranch = normalizeOptionalMetadataValue(input.branch);
+  const associatedWorktreePath = normalizeOptionalMetadataValue(input.associatedWorktreePath);
+  const associatedWorktreeBranch = normalizeOptionalMetadataValue(input.associatedWorktreeBranch);
+  const associatedWorktreeRef = normalizeOptionalMetadataValue(input.associatedWorktreeRef);
 
   if (input.associatedWorktreePath !== undefined) {
-    patch.associatedWorktreePath = input.associatedWorktreePath;
+    patch.associatedWorktreePath = associatedWorktreePath;
   } else if (materializedWorktreePath) {
     patch.associatedWorktreePath = materializedWorktreePath;
   }
 
   if (input.associatedWorktreeBranch !== undefined) {
-    patch.associatedWorktreeBranch = input.associatedWorktreeBranch;
+    patch.associatedWorktreeBranch = associatedWorktreeBranch;
   } else if (materializedWorktreePath) {
-    patch.associatedWorktreeBranch = input.branch ?? null;
+    patch.associatedWorktreeBranch = normalizedBranch;
   }
 
   if (input.associatedWorktreeRef !== undefined) {
-    patch.associatedWorktreeRef = input.associatedWorktreeRef;
+    patch.associatedWorktreeRef = associatedWorktreeRef;
   } else if (input.associatedWorktreeBranch !== undefined) {
-    patch.associatedWorktreeRef = input.associatedWorktreeBranch;
+    patch.associatedWorktreeRef = associatedWorktreeBranch;
   } else if (materializedWorktreePath) {
-    patch.associatedWorktreeRef = input.branch ?? null;
+    patch.associatedWorktreeRef = normalizedBranch;
   }
 
   return patch;
