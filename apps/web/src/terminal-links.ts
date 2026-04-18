@@ -268,17 +268,18 @@ export function isTerminalLinkActivation(
 
 export function resolvePathLinkTarget(rawPath: string, cwd: string): string {
   const { path, line, column } = splitPathAndPosition(rawPath);
+  const normalizedCwd = cwd.trim();
 
   let resolvedPath = path;
   if (path.startsWith("~/")) {
-    const home = inferHomeFromCwd(cwd);
+    const home = inferHomeFromCwd(normalizedCwd);
     if (home) {
       const separator: "/" | "\\" = isWindowsPathStyle(home) ? "\\" : "/";
       resolvedPath = joinPath(home, path.slice(2), separator);
     }
-  } else if (!isAbsolutePath(path)) {
-    const separator: "/" | "\\" = isWindowsPathStyle(cwd) ? "\\" : "/";
-    resolvedPath = joinPath(cwd, path, separator);
+  } else if (!isAbsolutePath(path) && normalizedCwd.length > 0) {
+    const separator: "/" | "\\" = isWindowsPathStyle(normalizedCwd) ? "\\" : "/";
+    resolvedPath = joinPath(normalizedCwd, path, separator);
   }
 
   if (!line) return resolvedPath;
