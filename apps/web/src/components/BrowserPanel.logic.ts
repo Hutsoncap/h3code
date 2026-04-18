@@ -5,6 +5,7 @@
 // Depends on: browser tab metadata and thread-local browser history
 
 import type { BrowserTabState } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import type { BrowserHistoryEntry } from "../browserStateStore";
 
 const ABOUT_BLANK_URL = "about:blank";
@@ -72,8 +73,8 @@ function looksLikeUrlInput(value: string): boolean {
 
 // Normalizes typed text into the url or search target we should submit.
 export function normalizeBrowserAddressInput(input: string): string {
-  const trimmed = input.trim();
-  if (trimmed.length === 0) {
+  const trimmed = trimOrNull(input);
+  if (trimmed === null) {
     return ABOUT_BLANK_URL;
   }
 

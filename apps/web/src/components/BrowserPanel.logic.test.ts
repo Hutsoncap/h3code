@@ -70,6 +70,10 @@ describe("resolveBrowserAddressSync", () => {
 });
 
 describe("normalizeBrowserAddressInput", () => {
+  it("treats quote-wrapped blank placeholders as about:blank", () => {
+    expect(normalizeBrowserAddressInput(' "   " ')).toBe("about:blank");
+  });
+
   it("adds https to naked domains", () => {
     expect(normalizeBrowserAddressInput("phodex.app")).toBe("https://phodex.app/");
   });
