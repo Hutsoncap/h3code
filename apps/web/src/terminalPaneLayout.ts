@@ -3,6 +3,7 @@
 // Layer: Terminal domain helpers
 // Depends on: terminal layout types shared by the store and terminal UI.
 
+import { trimOrNull } from "@t3tools/shared/model";
 import {
   DEFAULT_THREAD_TERMINAL_ID,
   type ThreadTerminalGroup,
@@ -26,7 +27,7 @@ function normalizePaneTerminalIds(
   terminalIds: Array<string | undefined> | undefined,
   validTerminalIdSet?: ReadonlySet<string>,
 ): string[] {
-  return [...new Set((terminalIds ?? []).map((terminalId) => terminalId?.trim() ?? ""))]
+  return [...new Set((terminalIds ?? []).map((terminalId) => trimOrNull(terminalId) ?? ""))]
     .filter((terminalId) => terminalId.length > 0)
     .filter((terminalId) => (validTerminalIdSet ? validTerminalIdSet.has(terminalId) : true));
 }
@@ -110,12 +111,13 @@ function sanitizeLayoutNode(
     if (terminalIds.length === 0) {
       return null;
     }
-    const activeTerminalId = terminalIds.includes(node.activeTerminalId?.trim() ?? "")
-      ? (node.activeTerminalId?.trim() ?? terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
+    const normalizedActiveTerminalId = trimOrNull(node.activeTerminalId);
+    const activeTerminalId = terminalIds.includes(normalizedActiveTerminalId ?? "")
+      ? (normalizedActiveTerminalId ?? terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
       : (terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID);
     return {
       type: "terminal",
-      paneId: node.paneId?.trim() || `pane-${activeTerminalId}`,
+      paneId: trimOrNull(node.paneId) ?? `pane-${activeTerminalId}`,
       terminalIds,
       activeTerminalId,
     };
@@ -136,7 +138,9 @@ function sanitizeLayoutNode(
 
   return {
     type: "split",
-    id: node.id,
+    id:
+      trimOrNull(node.id) ??
+      `split-${findFirstTerminalIdInLayout(flattened.children[0] ?? createTerminalLeaf(DEFAULT_THREAD_TERMINAL_ID))}`,
     direction: node.direction,
     children: flattened.children,
     weights: normalizeSplitWeights(flattened.children.length, flattened.weights),
@@ -187,7 +191,7 @@ export function findFirstTerminalIdInLayout(node: ThreadTerminalLayoutNode): str
   if (node.type === "terminal") {
     const terminalIds = collectTerminalIdsFromLayout(node);
     const activeTerminalId =
-      "activeTerminalId" in node ? (node.activeTerminalId?.trim() ?? "") : "";
+      "activeTerminalId" in node ? (trimOrNull(node.activeTerminalId) ?? "") : "";
     return terminalIds.includes(activeTerminalId)
       ? activeTerminalId
       : (terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID);
@@ -213,19 +217,20 @@ export function normalizeTerminalPaneGroup(
 ): ThreadTerminalGroup | null {
   const validTerminalIdSet = new Set(validTerminalIds);
   const legacyTerminalIds = [
-    ...new Set((group.terminalIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ...new Set((group.terminalIds ?? []).map((id) => trimOrNull(id) ?? "").filter(Boolean)),
   ].filter((terminalId) => validTerminalIdSet.has(terminalId));
   const fallbackLayout = legacyTerminalIds.length > 0 ? buildLegacyLayout(legacyTerminalIds) : null;
   const sanitizedLayout = sanitizeLayoutNode(group.layout ?? fallbackLayout, validTerminalIdSet);
   if (!sanitizedLayout) return null;
 
   const terminalIds = collectTerminalIdsFromLayout(sanitizedLayout);
-  const activeTerminalId = terminalIds.includes(group.activeTerminalId?.trim() ?? "")
-    ? (group.activeTerminalId?.trim() ?? terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
+  const normalizedActiveTerminalId = trimOrNull(group.activeTerminalId);
+  const activeTerminalId = terminalIds.includes(normalizedActiveTerminalId ?? "")
+    ? (normalizedActiveTerminalId ?? terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
     : (terminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID);
 
   return {
-    id: group.id?.trim() || `group-${activeTerminalId}`,
+    id: trimOrNull(group.id) ?? `group-${activeTerminalId}`,
     activeTerminalId,
     layout: sanitizedLayout,
   };
