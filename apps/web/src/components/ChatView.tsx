@@ -4,7 +4,6 @@ import {
   type ClaudeCodeEffort,
   type MessageId,
   type ModelSelection,
-  type ProjectScript,
   type ProviderKind,
   type ProjectEntry,
   type ProviderMentionReference,
@@ -171,6 +170,7 @@ import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBinding
 import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
+import { useChatTranscriptBindings } from "./chat/useChatTranscriptBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
@@ -3360,66 +3360,26 @@ export default function ChatView({
         providerPluginsQuery.isFetching)) ||
     (composerTriggerKind === "slash-command" &&
       (providerCommandsQuery.isLoading || providerCommandsQuery.isFetching));
-  const onToggleWorkGroup = useCallback((groupId: string) => {
-    setExpandedWorkGroups((existing) => ({
-      ...existing,
-      [groupId]: !existing[groupId],
-    }));
-  }, []);
-  const onExpandTimelineImage = useCallback((preview: ExpandedImagePreview) => {
-    setExpandedImage(preview);
-  }, []);
-  const onScrollToBottom = useCallback(() => {
-    forceStickToBottom("smooth");
-  }, [forceStickToBottom]);
-  const onOpenTurnDiff = useCallback(
-    (turnId: TurnId, filePath?: string) => {
-      if (diffEnvironmentPending) {
-        return;
-      }
-      if (onOpenTurnDiffPanel) {
-        onOpenTurnDiffPanel(turnId, filePath);
-        return;
-      }
-      void navigate({
-        to: "/$threadId",
-        params: { threadId },
-        search: (previous) => {
-          const rest = stripDiffSearchParams(previous);
-          return filePath
-            ? { ...rest, panel: "diff", diff: "1", diffTurnId: turnId, diffFilePath: filePath }
-            : { ...rest, panel: "diff", diff: "1", diffTurnId: turnId };
-        },
-      });
-    },
-    [diffEnvironmentPending, navigate, onOpenTurnDiffPanel, threadId],
-  );
-  const onNavigateToThread = useCallback(
-    (nextThreadId: ThreadId) => {
-      void navigate({
-        to: "/$threadId",
-        params: { threadId: nextThreadId },
-        search: (previous) => stripDiffSearchParams(previous),
-      });
-    },
-    [navigate],
-  );
-  const onRevertUserMessage = useCallback(
-    (messageId: MessageId) => {
-      const targetTurnCount = revertTurnCountByUserMessageId.get(messageId);
-      if (typeof targetTurnCount !== "number") {
-        return;
-      }
-      void onRevertToTurnCount(targetTurnCount);
-    },
-    [onRevertToTurnCount, revertTurnCountByUserMessageId],
-  );
-  const onRunProjectScriptFromHeader = useCallback(
-    (script: ProjectScript) => {
-      void runProjectScript(script);
-    },
-    [runProjectScript],
-  );
+  const {
+    onExpandTimelineImage,
+    onNavigateToThread,
+    onOpenTurnDiff,
+    onRevertUserMessage,
+    onRunProjectScriptFromHeader,
+    onScrollToBottom,
+    onToggleWorkGroup,
+  } = useChatTranscriptBindings({
+    diffEnvironmentPending,
+    forceStickToBottom,
+    navigate,
+    onOpenTurnDiffPanel,
+    onRevertToTurnCount,
+    revertTurnCountByUserMessageId,
+    runProjectScript,
+    setExpandedImage,
+    setExpandedWorkGroups,
+    threadId,
+  });
   const dismissActiveThreadError = useCallback(() => {
     if (!activeThread) return;
     setThreadError(activeThread.id, null);
