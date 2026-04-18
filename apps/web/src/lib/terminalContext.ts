@@ -1,4 +1,5 @@
 import { type ThreadId } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export interface TerminalContextSelection {
   terminalId: string;
@@ -82,9 +83,9 @@ export function normalizeTerminalContextSelection(
   selection: TerminalContextSelection,
 ): TerminalContextSelection | null {
   const text = normalizeTerminalContextText(selection.text);
-  const terminalId = selection.terminalId.trim();
-  const terminalLabel = selection.terminalLabel.trim();
-  if (text.length === 0 || terminalId.length === 0 || terminalLabel.length === 0) {
+  const terminalId = trimOrNull(selection.terminalId);
+  const terminalLabel = trimOrNull(selection.terminalLabel);
+  if (text.length === 0 || !terminalId || !terminalLabel) {
     return null;
   }
   const lineStart = Math.max(1, Math.floor(selection.lineStart));
