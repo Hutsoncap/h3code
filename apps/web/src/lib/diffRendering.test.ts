@@ -42,4 +42,11 @@ describe("buildPatchCacheKey", () => {
 
     expect(buildPatchCacheKey(patch, "   ")).toBe(buildPatchCacheKey(patch));
   });
+
+  it("falls back to the canonical scope when cache scope is quote-wrapped blank", () => {
+    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
+
+    expect(buildPatchCacheKey(patch, ' "   " ')).toBe(buildPatchCacheKey(patch));
+    expect(buildPatchCacheKey(patch, " '   ' ")).toBe(buildPatchCacheKey(patch));
+  });
 });
