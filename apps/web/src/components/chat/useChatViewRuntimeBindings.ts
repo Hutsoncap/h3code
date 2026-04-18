@@ -74,6 +74,41 @@ interface UseChatViewRuntimeBindingsOptions {
 }
 
 export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOptions) {
+  const {
+    activeProject,
+    activeRootBranch,
+    activeThread,
+    activeThreadAssociatedWorktree,
+    autoDispatchingQueuedTurnRef,
+    composerCursorSetter,
+    composerFooterHasWideActions,
+    composerFormRef,
+    composerImages,
+    composerImagesRef,
+    composerTerminalContexts,
+    composerTerminalContextsRef,
+    draftThreadEnvMode,
+    focusComposer,
+    hasLiveTurn,
+    isConnecting,
+    isRevertingCheckpoint,
+    isSendBusy,
+    isServerThread,
+    isWorking,
+    messageCount,
+    prompt,
+    promptRef,
+    queuedComposerTurns,
+    queuedComposerTurnsRef,
+    resolvedThreadEnvMode,
+    resolvedThreadWorktreePath,
+    runProjectScript,
+    setIsRevertingCheckpoint,
+    setStoreThreadWorkspace,
+    setThreadError,
+    syncServerReadModel,
+    terminalOpen,
+  } = options;
   const [expandedWorkGroups, setExpandedWorkGroups] = useState<Record<string, boolean>>({});
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -83,10 +118,10 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
     const api = readNativeApi();
     if (
       !api ||
-      !options.isServerThread ||
-      !options.activeThread ||
-      options.activeThread.session === null ||
-      options.activeThread.session.status === "closed"
+      !isServerThread ||
+      !activeThread ||
+      activeThread.session === null ||
+      activeThread.session.status === "closed"
     ) {
       return;
     }
@@ -94,31 +129,31 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
     await api.orchestration.dispatchCommand({
       type: "thread.session.stop",
       commandId: newCommandId(),
-      threadId: options.activeThread.id,
+      threadId: activeThread.id,
       createdAt: new Date().toISOString(),
     });
-  }, [options.activeThread, options.isServerThread]);
+  }, [activeThread, isServerThread]);
 
   const handoffBindings = useThreadWorkspaceHandoff({
-    activeProject: options.activeProject,
-    activeThread: options.activeThread,
-    activeRootBranch: options.activeRootBranch,
-    activeThreadAssociatedWorktree: options.activeThreadAssociatedWorktree,
-    isServerThread: options.isServerThread,
+    activeProject,
+    activeThread,
+    activeRootBranch,
+    activeThreadAssociatedWorktree,
+    isServerThread,
     stopActiveThreadSession,
-    runProjectScript: options.runProjectScript,
-    setStoreThreadWorkspace: options.setStoreThreadWorkspace,
-    syncServerReadModel: options.syncServerReadModel,
+    runProjectScript,
+    setStoreThreadWorkspace,
+    syncServerReadModel,
   });
 
-  const autoScrollBindings = useChatAutoScrollController({
-    threadId: options.activeThread?.id ?? null,
-    isStreaming: options.isWorking,
-    messageCount: options.messageCount,
+  const { onComposerHeightChange, ...autoScrollBindings } = useChatAutoScrollController({
+    threadId: activeThread?.id ?? null,
+    isStreaming: isWorking,
+    messageCount,
   });
 
   useLayoutEffect(() => {
-    const composerForm = options.composerFormRef.current;
+    const composerForm = composerFormRef.current;
     if (!composerForm) {
       return;
     }
@@ -128,7 +163,7 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
     composerFormHeightRef.current = composerForm.getBoundingClientRect().height;
     setIsComposerFooterCompact(
       shouldUseCompactComposerFooter(measureComposerFormWidth(), {
-        hasWideActions: options.composerFooterHasWideActions,
+        hasWideActions: composerFooterHasWideActions,
       }),
     );
     if (typeof ResizeObserver === "undefined") {
@@ -142,7 +177,7 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
       }
 
       const nextCompact = shouldUseCompactComposerFooter(measureComposerFormWidth(), {
-        hasWideActions: options.composerFooterHasWideActions,
+        hasWideActions: composerFooterHasWideActions,
       });
       setIsComposerFooterCompact((previous) => (previous === nextCompact ? previous : nextCompact));
 
@@ -150,78 +185,71 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
       const previousHeight = composerFormHeightRef.current;
       composerFormHeightRef.current = nextHeight;
 
-      autoScrollBindings.onComposerHeightChange(previousHeight, nextHeight);
+      onComposerHeightChange(previousHeight, nextHeight);
     });
 
     observer.observe(composerForm);
     return () => {
       observer.disconnect();
     };
-  }, [
-    options.activeThread?.id,
-    options.composerFooterHasWideActions,
-    options.composerFormRef,
-    autoScrollBindings.onComposerHeightChange,
-  ]);
+  }, [activeThread?.id, composerFooterHasWideActions, composerFormRef, onComposerHeightChange]);
 
   useEffect(() => {
     setExpandedWorkGroups({});
-  }, [options.activeThread?.id]);
+  }, [activeThread?.id]);
 
   useEffect(() => {
-    options.setIsRevertingCheckpoint(false);
-  }, [options.activeThread?.id, options.setIsRevertingCheckpoint]);
+    setIsRevertingCheckpoint(false);
+  }, [activeThread?.id, setIsRevertingCheckpoint]);
 
   useEffect(() => {
-    if (!options.activeThread?.id || options.terminalOpen) {
+    if (!activeThread?.id || terminalOpen) {
       return;
     }
 
     const frame = window.requestAnimationFrame(() => {
-      options.focusComposer();
+      focusComposer();
     });
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [options.activeThread?.id, options.focusComposer, options.terminalOpen]);
+  }, [activeThread?.id, focusComposer, terminalOpen]);
 
   useEffect(() => {
-    options.composerImagesRef.current = options.composerImages;
-  }, [options.composerImages, options.composerImagesRef]);
+    composerImagesRef.current = composerImages;
+  }, [composerImages, composerImagesRef]);
 
   useEffect(() => {
-    options.composerTerminalContextsRef.current = options.composerTerminalContexts;
-  }, [options.composerTerminalContexts, options.composerTerminalContextsRef]);
+    composerTerminalContextsRef.current = composerTerminalContexts;
+  }, [composerTerminalContexts, composerTerminalContextsRef]);
 
   useEffect(() => {
-    options.queuedComposerTurnsRef.current = options.queuedComposerTurns;
-  }, [options.queuedComposerTurns, options.queuedComposerTurnsRef]);
+    queuedComposerTurnsRef.current = queuedComposerTurns;
+  }, [queuedComposerTurns, queuedComposerTurnsRef]);
 
   useEffect(() => {
-    options.autoDispatchingQueuedTurnRef.current = false;
-  }, [options.autoDispatchingQueuedTurnRef, options.activeThread?.id]);
+    autoDispatchingQueuedTurnRef.current = false;
+  }, [autoDispatchingQueuedTurnRef, activeThread?.id]);
 
   useEffect(() => {
-    options.promptRef.current = options.prompt;
-    options.composerCursorSetter((existing) =>
-      clampCollapsedComposerCursor(options.prompt, existing),
-    );
-  }, [options.composerCursorSetter, options.prompt, options.promptRef]);
+    promptRef.current = prompt;
+    composerCursorSetter((existing) => clampCollapsedComposerCursor(prompt, existing));
+  }, [composerCursorSetter, prompt, promptRef]);
 
-  const envMode: DraftThreadEnvMode = options.isServerThread
+  const envMode: DraftThreadEnvMode = isServerThread
     ? resolveThreadEnvironmentMode({
-        envMode: options.activeThread?.envMode,
-        worktreePath: options.activeThread?.worktreePath ?? null,
+        envMode: activeThread?.envMode,
+        worktreePath: activeThread?.worktreePath ?? null,
       })
-    : (options.draftThreadEnvMode ?? "local");
+    : (draftThreadEnvMode ?? "local");
 
   const envState = resolveThreadWorkspaceState({
-    envMode: options.resolvedThreadEnvMode,
-    worktreePath: options.resolvedThreadWorktreePath,
+    envMode: resolvedThreadEnvMode,
+    worktreePath: resolvedThreadWorktreePath,
   });
 
   useEffect(() => {
-    if (!options.isWorking) {
+    if (!isWorking) {
       return;
     }
 
@@ -232,20 +260,17 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
     return () => {
       window.clearInterval(timer);
     };
-  }, [options.isWorking]);
+  }, [isWorking]);
 
   const onRevertToTurnCount = useCallback(
     async (turnCount: number) => {
       const api = readNativeApi();
-      if (!api || !options.activeThread || options.isRevertingCheckpoint) {
+      if (!api || !activeThread || isRevertingCheckpoint) {
         return;
       }
 
-      if (options.hasLiveTurn || options.isSendBusy || options.isConnecting) {
-        options.setThreadError(
-          options.activeThread.id,
-          "Interrupt the current turn before reverting checkpoints.",
-        );
+      if (hasLiveTurn || isSendBusy || isConnecting) {
+        setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
 
@@ -260,32 +285,32 @@ export function useChatViewRuntimeBindings(options: UseChatViewRuntimeBindingsOp
         return;
       }
 
-      options.setIsRevertingCheckpoint(true);
-      options.setThreadError(options.activeThread.id, null);
+      setIsRevertingCheckpoint(true);
+      setThreadError(activeThread.id, null);
       try {
         await api.orchestration.dispatchCommand({
           type: "thread.checkpoint.revert",
           commandId: newCommandId(),
-          threadId: options.activeThread.id,
+          threadId: activeThread.id,
           turnCount,
           createdAt: new Date().toISOString(),
         });
       } catch (err) {
-        options.setThreadError(
-          options.activeThread.id,
+        setThreadError(
+          activeThread.id,
           err instanceof Error ? err.message : "Failed to revert thread state.",
         );
       }
-      options.setIsRevertingCheckpoint(false);
+      setIsRevertingCheckpoint(false);
     },
     [
-      options.activeThread,
-      options.hasLiveTurn,
-      options.isConnecting,
-      options.isRevertingCheckpoint,
-      options.isSendBusy,
-      options.setIsRevertingCheckpoint,
-      options.setThreadError,
+      activeThread,
+      hasLiveTurn,
+      isConnecting,
+      isRevertingCheckpoint,
+      isSendBusy,
+      setIsRevertingCheckpoint,
+      setThreadError,
     ],
   );
 
