@@ -3,6 +3,7 @@
 // Layer: Terminal view-model helpers
 // Depends on: shared terminal identity logic plus terminal pane-tree helpers.
 
+import { trimOrNull } from "@t3tools/shared/model";
 import {
   type TerminalVisualState,
   resolveTerminalVisualIdentity,
@@ -58,7 +59,9 @@ function assignUniqueGroupId(groupId: string, usedGroupIds: Set<string>): string
 }
 
 function normalizeTerminalIds(terminalIds: string[]): string[] {
-  const cleaned = [...new Set(terminalIds.map((id) => id.trim()).filter((id) => id.length > 0))];
+  const cleaned = [
+    ...new Set(terminalIds.map((id) => trimOrNull(id) ?? "").filter((id) => id.length > 0)),
+  ];
   return cleaned.length > 0 ? cleaned : [DEFAULT_THREAD_TERMINAL_ID];
 }
 
@@ -133,12 +136,15 @@ function resolveActiveGroup(input: {
   activeTerminalId: string;
   resolvedTerminalGroups: ResolvedTerminalGroupLayout[];
 }): ResolvedTerminalGroupLayout {
+  const normalizedActiveTerminalGroupId = trimOrNull(input.activeTerminalGroupId);
+  const normalizedActiveTerminalId = trimOrNull(input.activeTerminalId);
+
   return (
     input.resolvedTerminalGroups.find(
-      (terminalGroup) => terminalGroup.id === input.activeTerminalGroupId,
+      (terminalGroup) => terminalGroup.id === normalizedActiveTerminalGroupId,
     ) ??
     input.resolvedTerminalGroups.find((terminalGroup) =>
-      terminalGroup.terminalIds.includes(input.activeTerminalId),
+      terminalGroup.terminalIds.includes(normalizedActiveTerminalId ?? ""),
     ) ??
     input.resolvedTerminalGroups[0] ?? {
       id: `group-${DEFAULT_THREAD_TERMINAL_ID}`,
@@ -165,7 +171,7 @@ function resolveTerminalVisualIdentityMap(input: {
   const terminalLabelsById = input.terminalLabelsById ?? {};
   const terminalTitleOverridesById = input.terminalTitleOverridesById ?? {};
   const runningTerminalIdSet = new Set(
-    input.runningTerminalIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    input.runningTerminalIds.map((id) => trimOrNull(id) ?? "").filter((id) => id.length > 0),
   );
 
   const resolveStateForTerminal = (terminalId: string): TerminalVisualState => {
@@ -207,6 +213,7 @@ export function resolveThreadTerminalLayout(input: {
   terminalTitleOverridesById: Record<string, string>;
 }): ResolvedThreadTerminalLayout {
   const normalizedTerminalIds = normalizeTerminalIds(input.terminalIds);
+  const normalizedActiveTerminalId = trimOrNull(input.activeTerminalId);
   const resolvedTerminalGroups = resolveTerminalGroups({
     normalizedTerminalIds,
     terminalGroups: input.terminalGroups,
@@ -216,8 +223,10 @@ export function resolveThreadTerminalLayout(input: {
     activeTerminalId: input.activeTerminalId,
     resolvedTerminalGroups,
   });
-  const resolvedActiveTerminalId = activeGroup.terminalIds.includes(input.activeTerminalId)
-    ? input.activeTerminalId
+  const resolvedActiveTerminalId = activeGroup.terminalIds.includes(
+    normalizedActiveTerminalId ?? "",
+  )
+    ? (normalizedActiveTerminalId ?? activeGroup.activeTerminalId)
     : activeGroup.terminalIds.includes(activeGroup.activeTerminalId)
       ? activeGroup.activeTerminalId
       : findFirstTerminalIdInLayout(activeGroup.layout);
