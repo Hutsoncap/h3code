@@ -1,4 +1,5 @@
 import { TurnId } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export type ChatRightPanel = "browser" | "diff";
 
@@ -18,8 +19,7 @@ function normalizeSearchString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
+  return trimOrNull(value) ?? undefined;
 }
 
 export function stripDiffSearchParams<T extends Record<string, unknown>>(
