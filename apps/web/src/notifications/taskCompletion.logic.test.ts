@@ -9,6 +9,8 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import {
+  buildTerminalAttentionCopy,
+  buildTerminalCompletionCopy,
   buildInputNeededCopy,
   buildTaskCompletionCopy,
   collectCompletedTerminalCandidates,
@@ -429,6 +431,36 @@ describe("collectCompletedTerminalCandidates", () => {
         title: "Terminal",
       },
     ]);
+  });
+});
+
+describe("terminal notification copy", () => {
+  it("falls back to the generic terminal label for quote-wrapped blank completion titles", () => {
+    expect(
+      buildTerminalCompletionCopy({
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        terminalId: "terminal-1",
+        cliKind: null,
+        title: ' "   " ',
+      }),
+    ).toEqual({
+      title: "Terminal task completed",
+      body: "Terminal finished working.",
+    });
+  });
+
+  it("falls back to the generic terminal label for quote-wrapped blank attention titles", () => {
+    expect(
+      buildTerminalAttentionCopy({
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        terminalId: "terminal-1",
+        cliKind: null,
+        title: " '' ",
+      }),
+    ).toEqual({
+      title: "Terminal input needed",
+      body: "Terminal needs your attention.",
+    });
   });
 });
 
