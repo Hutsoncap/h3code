@@ -330,6 +330,21 @@ describe("terminalStateStore actions", () => {
     }
   });
 
+  it("ignores quote-wrapped blank live metadata labels", () => {
+    const store = useTerminalStateStore.getState();
+
+    store.setTerminalMetadata(THREAD_ID, "default", {
+      cliKind: null,
+      label: ' "   " ',
+    });
+
+    const terminalState = selectThreadTerminalState(
+      useTerminalStateStore.getState().terminalStateByThreadId,
+      THREAD_ID,
+    );
+    expect(terminalState.terminalLabelsById).toEqual({ default: "Terminal 1" });
+  });
+
   it("creates new terminals in a separate group", () => {
     useTerminalStateStore.getState().newTerminal(THREAD_ID, "terminal-2");
 
@@ -372,6 +387,18 @@ describe("terminalStateStore actions", () => {
     );
     expect(terminalState.terminalLabelsById).toEqual({ default: "Terminal 1" });
     expect(terminalState.terminalCliKindsById).toEqual({});
+  });
+
+  it("treats quote-wrapped blank live title overrides as absent", () => {
+    const store = useTerminalStateStore.getState();
+
+    store.setTerminalTitleOverride(THREAD_ID, "default", ' "   " ');
+
+    const terminalState = selectThreadTerminalState(
+      useTerminalStateStore.getState().terminalStateByThreadId,
+      THREAD_ID,
+    );
+    expect(terminalState.terminalTitleOverridesById).toEqual({});
   });
 
   it("allows unlimited groups while keeping each group capped at four terminals", () => {
