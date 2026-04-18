@@ -1,14 +1,25 @@
 const GITHUB_PULL_REQUEST_URL_PATTERN =
   /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)(?:[/?#].*)?$/i;
 const PULL_REQUEST_NUMBER_PATTERN = /^#?(\d+)$/;
+const TRAILING_REFERENCE_PUNCTUATION_PATTERN = /[),.;:!?]+$/;
 
 function normalizePullRequestNumber(value: string): string | null {
   const normalized = value.replace(/^0+/, "");
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizePullRequestReferenceInput(input: string): string {
+  let normalized = input.trim();
+
+  if (normalized.startsWith("<") && normalized.endsWith(">")) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+
+  return normalized.replace(TRAILING_REFERENCE_PUNCTUATION_PATTERN, "");
+}
+
 export function parsePullRequestReference(input: string): string | null {
-  const trimmed = input.trim();
+  const trimmed = normalizePullRequestReferenceInput(input);
   if (trimmed.length === 0) {
     return null;
   }
