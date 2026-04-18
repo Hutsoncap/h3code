@@ -78,6 +78,20 @@ describe("parseDiffRouteSearch", () => {
     });
   });
 
+  it("normalizes quote-wrapped blank values", () => {
+    const parsed = parseDiffRouteSearch({
+      diff: "1",
+      diffTurnId: ' "   " ',
+      diffFilePath: ' "   " ',
+      splitViewId: ' "   " ',
+    });
+
+    expect(parsed).toEqual({
+      panel: "diff",
+      diff: "1",
+    });
+  });
+
   it("preserves browser panel mode without diff state", () => {
     const parsed = parseDiffRouteSearch({
       panel: "browser",
