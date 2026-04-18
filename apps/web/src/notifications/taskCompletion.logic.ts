@@ -8,6 +8,7 @@ import {
   type TerminalCliKind,
   type TerminalVisualState,
 } from "@t3tools/shared/terminalThreads";
+import { trimOrNull } from "@t3tools/shared/model";
 import type { Thread, ThreadSession } from "../types";
 import {
   derivePendingApprovals,
@@ -327,8 +328,7 @@ export function buildTaskCompletionCopy(candidate: CompletedThreadCandidate): {
   title: string;
   body: string;
 } {
-  const normalizedTitle = candidate.title.trim();
-  const threadLabel = normalizedTitle.length > 0 ? normalizedTitle : "Untitled thread";
+  const threadLabel = trimOrNull(candidate.title) ?? "Untitled thread";
 
   return {
     title: threadLabel,
@@ -340,8 +340,7 @@ export function buildThreadAttentionCopy(candidate: ThreadAttentionCandidate): {
   title: string;
   body: string;
 } {
-  const normalizedTitle = candidate.title.trim();
-  const threadLabel = normalizedTitle.length > 0 ? normalizedTitle : "Untitled thread";
+  const threadLabel = trimOrNull(candidate.title) ?? "Untitled thread";
   const summary =
     candidate.summary ??
     (candidate.kind === "approval"
