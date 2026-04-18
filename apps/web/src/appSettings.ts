@@ -264,19 +264,22 @@ export function getCustomModelOptionsByProvider(
 export function getProviderStartOptions(
   settings: Pick<AppSettings, "claudeBinaryPath" | "codexBinaryPath" | "codexHomePath">,
 ): ProviderStartOptions | undefined {
+  const claudeBinaryPath = trimOrNull(settings.claudeBinaryPath);
+  const codexBinaryPath = trimOrNull(settings.codexBinaryPath);
+  const codexHomePath = trimOrNull(settings.codexHomePath);
   const providerOptions: ProviderStartOptions = {
-    ...(settings.codexBinaryPath || settings.codexHomePath
+    ...(codexBinaryPath || codexHomePath
       ? {
           codex: {
-            ...(settings.codexBinaryPath ? { binaryPath: settings.codexBinaryPath } : {}),
-            ...(settings.codexHomePath ? { homePath: settings.codexHomePath } : {}),
+            ...(codexBinaryPath ? { binaryPath: codexBinaryPath } : {}),
+            ...(codexHomePath ? { homePath: codexHomePath } : {}),
           },
         }
       : {}),
-    ...(settings.claudeBinaryPath
+    ...(claudeBinaryPath
       ? {
           claudeAgent: {
-            binaryPath: settings.claudeBinaryPath,
+            binaryPath: claudeBinaryPath,
           },
         }
       : {}),
