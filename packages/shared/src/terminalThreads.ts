@@ -3,6 +3,8 @@
 // Layer: Shared terminal metadata utilities
 // Exports: command parsing plus resolved terminal presentation metadata for web/server consumers.
 
+import { trimOrNull } from "./model";
+
 export const GENERIC_TERMINAL_THREAD_TITLE = "New terminal";
 export type TerminalCliKind = "codex" | "claude";
 export type TerminalIconKey = "terminal" | "openai" | "claude";
@@ -317,7 +319,7 @@ export function deriveTerminalProcessIdentity(
 }
 
 function inferCliKindFromTitle(title: string | null | undefined): TerminalCliKind | null {
-  const normalizedTitle = title?.trim().toLowerCase();
+  const normalizedTitle = trimOrNull(title)?.toLowerCase();
   if (!normalizedTitle) {
     return null;
   }
@@ -337,7 +339,7 @@ function normalizePersistedTerminalTitle(
   title: string | null | undefined,
   cliKind: TerminalCliKind | null,
 ): string {
-  const normalizedTitle = title?.trim();
+  const normalizedTitle = trimOrNull(title);
   if (normalizedTitle && normalizedTitle.length > 0) {
     return normalizedTitle;
   }
@@ -496,7 +498,7 @@ export function resolveTerminalVisualIdentity(input: {
 }): ResolvedTerminalVisualIdentity {
   const resolvedCliKind = input.cliKind ?? inferCliKindFromTitle(input.title);
   const title =
-    input.title?.trim() ||
+    trimOrNull(input.title) ||
     (resolvedCliKind ? defaultTerminalTitleForCliKind(resolvedCliKind) : input.fallbackTitle);
   const cliKind = resolvedCliKind ?? null;
   const state = input.state ?? (input.isRunning ? "running" : "idle");
