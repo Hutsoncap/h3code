@@ -185,7 +185,6 @@ import {
   type TerminalContextSelection,
 } from "../lib/terminalContext";
 import { deriveLatestContextWindowSnapshot, deriveCumulativeCostUsd } from "../lib/contextWindow";
-import { formatVoiceRecordingDuration, useVoiceRecorder } from "../lib/voiceRecorder";
 import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
 import {
   resolveSplitViewFocusedThreadId,
@@ -211,6 +210,7 @@ import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
+import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
@@ -223,9 +223,6 @@ import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
   appendVoiceTranscriptToPrompt,
-  describeVoiceRecordingStartError,
-  isVoiceAuthExpiredMessage,
-  sanitizeVoiceErrorMessage,
   shouldStartActiveTurnLayoutGrace,
   shouldAutoDeleteTerminalThreadOnLastClose,
   buildExpiredTerminalContextToastCopy,
@@ -318,19 +315,6 @@ function buildQueuedComposerPreviewText(input: {
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
-const VOICE_RECORDER_ACTION_ARM_DELAY_MS = 250;
-
-function warnVoiceGuard(event: string, details?: Record<string, unknown>) {
-  if (!import.meta.env.DEV) {
-    return;
-  }
-  if (details) {
-    console.warn(`[voice] ${event}`, details);
-    return;
-  }
-  console.warn(`[voice] ${event}`);
-}
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -733,15 +717,6 @@ export default function ChatView({
     setStickyComposerModelSelection,
     syncComposerDraftPersistedAttachments,
   } = useChatComposerDraftBindings(threadId);
-  const {
-    isRecording: isVoiceRecording,
-    durationMs: voiceRecordingDurationMs,
-    waveformLevels: voiceWaveformLevels,
-    startRecording: startVoiceRecording,
-    stopRecording: stopVoiceRecording,
-    cancelRecording: cancelVoiceRecording,
-  } = useVoiceRecorder();
-  const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false);
   const allThreads = useStore((store) => store.threads);
   const serverThread = useStore(useMemo(() => createThreadSelector(threadId), [threadId]));
   const fallbackDraftProjectId = draftThread?.projectId ?? null;
@@ -1030,12 +1005,6 @@ export default function ChatView({
     : null;
   const selectedProvider: ProviderKind =
     lockedProvider ?? selectedProviderByThreadId ?? threadProvider ?? settings.defaultProvider;
-  const voiceTranscriptionRequestIdRef = useRef(0);
-  const voiceThreadIdRef = useRef(threadId);
-  const voiceProviderRef = useRef<ProviderKind>(selectedProvider);
-  const voiceRecordingStartedAtRef = useRef<number | null>(null);
-  voiceThreadIdRef.current = threadId;
-  voiceProviderRef.current = selectedProvider;
   const customModelsByProvider = useMemo(() => getCustomModelsByProvider(settings), [settings]);
   const { modelOptions: composerModelOptions, selectedModel } = useEffectiveComposerModelState({
     threadId,
@@ -1845,15 +1814,6 @@ export default function ChatView({
         });
       });
   }, [queryClient, toastManager]);
-  const voiceRecordingDurationLabel = useMemo(
-    () => formatVoiceRecordingDuration(voiceRecordingDurationMs),
-    [voiceRecordingDurationMs],
-  );
-  const canRenderVoiceNotes = voiceProviderStatus?.authStatus !== "unauthenticated";
-  const canStartVoiceNotes =
-    voiceProviderStatus?.authStatus !== "unauthenticated" &&
-    voiceProviderStatus?.voiceTranscriptionAvailable !== false;
-  const showVoiceNotesControl = canRenderVoiceNotes || isVoiceRecording || isVoiceTranscribing;
   const activeProjectCwd = activeProject?.cwd ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const hasNativeUserMessages = useMemo(
@@ -1996,6 +1956,25 @@ export default function ChatView({
     },
     [scheduleComposerFocus, setPrompt],
   );
+  const {
+    isVoiceRecording,
+    isVoiceTranscribing,
+    voiceWaveformLevels,
+    voiceRecordingDurationLabel,
+    showVoiceNotesControl,
+    toggleComposerVoiceRecording,
+    submitComposerVoiceRecording,
+    cancelComposerVoiceRecording,
+  } = useComposerVoiceController({
+    activeProject,
+    activeThreadId,
+    threadId,
+    selectedProvider,
+    activeProviderStatus: voiceProviderStatus,
+    pendingUserInputCount: pendingUserInputs.length,
+    onTranscriptReady: appendVoiceTranscriptToComposer,
+    refreshVoiceStatus,
+  });
   const addTerminalContextToDraft = useCallback(
     (selection: TerminalContextSelection) => {
       if (!activeThread) {
@@ -2803,10 +2782,6 @@ export default function ChatView({
   }, [selectedProvider]);
 
   useEffect(() => {
-    voiceTranscriptionRequestIdRef.current += 1;
-    voiceRecordingStartedAtRef.current = null;
-    void cancelVoiceRecording();
-    setIsVoiceTranscribing(false);
     setOptimisticUserMessages((existing) => {
       for (const message of existing) {
         revokeUserMessagePreviewUrls(message);
@@ -2822,28 +2797,7 @@ export default function ChatView({
     dragDepthRef.current = 0;
     setIsDragOverComposer(false);
     setExpandedImage(null);
-  }, [cancelVoiceRecording, threadId]);
-
-  useEffect(() => {
-    if (canStartVoiceNotes || !isVoiceRecording) {
-      return;
-    }
-    warnVoiceGuard("cancelled active voice recording because voice became unavailable", {
-      authStatus: voiceProviderStatus?.authStatus ?? null,
-      voiceTranscriptionAvailable: voiceProviderStatus?.voiceTranscriptionAvailable ?? null,
-      isVoiceRecording,
-    });
-    voiceTranscriptionRequestIdRef.current += 1;
-    voiceRecordingStartedAtRef.current = null;
-    void cancelVoiceRecording();
-    setIsVoiceTranscribing(false);
-  }, [
-    canStartVoiceNotes,
-    cancelVoiceRecording,
-    isVoiceRecording,
-    voiceProviderStatus?.authStatus,
-    voiceProviderStatus?.voiceTranscriptionAvailable,
-  ]);
+  }, [threadId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3292,195 +3246,6 @@ export default function ChatView({
     setTerminalWorkspaceTab,
     surfaceMode,
     toggleTerminalVisibility,
-  ]);
-
-  const startComposerVoiceRecording = useCallback(async () => {
-    if (!activeProject) {
-      return;
-    }
-    if (voiceProviderStatus?.authStatus === "unauthenticated") {
-      toastManager.add({
-        type: "error",
-        title: "Sign in to ChatGPT in Codex before using voice notes.",
-      });
-      return;
-    }
-    if (!canStartVoiceNotes) {
-      toastManager.add({
-        type: "error",
-        title: "Voice notes require a ChatGPT-authenticated Codex session.",
-      });
-      return;
-    }
-    if (pendingUserInputs.length > 0) {
-      toastManager.add({
-        type: "error",
-        title: "Answer plan questions before recording a voice note.",
-      });
-      return;
-    }
-
-    try {
-      await startVoiceRecording();
-      voiceRecordingStartedAtRef.current = performance.now();
-    } catch (error) {
-      toastManager.add({
-        type: "error",
-        title: "Could not start recording",
-        description: describeVoiceRecordingStartError(error),
-      });
-    }
-  }, [
-    activeProject,
-    canStartVoiceNotes,
-    pendingUserInputs.length,
-    startVoiceRecording,
-    voiceProviderStatus?.authStatus,
-  ]);
-
-  const submitComposerVoiceRecording = useCallback(async () => {
-    if (!activeProject || !isVoiceRecording) {
-      return;
-    }
-    const recordedForMs =
-      voiceRecordingStartedAtRef.current === null
-        ? null
-        : Math.round(performance.now() - voiceRecordingStartedAtRef.current);
-    if (
-      recordedForMs !== null &&
-      recordedForMs >= 0 &&
-      recordedForMs < VOICE_RECORDER_ACTION_ARM_DELAY_MS
-    ) {
-      warnVoiceGuard("ignored recorder action immediately after start", {
-        recordedForMs,
-      });
-      return;
-    }
-
-    const api = readNativeApi();
-    if (!api) {
-      toastManager.add({
-        type: "error",
-        title: "Voice transcription is unavailable right now.",
-      });
-      void cancelVoiceRecording();
-      return;
-    }
-
-    setIsVoiceTranscribing(true);
-    const requestId = voiceTranscriptionRequestIdRef.current + 1;
-    voiceTranscriptionRequestIdRef.current = requestId;
-    const requestThreadId = threadId;
-    const requestProvider = selectedProvider;
-    const isCurrentVoiceRequest = () =>
-      voiceTranscriptionRequestIdRef.current === requestId &&
-      voiceThreadIdRef.current === requestThreadId &&
-      voiceProviderRef.current === requestProvider;
-
-    try {
-      const payload = await stopVoiceRecording();
-      if (!isCurrentVoiceRequest()) {
-        return;
-      }
-      if (!payload) {
-        toastManager.add({
-          type: "warning",
-          title: "No audio was captured.",
-        });
-        return;
-      }
-      const result = await api.server.transcribeVoice({
-        provider: "codex",
-        cwd: activeProject.cwd,
-        ...(activeThread ? { threadId: activeThread.id } : {}),
-        ...payload,
-      });
-      if (!isCurrentVoiceRequest()) {
-        return;
-      }
-      appendVoiceTranscriptToComposer(result.text);
-    } catch (error) {
-      if (!isCurrentVoiceRequest()) {
-        return;
-      }
-      const description =
-        error instanceof Error
-          ? sanitizeVoiceErrorMessage(error.message)
-          : "The voice note could not be transcribed.";
-      const authExpired = isVoiceAuthExpiredMessage(description);
-      if (authExpired) {
-        refreshVoiceStatus();
-      }
-      toastManager.add({
-        type: "error",
-        title: authExpired ? "Sign in to ChatGPT again" : "Couldn't transcribe voice note",
-        description: authExpired
-          ? "Voice transcription uses your ChatGPT session in Codex. That session was rejected, so sign in again there and retry."
-          : description,
-        ...(authExpired
-          ? {
-              actionProps: {
-                children: "Refresh status",
-                onClick: refreshVoiceStatus,
-              },
-            }
-          : {}),
-      });
-    } finally {
-      if (isCurrentVoiceRequest()) {
-        voiceRecordingStartedAtRef.current = null;
-        setIsVoiceTranscribing(false);
-      }
-    }
-  }, [
-    activeProject,
-    activeThread,
-    appendVoiceTranscriptToComposer,
-    cancelVoiceRecording,
-    isVoiceRecording,
-    refreshVoiceStatus,
-    selectedProvider,
-    stopVoiceRecording,
-    threadId,
-  ]);
-
-  const cancelComposerVoiceRecording = useCallback(() => {
-    const recordedForMs =
-      voiceRecordingStartedAtRef.current === null
-        ? null
-        : Math.round(performance.now() - voiceRecordingStartedAtRef.current);
-    if (
-      recordedForMs !== null &&
-      recordedForMs >= 0 &&
-      recordedForMs < VOICE_RECORDER_ACTION_ARM_DELAY_MS
-    ) {
-      warnVoiceGuard("ignored recorder action immediately after start", {
-        recordedForMs,
-      });
-      return;
-    }
-    voiceTranscriptionRequestIdRef.current += 1;
-    voiceRecordingStartedAtRef.current = null;
-    setIsVoiceTranscribing(false);
-    void cancelVoiceRecording();
-  }, [cancelVoiceRecording]);
-
-  // Preserve the original "single mic button" contract:
-  // first click starts recording, the next click submits/transcribes.
-  const toggleComposerVoiceRecording = useCallback(() => {
-    if (isVoiceTranscribing) {
-      return;
-    }
-    if (isVoiceRecording) {
-      void submitComposerVoiceRecording();
-      return;
-    }
-    void startComposerVoiceRecording();
-  }, [
-    isVoiceRecording,
-    isVoiceTranscribing,
-    startComposerVoiceRecording,
-    submitComposerVoiceRecording,
   ]);
 
   // --- Composer attachment entry points -------------------------------------
