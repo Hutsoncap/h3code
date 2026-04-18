@@ -19,6 +19,10 @@ export interface NormalizeWorkspaceRootForComparisonOptions {
   readonly platform?: string;
 }
 
+function hasMaterializedWorktreePath(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isLikelyWindowsWorkspaceRoot(value: string, platform?: string): boolean {
   if (platform === "win32") {
     return true;
@@ -71,15 +75,19 @@ export function deriveAssociatedWorktreeMetadata(input: {
   associatedWorktreeBranch?: string | null;
   associatedWorktreeRef?: string | null;
 }): AssociatedWorktreeMetadata {
+  const materializedWorktreePath = hasMaterializedWorktreePath(input.worktreePath)
+    ? input.worktreePath
+    : null;
+
   return {
     associatedWorktreePath:
       input.associatedWorktreePath !== undefined
         ? input.associatedWorktreePath
-        : (input.worktreePath ?? null),
+        : materializedWorktreePath,
     associatedWorktreeBranch:
       input.associatedWorktreeBranch !== undefined
         ? input.associatedWorktreeBranch
-        : input.worktreePath
+        : materializedWorktreePath
           ? (input.branch ?? null)
           : null,
     associatedWorktreeRef:
@@ -87,7 +95,7 @@ export function deriveAssociatedWorktreeMetadata(input: {
         ? input.associatedWorktreeRef
         : input.associatedWorktreeBranch !== undefined
           ? input.associatedWorktreeBranch
-          : input.worktreePath
+          : materializedWorktreePath
             ? (input.branch ?? null)
             : null,
   };
@@ -101,16 +109,19 @@ export function deriveAssociatedWorktreeMetadataPatch(input: {
   associatedWorktreeRef?: string | null;
 }): AssociatedWorktreeMetadataPatch {
   const patch: AssociatedWorktreeMetadataPatch = {};
+  const materializedWorktreePath = hasMaterializedWorktreePath(input.worktreePath)
+    ? input.worktreePath
+    : null;
 
   if (input.associatedWorktreePath !== undefined) {
     patch.associatedWorktreePath = input.associatedWorktreePath;
-  } else if (input.worktreePath !== undefined && input.worktreePath !== null) {
-    patch.associatedWorktreePath = input.worktreePath;
+  } else if (materializedWorktreePath) {
+    patch.associatedWorktreePath = materializedWorktreePath;
   }
 
   if (input.associatedWorktreeBranch !== undefined) {
     patch.associatedWorktreeBranch = input.associatedWorktreeBranch;
-  } else if (input.worktreePath !== undefined && input.worktreePath !== null) {
+  } else if (materializedWorktreePath) {
     patch.associatedWorktreeBranch = input.branch ?? null;
   }
 
@@ -118,7 +129,7 @@ export function deriveAssociatedWorktreeMetadataPatch(input: {
     patch.associatedWorktreeRef = input.associatedWorktreeRef;
   } else if (input.associatedWorktreeBranch !== undefined) {
     patch.associatedWorktreeRef = input.associatedWorktreeBranch;
-  } else if (input.worktreePath !== undefined && input.worktreePath !== null) {
+  } else if (materializedWorktreePath) {
     patch.associatedWorktreeRef = input.branch ?? null;
   }
 
