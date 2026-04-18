@@ -2,7 +2,6 @@ import {
   type ApprovalRequestId,
   DEFAULT_MODEL_BY_PROVIDER,
   type ClaudeCodeEffort,
-  type ModelSelection,
   type ProviderKind,
   type ProjectEntry,
   type ProviderMentionReference,
@@ -19,11 +18,7 @@ import {
   type EditorId,
   OrchestrationThreadActivity,
 } from "@t3tools/contracts";
-import {
-  applyClaudePromptEffortPrefix,
-  getModelCapabilities,
-  normalizeModelSlug,
-} from "@t3tools/shared/model";
+import { applyClaudePromptEffortPrefix, getModelCapabilities } from "@t3tools/shared/model";
 import {
   resolveThreadWorkspaceState,
   resolveThreadBranchSourceCwd,
@@ -56,15 +51,8 @@ import {
   collapseExpandedComposerCursor,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
-  stripComposerTriggerText,
 } from "../composer-logic";
 import { createProjectSelector, createThreadSelector } from "../storeSelectors";
-import {
-  canOfferForkSlashCommand,
-  canOfferReviewSlashCommand,
-  hasProviderNativeSlashCommand,
-  resolveComposerSlashRootBranch,
-} from "../composerSlashCommands";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -93,23 +81,16 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useThreadWorkspaceHandoff } from "../hooks/useThreadWorkspaceHandoff";
-import { useComposerCommandMenuItems } from "../hooks/useComposerCommandMenuItems";
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { toastManager } from "./ui/toast";
 import { newCommandId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
-import {
-  getCustomModelOptionsByProvider,
-  getCustomModelsByProvider,
-  getProviderStartOptions,
-  useAppSettings,
-} from "../appSettings";
+import { useAppSettings } from "../appSettings";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
   type QueuedComposerPlanFollowUp,
   type QueuedComposerTurn,
-  useEffectiveComposerModelState,
 } from "../composerDraftStore";
 import { deriveLatestContextWindowSnapshot, deriveCumulativeCostUsd } from "../lib/contextWindow";
 import { type TerminalContextDraft } from "../lib/terminalContext";
@@ -121,7 +102,6 @@ import {
   useSplitViewStore,
 } from "../splitViewStore";
 import { type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
-import { AVAILABLE_PROVIDER_OPTIONS } from "./chat/ProviderModelPicker";
 import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
 import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
@@ -132,7 +112,9 @@ import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBin
 import { useChatComposerInputBindings } from "./chat/useChatComposerInputBindings";
 import { useChatComposerFooterBindings } from "./chat/useChatComposerFooterBindings";
 import { useChatMediaBindings } from "./chat/useChatMediaBindings";
+import { useChatComposerMenuBindings } from "./chat/useChatComposerMenuBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
+import { useChatComposerProviderStateBindings } from "./chat/useChatComposerProviderStateBindings";
 import { useChatPlanHandoffBindings } from "./chat/useChatPlanHandoffBindings";
 import { useChatSendBindings } from "./chat/useChatSendBindings";
 import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
@@ -154,7 +136,6 @@ import { useChatPendingInteractionBindings } from "./chat/useChatPendingInteract
 import { useChatQueuedTurnBindings } from "./chat/useChatQueuedTurnBindings";
 import { useChatProjectScriptBindings } from "./chat/useChatProjectScriptBindings";
 import { useChatTurnDispatchBindings } from "./chat/useChatTurnDispatchBindings";
-import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
@@ -188,8 +169,6 @@ type ComposerPluginSuggestion = {
   plugin: ProviderPluginDescriptor;
   mention: ProviderMentionReference;
 };
-
-const EMPTY_COMPOSER_PLUGIN_SUGGESTIONS: ComposerPluginSuggestion[] = [];
 
 function formatOutgoingPrompt(params: {
   provider: ProviderKind;
@@ -660,78 +639,28 @@ export default function ChatView({
     markThreadVisited,
   ]);
 
-  const sessionProvider = activeThread?.session?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
-  const threadProvider =
-    activeThread?.modelSelection.provider ?? activeProject?.defaultModelSelection?.provider ?? null;
-  const hasThreadStarted = Boolean(
-    activeThread &&
-    (activeThread.latestTurn !== null ||
-      activeThread.messages.length > 0 ||
-      activeThread.session !== null),
-  );
-  const lockedProvider: ProviderKind | null = hasThreadStarted
-    ? (sessionProvider ?? threadProvider ?? selectedProviderByThreadId ?? null)
-    : null;
-  const selectedProvider: ProviderKind =
-    lockedProvider ?? selectedProviderByThreadId ?? threadProvider ?? settings.defaultProvider;
-  const customModelsByProvider = useMemo(() => getCustomModelsByProvider(settings), [settings]);
-  const { modelOptions: composerModelOptions, selectedModel } = useEffectiveComposerModelState({
-    threadId,
-    selectedProvider,
-    threadModelSelection: activeThread?.modelSelection,
-    projectModelSelection: activeProject?.defaultModelSelection,
+  const {
+    composerModelOptions,
+    composerProviderState,
     customModelsByProvider,
+    lockedProvider,
+    modelOptionsByProvider,
+    providerOptionsForDispatch,
+    searchableModelOptions,
+    selectedModel,
+    selectedModelForPickerWithCustomFallback,
+    selectedModelSelection,
+    selectedPromptEffort,
+    selectedProvider,
+  } = useChatComposerProviderStateBindings({
+    activeProjectDefaultModelSelection: activeProject?.defaultModelSelection,
+    activeThread,
+    composerDraftActiveProvider: selectedProviderByThreadId,
+    prompt,
+    settings,
+    threadId,
   });
-  const composerProviderState = useMemo(
-    () =>
-      getComposerProviderState({
-        provider: selectedProvider,
-        model: selectedModel,
-        prompt,
-        modelOptions: composerModelOptions,
-      }),
-    [composerModelOptions, prompt, selectedModel, selectedProvider],
-  );
-  const selectedPromptEffort = composerProviderState.promptEffort;
-  const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
-  const selectedModelSelection = useMemo<ModelSelection>(
-    () => ({
-      provider: selectedProvider,
-      model: selectedModel,
-      ...(selectedModelOptionsForDispatch ? { options: selectedModelOptionsForDispatch } : {}),
-    }),
-    [selectedModel, selectedModelOptionsForDispatch, selectedProvider],
-  );
-  const providerOptionsForDispatch = useMemo(() => getProviderStartOptions(settings), [settings]);
-  const selectedModelForPicker = selectedModel;
-  const modelOptionsByProvider = useMemo(
-    () => getCustomModelOptionsByProvider(settings),
-    [settings],
-  );
-  const selectedModelForPickerWithCustomFallback = useMemo(() => {
-    const currentOptions = modelOptionsByProvider[selectedProvider];
-    return currentOptions.some((option) => option.slug === selectedModelForPicker)
-      ? selectedModelForPicker
-      : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
-  }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
-  const searchableModelOptions = useMemo(
-    () =>
-      AVAILABLE_PROVIDER_OPTIONS.filter(
-        (option) => lockedProvider === null || option.value === lockedProvider,
-      ).flatMap((option) =>
-        modelOptionsByProvider[option.value].map(({ slug, name }) => ({
-          provider: option.value,
-          providerLabel: option.label,
-          slug,
-          name,
-          searchSlug: slug.toLowerCase(),
-          searchName: name.toLowerCase(),
-          searchProvider: option.label.toLowerCase(),
-        })),
-      ),
-    [lockedProvider, modelOptionsByProvider],
-  );
   const phase = derivePhase(activeThread?.session ?? null);
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
@@ -1100,155 +1029,44 @@ export default function ChatView({
     }),
   );
   const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
-  const activeRootBranch = useMemo(
-    () =>
-      resolveComposerSlashRootBranch({
-        branches: branchesQuery.data?.branches,
-        activeProjectCwd: activeProject?.cwd,
-        activeThreadBranch: activeThread?.branch,
-      }),
-    [activeProject?.cwd, activeThread?.branch, branchesQuery.data?.branches],
-  );
-  // Keep plugin suggestions referentially stable so prompt-sync effects do not loop on rerender.
-  const providerPlugins = useMemo(
-    () =>
-      providerPluginsQuery.data?.marketplaces.flatMap((marketplace) =>
-        marketplace.plugins.map((plugin) => ({
-          plugin,
-          mention: {
-            name: plugin.name,
-            path: `plugin://${plugin.name}@${marketplace.name}`,
-          } satisfies ProviderMentionReference,
-        })),
-      ) ?? EMPTY_COMPOSER_PLUGIN_SUGGESTIONS,
-    [providerPluginsQuery.data],
-  );
   const providerNativeCommands =
     providerCommandsQuery.data?.commands ?? EMPTY_PROVIDER_NATIVE_COMMANDS;
-  const providerNativeCommandNames = useMemo(
-    () => providerNativeCommands.map((command) => command.name),
-    [providerNativeCommands],
-  );
-  const effectiveComposerTrigger = useMemo(() => {
-    if (
-      composerTrigger?.kind === "slash-model" &&
-      hasProviderNativeSlashCommand(selectedProvider, providerNativeCommandNames, "model")
-    ) {
-      return {
-        ...composerTrigger,
-        kind: "slash-command" as const,
-        query: "model",
-      };
-    }
-    return composerTrigger;
-  }, [composerTrigger, providerNativeCommandNames, selectedProvider]);
-  const effectiveComposerTriggerKind = effectiveComposerTrigger?.kind ?? null;
-  const supportsTextNativeReviewCommand = useMemo(
-    () => providerNativeCommands.some((command) => command.name.toLowerCase() === "review"),
-    [providerNativeCommands],
-  );
   const providerSkills = providerSkillsQuery.data?.skills ?? EMPTY_PROVIDER_SKILLS;
-  const selectedModelCaps = useMemo(
-    () => getModelCapabilities(selectedProvider, selectedModel),
-    [selectedModel, selectedProvider],
-  );
-  const supportsFastSlashCommand = selectedModelCaps.supportsFastMode;
-  const currentProviderModelOptions = composerModelOptions?.[selectedProvider];
-  const fastModeEnabled =
-    supportsFastSlashCommand &&
-    (currentProviderModelOptions as { fastMode?: boolean } | undefined)?.fastMode === true;
-  const composerPromptWithoutActiveSlashTrigger =
-    composerTrigger?.kind === "slash-command"
-      ? stripComposerTriggerText(prompt, composerTrigger)
-      : prompt;
-  const canOfferReviewCommand =
-    (branchesQuery.data?.isRepo ?? true) &&
-    canOfferReviewSlashCommand({
-      prompt: composerPromptWithoutActiveSlashTrigger,
-      imageCount: composerImages.length,
-      terminalContextCount: composerTerminalContexts.length,
-      selectedSkillCount: selectedComposerSkills.length,
-      selectedMentionCount: selectedComposerMentions.length,
-    });
-  const canOfferForkCommand =
-    isServerThread &&
-    activeThread !== undefined &&
-    canOfferForkSlashCommand({
-      prompt: composerPromptWithoutActiveSlashTrigger,
-      imageCount: composerImages.length,
-      terminalContextCount: composerTerminalContexts.length,
-      selectedSkillCount: selectedComposerSkills.length,
-      selectedMentionCount: selectedComposerMentions.length,
-      interactionMode,
-    });
-  const normalComposerMenuItems = useComposerCommandMenuItems({
-    composerTrigger: effectiveComposerTrigger,
-    provider: selectedProvider,
+  const {
+    activeComposerMenuItem,
+    activeRootBranch,
+    composerMenuItems,
+    composerMenuOpen,
+    currentProviderModelOptions,
+    effectiveComposerTriggerKind,
+    fastModeEnabled,
     providerPlugins,
-    providerNativeCommands,
-    providerSkills,
-    workspaceEntries,
-    searchableModelOptions,
     supportsFastSlashCommand,
-    canOfferReviewCommand,
-    canOfferForkCommand,
-  });
-  const composerMenuItems = useMemo(() => {
-    if (composerCommandPicker === "fork-target") {
-      return [
-        {
-          id: "fork-target:worktree",
-          type: "fork-target" as const,
-          target: "worktree" as const,
-          label: "Fork Into New Worktree",
-          description: "Continue in a new worktree",
-        },
-        {
-          id: "fork-target:local",
-          type: "fork-target" as const,
-          target: "local" as const,
-          label: "Fork Into Local",
-          description:
-            activeThread?.worktreePath || activeThread?.envMode === "worktree"
-              ? "Continue in this local worktree"
-              : "Continue in the current local thread",
-        },
-      ];
-    }
-    if (composerCommandPicker === "review-target") {
-      return [
-        {
-          id: "review-target:changes",
-          type: "review-target" as const,
-          target: "changes" as const,
-          label: "Review Uncommitted Changes",
-          description: "Review local uncommitted changes",
-        },
-        {
-          id: "review-target:base-branch",
-          type: "review-target" as const,
-          target: "base-branch" as const,
-          label: "Review Against Base Branch",
-          description: "Review the current branch diff against its base",
-        },
-      ];
-    }
-
-    return normalComposerMenuItems;
-  }, [
-    activeThread?.envMode,
-    activeThread?.worktreePath,
+    supportsTextNativeReviewCommand,
+  } = useChatComposerMenuBindings({
+    activeProjectCwd: activeProject?.cwd,
+    activeThread,
+    branches: branchesQuery.data?.branches,
+    branchesIsRepo: branchesQuery.data?.isRepo,
     composerCommandPicker,
-    normalComposerMenuItems,
-  ]);
-  const composerMenuOpen = Boolean(composerTrigger || composerCommandPicker);
-  const activeComposerMenuItem = useMemo(
-    () =>
-      composerMenuItems.find((item) => item.id === composerHighlightedItemId) ??
-      composerMenuItems[0] ??
-      null,
-    [composerHighlightedItemId, composerMenuItems],
-  );
+    composerHighlightedItemId,
+    composerImagesCount: composerImages.length,
+    composerModelOptions,
+    composerTerminalContextsCount: composerTerminalContexts.length,
+    composerTrigger,
+    interactionMode,
+    isServerThread,
+    providerNativeCommands,
+    providerPluginMarketplaces: providerPluginsQuery.data?.marketplaces,
+    providerSkills,
+    prompt,
+    searchableModelOptions,
+    selectedComposerMentionsCount: selectedComposerMentions.length,
+    selectedComposerSkillsCount: selectedComposerSkills.length,
+    selectedModel,
+    selectedProvider,
+    workspaceEntries,
+  });
   const nonPersistedComposerImageIdSet = useMemo(
     () => new Set(nonPersistedComposerImageIds),
     [nonPersistedComposerImageIds],
