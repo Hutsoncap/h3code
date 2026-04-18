@@ -74,6 +74,35 @@ describe("deriveAssociatedWorktreeMetadata", () => {
       associatedWorktreeRef: null,
     });
   });
+
+  it("treats quote-wrapped blank worktree metadata as absent", () => {
+    expect(
+      deriveAssociatedWorktreeMetadata({
+        branch: "feature/base",
+        worktreePath: ' "   " ',
+        associatedWorktreePath: " '   ' ",
+        associatedWorktreeBranch: ' "" ',
+        associatedWorktreeRef: " '  ' ",
+      }),
+    ).toEqual({
+      associatedWorktreePath: null,
+      associatedWorktreeBranch: null,
+      associatedWorktreeRef: null,
+    });
+  });
+
+  it("treats quote-wrapped blank fallback branches as absent when a worktree path exists", () => {
+    expect(
+      deriveAssociatedWorktreeMetadata({
+        branch: ' "   " ',
+        worktreePath: "/repo/.worktrees/feature",
+      }),
+    ).toEqual({
+      associatedWorktreePath: "/repo/.worktrees/feature",
+      associatedWorktreeBranch: null,
+      associatedWorktreeRef: null,
+    });
+  });
 });
 
 describe("deriveAssociatedWorktreeMetadataPatch", () => {
@@ -115,5 +144,20 @@ describe("deriveAssociatedWorktreeMetadataPatch", () => {
         worktreePath: "   ",
       }),
     ).toEqual({});
+  });
+
+  it("normalizes quote-wrapped blank explicit patch fields to null", () => {
+    expect(
+      deriveAssociatedWorktreeMetadataPatch({
+        branch: "feature/base",
+        associatedWorktreePath: ' "   " ',
+        associatedWorktreeBranch: " '   ' ",
+        associatedWorktreeRef: ' "" ',
+      }),
+    ).toEqual({
+      associatedWorktreePath: null,
+      associatedWorktreeBranch: null,
+      associatedWorktreeRef: null,
+    });
   });
 });
