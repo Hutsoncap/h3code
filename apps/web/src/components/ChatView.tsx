@@ -5,7 +5,6 @@ import {
   type MessageId,
   type ModelSelection,
   type ProjectScript,
-  type ModelSlug,
   type ProviderKind,
   type ProjectEntry,
   type ProjectId,
@@ -159,7 +158,6 @@ import {
   getCustomModelOptionsByProvider,
   getCustomModelsByProvider,
   getProviderStartOptions,
-  resolveAppModelSelection,
   useAppSettings,
 } from "../appSettings";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -208,17 +206,14 @@ import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
+import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
-import {
-  getComposerProviderState,
-  renderProviderTraitsPicker,
-} from "./chat/composerProviderRegistry";
-import { getComposerTraitSelection } from "./chat/composerTraits";
+import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
@@ -251,7 +246,6 @@ import {
   resolveDiffEnvironmentState,
   resolveThreadEnvironmentMode,
 } from "../lib/threadEnvironment";
-import { buildNextProviderOptions } from "../providerModelOptions";
 
 const ATTACHMENT_PREVIEW_HANDOFF_TTL_MS = 5000;
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
@@ -4346,86 +4340,25 @@ export default function ChatView({
     selectedModel,
   ]);
 
-  const onProviderModelSelect = useCallback(
-    (provider: ProviderKind, model: ModelSlug) => {
-      if (!activeThread) return;
-      if (lockedProvider !== null && provider !== lockedProvider) {
-        scheduleComposerFocus();
-        return;
-      }
-      const resolvedModel = resolveAppModelSelection(provider, customModelsByProvider, model);
-      const nextModelSelection: ModelSelection = {
-        provider,
-        model: resolvedModel,
-      };
-      setComposerDraftModelSelection(activeThread.id, nextModelSelection);
-      setStickyComposerModelSelection(nextModelSelection);
-      scheduleComposerFocus();
-    },
-    [
+  const { composerTraitSelection, onProviderModelSelect, providerTraitsPicker, toggleFastMode } =
+    useChatComposerModelBindings({
       activeThread,
-      lockedProvider,
-      scheduleComposerFocus,
-      setComposerDraftModelSelection,
-      setStickyComposerModelSelection,
+      composerModelOptions,
       customModelsByProvider,
-    ],
-  );
-  const setPromptFromTraits = useCallback(
-    (nextPrompt: string) => {
-      const currentPrompt = promptRef.current;
-      if (nextPrompt === currentPrompt) {
-        scheduleComposerFocus();
-        return;
-      }
-      promptRef.current = nextPrompt;
-      setPrompt(nextPrompt);
-      const nextCursor = collapseExpandedComposerCursor(nextPrompt, nextPrompt.length);
-      setComposerCursor(nextCursor);
-      setComposerTrigger(detectComposerTrigger(nextPrompt, nextPrompt.length));
-      scheduleComposerFocus();
-    },
-    [scheduleComposerFocus, setPrompt],
-  );
-  const selectedProviderModelOptions = composerModelOptions?.[selectedProvider];
-  const composerTraitSelection = getComposerTraitSelection(
-    selectedProvider,
-    selectedModel,
-    prompt,
-    selectedProviderModelOptions,
-  );
-  const providerTraitsPicker = renderProviderTraitsPicker({
-    provider: selectedProvider,
-    threadId,
-    model: selectedModel,
-    modelOptions: selectedProviderModelOptions,
-    prompt,
-    includeFastMode: false,
-    onPromptChange: setPromptFromTraits,
-  });
-  const toggleFastMode = useCallback(() => {
-    if (!composerTraitSelection.caps.supportsFastMode) {
-      scheduleComposerFocus();
-      return;
-    }
-    setComposerDraftProviderModelOptions(
-      threadId,
+      lockedProvider,
+      prompt,
+      promptRef,
+      scheduleComposerFocus,
+      selectedModel,
       selectedProvider,
-      buildNextProviderOptions(selectedProvider, selectedProviderModelOptions, {
-        fastMode: !composerTraitSelection.fastModeEnabled,
-      }),
-      { persistSticky: true },
-    );
-    scheduleComposerFocus();
-  }, [
-    composerTraitSelection.caps.supportsFastMode,
-    composerTraitSelection.fastModeEnabled,
-    scheduleComposerFocus,
-    selectedProvider,
-    selectedProviderModelOptions,
-    setComposerDraftProviderModelOptions,
-    threadId,
-  ]);
+      setComposerCursor,
+      setComposerDraftModelSelection,
+      setComposerDraftProviderModelOptions,
+      setComposerTrigger,
+      setPrompt,
+      setStickyComposerModelSelection,
+      threadId,
+    });
   const applyPromptReplacement = useCallback(
     (
       rangeStart: number,
