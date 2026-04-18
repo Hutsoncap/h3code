@@ -85,6 +85,16 @@ function normalizeTextForIdentityDetection(value: string): string {
     .trim();
 }
 
+function stripTerminalInputControlSequences(data: string): string {
+  return data
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/\u001b[P^_].*?(?:\u001b\\|\u0007|\u009c)/g, "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u001b[@-_]/g, "")
+    .replace(/\u001b./g, "")
+    .replace(/\u001b/g, "");
+}
+
 function normalizeCommandToken(token: string): string {
   const normalizedPath = token.replaceAll("\\", "/");
   const segments = normalizedPath.split("/");
@@ -414,15 +424,14 @@ export function consumeTerminalIdentityInput(
   buffer: string,
   data: string,
 ): { buffer: string; identity: TerminalCommandIdentity | null } {
-  if (data.includes("\u001b")) {
-    return { buffer, identity: null };
-  }
-
+  const sanitizedData = stripTerminalInputControlSequences(data);
   let nextBuffer = buffer;
   let nextIdentity: TerminalCommandIdentity | null = null;
-  for (const char of data) {
+  for (const char of sanitizedData) {
     if (char === "\r" || char === "\n") {
-      nextIdentity = deriveTerminalCommandIdentity(nextBuffer);
+      if (nextBuffer.length > 0) {
+        nextIdentity = deriveTerminalCommandIdentity(nextBuffer);
+      }
       nextBuffer = "";
       continue;
     }
