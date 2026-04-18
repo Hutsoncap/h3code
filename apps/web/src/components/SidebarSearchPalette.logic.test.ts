@@ -106,6 +106,18 @@ describe("SidebarSearchPalette.logic", () => {
     );
   });
 
+  it("treats quote-wrapped blank queries like empty searches", () => {
+    assert.deepEqual(
+      matchSidebarSearchActions(actions, ' "   " ').map((action) => action.id),
+      ["new-thread", "plugins"],
+    );
+    assert.deepEqual(matchSidebarSearchProjects(projects, " '   ' "), []);
+    assert.deepEqual(
+      matchSidebarSearchThreads(threads, ' "" ').map((match) => match.thread.id),
+      ["thread-alpha-composer", "thread-alpha-compose-prompt", "thread-beta-settings"],
+    );
+  });
+
   it("matches projects by repo name before cwd fragments", () => {
     const result = matchSidebarSearchProjects(projects, "alpha");
 
