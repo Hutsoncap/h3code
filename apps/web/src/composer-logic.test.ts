@@ -49,6 +49,18 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("treats quote-wrapped blank /model queries as empty", () => {
+    const text = '/model "   "';
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-model",
+      query: "",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
   it("detects non-model slash commands while typing", () => {
     const text = "/pl";
     const trigger = detectComposerTrigger(text, text.length);
