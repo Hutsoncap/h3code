@@ -11,7 +11,6 @@ import {
   type ProviderPluginDescriptor,
   type ProviderSkillDescriptor,
   type ProviderSkillReference,
-  PROVIDER_DISPLAY_NAMES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type ResolvedKeybindingsConfig,
   type ServerProviderStatus,
@@ -146,6 +145,7 @@ import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBin
 import { useChatComposerFooterBindings } from "./chat/useChatComposerFooterBindings";
 import { useChatMediaBindings } from "./chat/useChatMediaBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
+import { useChatPlanHandoffBindings } from "./chat/useChatPlanHandoffBindings";
 import { useChatSendBindings } from "./chat/useChatSendBindings";
 import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
 import { useChatViewDialogBindings } from "./chat/useChatViewDialogBindings";
@@ -179,11 +179,6 @@ import {
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import {
-  canCreateThreadHandoff,
-  resolveHandoffTargetProvider,
-  resolveThreadHandoffBadgeLabel,
-} from "../lib/threadHandoff";
 import {
   resolveDiffEnvironmentState,
   resolveThreadEnvironmentMode,
@@ -620,16 +615,10 @@ export default function ChatView({
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
   const [expandedWorkGroups, setExpandedWorkGroups] = useState<Record<string, boolean>>({});
-  const [planSidebarOpen, setPlanSidebarOpen] = useState(false);
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [composerCommandPicker, setComposerCommandPicker] = useState<
     null | "fork-target" | "review-target"
   >(null);
-  // Tracks whether the user explicitly dismissed the sidebar for the active turn.
-  const planSidebarDismissedForTurnRef = useRef<string | null>(null);
-  // When set, the thread-change reset effect will open the sidebar instead of closing it.
-  // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
-  const planSidebarOpenOnNextThreadRef = useRef(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const [composerCursor, setComposerCursor] = useState(() =>
@@ -960,25 +949,6 @@ export default function ChatView({
         : null,
     [activePendingDraftAnswers, activePendingUserInput],
   );
-  const handoffBadgeLabel = useMemo(
-    () => (activeThread ? resolveThreadHandoffBadgeLabel(activeThread) : null),
-    [activeThread],
-  );
-  const handoffBadgeSourceProvider = activeThread?.handoff?.sourceProvider ?? null;
-  const handoffBadgeTargetProvider = activeThread?.handoff
-    ? activeThread.modelSelection.provider
-    : null;
-  const handoffTargetProvider = useMemo(
-    () =>
-      activeThread ? resolveHandoffTargetProvider(activeThread.modelSelection.provider) : null,
-    [activeThread],
-  );
-  const handoffActionLabel = useMemo(() => {
-    if (!activeThread) {
-      return "Create handoff thread";
-    }
-    return `Handoff to ${PROVIDER_DISPLAY_NAMES[handoffTargetProvider ?? "codex"]}`;
-  }, [activeThread, handoffTargetProvider]);
   const activePendingIsResponding = activePendingUserInput
     ? respondingUserInputRequestIds.includes(activePendingUserInput.requestId)
     : false;
@@ -1081,6 +1051,31 @@ export default function ChatView({
   const isPreparingWorktree = localDispatch?.preparingWorktree ?? false;
   const hasLiveTurn = phase === "running";
   const isWorking = hasLiveTurn || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const {
+    closePlanSidebar,
+    handleImplementationThreadOpened,
+    handlePlanImplementationStarted,
+    handoffActionLabel,
+    handoffBadgeLabel,
+    handoffBadgeSourceProvider,
+    handoffBadgeTargetProvider,
+    handoffDisabled,
+    handoffTargetProvider,
+    onCreateHandoffThread,
+    openPlanSidebar,
+    planSidebarOpen,
+  } = useChatPlanHandoffBindings({
+    activePlanTurnId: activePlan?.turnId ?? null,
+    activeProjectExists: activeProject !== undefined,
+    activeThread,
+    createThreadHandoff,
+    hasPendingApprovals: pendingApprovals.length > 0,
+    hasPendingUserInput: pendingUserInputs.length > 0,
+    isServerThread,
+    isWorking,
+    navigate,
+    sidebarProposedPlanTurnId: sidebarProposedPlan?.turnId ?? null,
+  });
   const activeTurnLayoutLive = isWorking || !latestTurnSettled;
   const [keepSettledActiveTurnLayout, setKeepSettledActiveTurnLayout] = useState(false);
   const previousActiveTurnLayoutLiveRef = useRef(activeTurnLayoutLive);
@@ -1098,17 +1093,6 @@ export default function ChatView({
   const activeTurnInProgress = activeTurnLayoutLive || keepSettledActiveTurnLayout;
   const isComposerApprovalState = activePendingApproval !== null;
   const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
-  const handoffDisabled = !(
-    activeThread &&
-    activeProject &&
-    isServerThread &&
-    canCreateThreadHandoff({
-      thread: activeThread,
-      isBusy: isWorking,
-      hasPendingApprovals: pendingApprovals.length > 0,
-      hasPendingUserInput: pendingUserInputs.length > 0,
-    })
-  );
   const lastSyncedPendingInputRef = useRef<{
     requestId: string | null;
     questionId: string | null;
@@ -1918,13 +1902,6 @@ export default function ChatView({
 
   useEffect(() => {
     setExpandedWorkGroups({});
-    if (planSidebarOpenOnNextThreadRef.current) {
-      planSidebarOpenOnNextThreadRef.current = false;
-      setPlanSidebarOpen(true);
-    } else {
-      setPlanSidebarOpen(false);
-    }
-    planSidebarDismissedForTurnRef.current = null;
   }, [activeThread?.id]);
 
   useEffect(() => {
@@ -2284,25 +2261,6 @@ export default function ChatView({
     [activeThread, hasLiveTurn, isConnecting, isRevertingCheckpoint, isSendBusy, setThreadError],
   );
 
-  const onCreateHandoffThread = useCallback(async () => {
-    if (!activeThread || handoffDisabled) {
-      return;
-    }
-
-    try {
-      await createThreadHandoff(activeThread);
-    } catch (error) {
-      toastManager.add({
-        type: "error",
-        title: "Could not create handoff thread",
-        description:
-          error instanceof Error
-            ? error.message
-            : "An error occurred while creating the handoff thread.",
-      });
-    }
-  }, [activeThread, createThreadHandoff, handoffDisabled]);
-
   const { dispatchQueuedChatTurn, onSend, removeQueuedComposerTurn, restoreQueuedTurnToComposer } =
     useChatSendBindings({
       activeProject,
@@ -2354,22 +2312,6 @@ export default function ChatView({
       submitPlanFollowUpRef,
       threadId,
     });
-
-  const handlePlanImplementationStarted = useCallback(() => {
-    planSidebarDismissedForTurnRef.current = null;
-    setPlanSidebarOpen(true);
-  }, []);
-
-  const handleImplementationThreadOpened = useCallback(
-    async (nextThreadId: ThreadIdType) => {
-      planSidebarOpenOnNextThreadRef.current = true;
-      await navigate({
-        to: "/$threadId",
-        params: { threadId: nextThreadId },
-      });
-    },
-    [navigate],
-  );
 
   const {
     onEditQueuedComposerTurn,
@@ -2698,7 +2640,7 @@ export default function ChatView({
     onCancelComposerVoiceRecording: cancelComposerVoiceRecording,
     onExpandComposerImage: onExpandImage,
     onImplementPlanInNewThread,
-    onOpenPlanSidebar: () => setPlanSidebarOpen(true),
+    onOpenPlanSidebar: openPlanSidebar,
     onPreviousActivePendingUserInputQuestion,
     onComposerCommandKey,
     onComposerPaste,
@@ -2823,14 +2765,6 @@ export default function ChatView({
             onClick: onMaximizeSurface,
           }
         : null;
-  const closePlanSidebar = useCallback(() => {
-    setPlanSidebarOpen(false);
-    // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
-    const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
-    if (turnKey) {
-      planSidebarDismissedForTurnRef.current = turnKey;
-    }
-  }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
   const { chatThreadPaneProps } = useChatViewShellBindings({
     activeContextWindow,
     activeCumulativeCostUsd,
