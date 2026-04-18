@@ -33,6 +33,10 @@ describe("parseAgentMentionInvocations", () => {
     expect(parsed[0]?.task).toBe("check fn(a, b) and the SQL migration");
     expect(parsed[0]?.definition.kind).toBe("claude-subagent");
   });
+
+  it("ignores mentions whose task is blank after trimming", () => {
+    expect(parseAgentMentionInvocations("Check @spark(   ) and continue", "codex")).toEqual([]);
+  });
 });
 
 describe("buildClaudeSubagentPrompt", () => {
