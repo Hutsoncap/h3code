@@ -40,4 +40,15 @@ describe("LRUCache", () => {
     expect(cache.get("b")).toBe("B");
     expect(cache.get("c")).toBe("C");
   });
+
+  it("treats invalid size estimates as zero", () => {
+    const cache = new LRUCache<string>(2, 10);
+    cache.set("a", "A", Number.NaN);
+    cache.set("b", "B", -5);
+    cache.set("c", "C", 10);
+
+    expect(cache.get("a")).toBeNull();
+    expect(cache.get("b")).toBe("B");
+    expect(cache.get("c")).toBe("C");
+  });
 });

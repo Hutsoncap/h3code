@@ -23,15 +23,17 @@ export class LRUCache<T> {
   }
 
   set(key: string, value: T, approximateSize: number): void {
+    const normalizedApproximateSize =
+      Number.isFinite(approximateSize) && approximateSize > 0 ? approximateSize : 0;
     const existing = this.cache.get(key);
     if (existing) {
       this.totalSize -= existing.approximateSize;
       this.cache.delete(key);
     }
 
-    this.evictIfNeeded(approximateSize);
-    this.cache.set(key, { value, approximateSize });
-    this.totalSize += approximateSize;
+    this.evictIfNeeded(normalizedApproximateSize);
+    this.cache.set(key, { value, approximateSize: normalizedApproximateSize });
+    this.totalSize += normalizedApproximateSize;
   }
 
   clear(): void {
