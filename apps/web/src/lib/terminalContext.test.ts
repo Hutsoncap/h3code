@@ -19,6 +19,7 @@ import {
   insertInlineTerminalContextPlaceholder,
   isTerminalContextExpired,
   materializeInlineTerminalContextPrompt,
+  normalizeTerminalContextSelection,
   removeInlineTerminalContextPlaceholder,
   stripInlineTerminalContextPlaceholders,
   type TerminalContextDraft,
@@ -161,6 +162,23 @@ describe("terminalContext", () => {
           text: "\n\n",
         }),
       ]),
+    ).toBeNull();
+  });
+
+  it("drops quote-wrapped blank terminal ids and labels", () => {
+    expect(
+      normalizeTerminalContextSelection(
+        makeContext({
+          terminalId: ' "   " ',
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      normalizeTerminalContextSelection(
+        makeContext({
+          terminalLabel: " '   ' ",
+        }),
+      ),
     ).toBeNull();
   });
 
