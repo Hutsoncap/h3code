@@ -66,6 +66,21 @@ describe("getAppModelOptions", () => {
       isCustom: true,
     });
   });
+
+  it("ignores quote-wrapped blank selected models", () => {
+    const options = getAppModelOptions("codex", [], ' "   " ');
+
+    expect(options.some((option) => option.slug === '"   "')).toBe(false);
+    expect(options.map((option) => option.slug)).toEqual([
+      "gpt-5.4",
+      "gpt-5.4-mini",
+      "gpt-5.3-codex",
+      "gpt-5.3-codex-spark",
+      "gpt-5.2-codex",
+      "gpt-5.2",
+    ]);
+  });
+
   it("keeps a saved custom provider model available as an exact slug option", () => {
     const options = getAppModelOptions("claudeAgent", ["claude/custom-opus"], "claude/custom-opus");
 
