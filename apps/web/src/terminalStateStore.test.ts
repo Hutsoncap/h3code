@@ -330,6 +330,69 @@ describe("terminalStateStore actions", () => {
     }
   });
 
+  it("treats quote-wrapped blank persisted terminal ids and running ids as absent", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useTerminalStateStore: freshUseTerminalStateStore } =
+        await import("./terminalStateStore");
+      const persistApi = freshUseTerminalStateStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseTerminalStateStore.getState>,
+          ) => ReturnType<typeof freshUseTerminalStateStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          terminalStateByThreadId: {
+            [THREAD_ID]: {
+              entryPoint: "chat",
+              terminalOpen: true,
+              presentationMode: "drawer",
+              workspaceLayout: "both",
+              workspaceActiveTab: "terminal",
+              terminalHeight: 280,
+              terminalIds: [' "   " ', " default "],
+              terminalLabelsById: {},
+              terminalTitleOverridesById: {},
+              terminalCliKindsById: { default: "claude", ' "   " ': "codex" },
+              terminalAttentionStatesById: { default: "attention", ' "   " ': "review" },
+              runningTerminalIds: [' "   " ', " default "],
+              activeTerminalId: ' "   " ',
+              terminalGroups: [createTerminalGroup("group-default", "default")],
+              activeTerminalGroupId: "group-default",
+            },
+          },
+        },
+        freshUseTerminalStateStore.getInitialState(),
+      );
+
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.terminalIds).toEqual(["default"]);
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.runningTerminalIds).toEqual([
+        "default",
+      ]);
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.activeTerminalId).toBe("default");
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.terminalCliKindsById).toEqual({
+        default: "claude",
+      });
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.terminalAttentionStatesById).toEqual({
+        default: "attention",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("ignores quote-wrapped blank live metadata labels", () => {
     const store = useTerminalStateStore.getState();
 
