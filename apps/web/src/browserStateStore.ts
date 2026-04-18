@@ -6,6 +6,7 @@
  */
 
 import type { ThreadBrowserState, ThreadId } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
@@ -66,28 +67,40 @@ function normalizePersistedBrowserState(persistedState: unknown): PersistedBrows
   }
 
   const threadStatesByThreadId = Object.fromEntries(
-    Object.values(decoded.threadStatesByThreadId)
-      .filter((state) => state.threadId.trim().length > 0)
-      .map((state) => [
-        state.threadId,
-        {
-          ...state,
-          tabs: state.tabs.map((tab) => ({ ...tab })),
-        } satisfies ThreadBrowserState,
-      ]),
+    Object.values(decoded.threadStatesByThreadId).flatMap((state) => {
+      const normalizedThreadId = trimOrNull(state.threadId);
+      if (!normalizedThreadId) {
+        return [];
+      }
+
+      return [
+        [
+          normalizedThreadId,
+          {
+            ...state,
+            threadId: normalizedThreadId,
+            tabs: state.tabs.map((tab) => ({ ...tab })),
+          } satisfies ThreadBrowserState,
+        ] as const,
+      ];
+    }),
   );
   const recentHistoryByThreadId = Object.fromEntries(
-    Object.entries(decoded.recentHistoryByThreadId)
-      .map(
-        ([threadId, entries]) =>
-          [
-            threadId.trim(),
-            entries.map((entry) => ({
-              ...entry,
-            })),
-          ] as const,
-      )
-      .filter(([threadId]) => threadId.length > 0),
+    Object.entries(decoded.recentHistoryByThreadId).flatMap(([threadId, entries]) => {
+      const normalizedThreadId = trimOrNull(threadId);
+      if (!normalizedThreadId) {
+        return [];
+      }
+
+      return [
+        [
+          normalizedThreadId,
+          entries.map((entry) => ({
+            ...entry,
+          })),
+        ] as const,
+      ];
+    }),
   );
 
   return {

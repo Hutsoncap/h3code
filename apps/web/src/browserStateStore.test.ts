@@ -66,4 +66,51 @@ describe("browserStateStore selectors", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("drops quote-wrapped blank persisted thread ids", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useBrowserStateStore: freshUseBrowserStateStore } =
+        await import("./browserStateStore");
+      const persistApi = freshUseBrowserStateStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseBrowserStateStore.getState>,
+          ) => ReturnType<typeof freshUseBrowserStateStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          threadStatesByThreadId: {
+            [THREAD_ID]: {
+              threadId: ' "   " ',
+              open: true,
+              activeTabId: null,
+              tabs: [],
+              lastError: null,
+            },
+          },
+          recentHistoryByThreadId: {
+            [' "   " ']: [{ url: "https://example.com", title: "Example", tabId: "tab-1" }],
+          },
+        },
+        freshUseBrowserStateStore.getInitialState(),
+      );
+
+      expect(mergedState.threadStatesByThreadId).toEqual({});
+      expect(mergedState.recentHistoryByThreadId).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
