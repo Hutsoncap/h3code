@@ -73,6 +73,48 @@ it.effect("accepts git.preparePullRequestThread requests", () =>
   }),
 );
 
+it.effect("accepts server.refreshProviders requests with empty bodies", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-refresh-1",
+      body: {
+        _tag: WS_METHODS.serverRefreshProviders,
+      },
+    });
+
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverRefreshProviders);
+  }),
+);
+
+it.effect("accepts server.listWorktrees requests with empty bodies", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-worktrees-1",
+      body: {
+        _tag: WS_METHODS.serverListWorktrees,
+      },
+    });
+
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverListWorktrees);
+  }),
+);
+
+it.effect("rejects server-meta requests with excess body fields", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWebSocketRequest({
+        id: "req-refresh-2",
+        body: {
+          _tag: WS_METHODS.serverRefreshProviders,
+          force: true,
+        },
+      }),
+    );
+
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
 it.effect("rejects websocket requests with excess body fields", () =>
   Effect.gen(function* () {
     const result = yield* Effect.exit(
@@ -113,6 +155,69 @@ it.effect("accepts typed websocket push envelopes with sequence", () =>
   }),
 );
 
+it.effect("accepts server.configUpdated push envelopes", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWsResponse({
+      type: "push",
+      sequence: 2,
+      channel: WS_CHANNELS.serverConfigUpdated,
+      data: {
+        issues: [
+          {
+            kind: "keybindings.invalid-entry",
+            index: 1,
+            message: "Duplicate shortcut",
+          },
+        ],
+        providers: [
+          {
+            provider: "codex",
+            status: "warning",
+            available: false,
+            authStatus: "unknown",
+            checkedAt: "2026-04-17T12:34:56.000Z",
+            message: "Needs login",
+          },
+        ],
+      },
+    });
+
+    if (!("type" in parsed) || parsed.type !== "push") {
+      assert.fail("expected websocket response to decode as a push envelope");
+    }
+
+    assert.strictEqual(parsed.channel, WS_CHANNELS.serverConfigUpdated);
+  }),
+);
+
+it.effect("accepts server.providerStatusesUpdated push envelopes", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWsResponse({
+      type: "push",
+      sequence: 3,
+      channel: WS_CHANNELS.serverProviderStatusesUpdated,
+      data: {
+        providers: [
+          {
+            provider: "claudeAgent",
+            status: "ready",
+            available: true,
+            authStatus: "authenticated",
+            voiceTranscriptionAvailable: false,
+            checkedAt: "2026-04-17T12:35:56.000Z",
+          },
+        ],
+      },
+    });
+
+    if (!("type" in parsed) || parsed.type !== "push") {
+      assert.fail("expected websocket response to decode as a push envelope");
+    }
+
+    assert.strictEqual(parsed.channel, WS_CHANNELS.serverProviderStatusesUpdated);
+  }),
+);
+
 it.effect("accepts git.actionProgress push envelopes", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({
@@ -134,6 +239,54 @@ it.effect("accepts git.actionProgress push envelopes", () =>
     }
 
     assert.strictEqual(parsed.channel, WS_CHANNELS.gitActionProgress);
+  }),
+);
+
+it.effect("rejects server.configUpdated pushes with malformed issues", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWsResponse({
+        type: "push",
+        sequence: 4,
+        channel: WS_CHANNELS.serverConfigUpdated,
+        data: {
+          issues: [
+            {
+              kind: "keybindings.unknown",
+              message: "bad issue",
+            },
+          ],
+          providers: [],
+        },
+      }),
+    );
+
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("rejects server.providerStatusesUpdated pushes with malformed providers", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWsResponse({
+        type: "push",
+        sequence: 5,
+        channel: WS_CHANNELS.serverProviderStatusesUpdated,
+        data: {
+          providers: [
+            {
+              provider: "codex",
+              status: "ready",
+              available: true,
+              authStatus: "signed-in",
+              checkedAt: "2026-04-17T12:35:56.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.strictEqual(result._tag, "Failure");
   }),
 );
 
