@@ -108,11 +108,8 @@ import { useThreadWorkspaceHandoff } from "../hooks/useThreadWorkspaceHandoff";
 import { useComposerCommandMenuItems } from "../hooks/useComposerCommandMenuItems";
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
-import BranchToolbar from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import PlanSidebar from "./PlanSidebar";
-import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
-import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
+import { isMacPlatform, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
 import { projectScriptRuntimeEnv, projectScriptIdFromCommand } from "~/projectScripts";
 import { newCommandId } from "~/lib/utils";
@@ -147,7 +144,6 @@ import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS } from "./chat/ProviderModelPicker";
 import { ChatEmptyThreadState } from "./chat/ChatEmptyThreadState";
 import { ChatExpandedImageDialog } from "./chat/ChatExpandedImageDialog";
-import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerAttachmentBindings } from "./chat/useChatComposerAttachmentBindings";
@@ -157,6 +153,7 @@ import { useChatComposerFooterBindings } from "./chat/useChatComposerFooterBindi
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
 import { useChatTranscriptBindings } from "./chat/useChatTranscriptBindings";
+import { useChatViewShellBindings } from "./chat/useChatViewShellBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
@@ -3544,175 +3541,122 @@ export default function ChatView({
     paneScopeId,
     queuedComposerTurns,
   };
-  const terminalWorkspaceTabProps = {
-    activeTab: terminalState.workspaceActiveTab,
-    isWorking,
-    terminalHasRunningActivity: terminalState.runningTerminalIds.length > 0,
-    terminalCount: terminalState.terminalIds.length,
-    workspaceLayout: terminalState.workspaceLayout,
-    onSelectTab: setTerminalWorkspaceTab,
-  };
-  const chatHeaderProps = {
-    activeThreadId: activeThread.id,
-    activeThreadTitle: activeThread.parentThreadId
-      ? resolveSubagentPresentationForThread({
-          thread: activeThread,
-          threads: allThreads,
-        }).fullLabel
-      : activeThread.title,
+  const activeThreadTitle = activeThread.parentThreadId
+    ? resolveSubagentPresentationForThread({
+        thread: activeThread,
+        threads: allThreads,
+      }).fullLabel
+    : activeThread.title;
+  const chatLayoutAction =
+    surfaceMode === "single" && onSplitSurface
+      ? {
+          kind: "split" as const,
+          label: "Split chat",
+          shortcutLabel: chatSplitShortcutLabel,
+          onClick: onSplitSurface,
+        }
+      : surfaceMode === "split" && isFocusedPane && onMaximizeSurface
+        ? {
+            kind: "maximize" as const,
+            label: "Expand this chat",
+            shortcutLabel: null,
+            onClick: onMaximizeSurface,
+          }
+        : null;
+  const closePlanSidebar = useCallback(() => {
+    setPlanSidebarOpen(false);
+    // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
+    const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
+    if (turnKey) {
+      planSidebarDismissedForTurnRef.current = turnKey;
+    }
+  }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
+  const { chatThreadPaneProps } = useChatViewShellBindings({
+    activeContextWindow,
+    activeCumulativeCostUsd,
+    activePlan,
+    activeProjectCwd: activeProject?.cwd,
     activeProjectName: activeProject?.name,
-    threadBreadcrumbs,
-    hideHandoffControls: terminalWorkspaceTerminalTabActive,
-    isGitRepo,
-    openInCwd: threadWorkspaceCwd,
     activeProjectScripts: activeProject?.scripts,
+    activeProviderStatus,
+    activeRateLimitStatus,
+    activeThreadError: activeThread.error,
+    activeThreadId: activeThread.id,
+    activeThreadTitle,
+    availableEditors,
+    browserOpen: resolvedBrowserOpen,
+    browserToggleShortcutLabel: browserPanelShortcutLabel,
+    canCheckoutPullRequestIntoThread,
+    chatComposerPaneProps,
+    chatLayoutAction,
+    chatTranscriptPaneProps,
+    collapseTerminalWorkspace,
+    diffDisabledReason,
+    diffOpen: resolvedDiffOpen,
+    diffToggleShortcutLabel: diffPanelShortcutLabel,
+    dismissActiveThreadError,
+    envLocked,
+    expandTerminalWorkspace,
+    gitCwd: threadWorkspaceCwd,
+    handoffActionLabel,
+    handoffActionTargetProvider: handoffTargetProvider,
+    handoffBadgeLabel,
+    handoffBadgeSourceProvider,
+    handoffBadgeTargetProvider,
+    handoffBusy,
+    handoffDisabled,
+    hideHandoffControls: terminalWorkspaceTerminalTabActive,
+    isElectron,
+    isGitRepo,
+    keybindings,
+    markdownCwd: threadWorkspaceCwd ?? undefined,
+    onAddProjectScript: saveProjectScript,
+    onClosePlanSidebar: closePlanSidebar,
+    onClosePullRequestDialog: closePullRequestDialog,
+    onComposerFocusRequest: scheduleComposerFocus,
+    onCreateHandoff: onCreateHandoffThread,
+    onDeleteProjectScript: deleteProjectScript,
+    onEnvModeChange,
+    onHandoffToLocal,
+    onHandoffToWorktree,
+    onNavigateToThread,
+    onPreparedPullRequestThread: handlePreparedPullRequestThread,
+    onRunProjectScript: onRunProjectScriptFromHeader,
+    onRuntimeModeChange: handleRuntimeModeChange,
+    onToggleBrowser,
+    onToggleDiff,
+    onToggleTerminal: toggleTerminalVisibility,
+    onUpdateProjectScript: updateProjectScript,
+    openInCwd: threadWorkspaceCwd,
+    openPullRequestDialog,
+    planSidebarOpen,
     preferredScriptId: activeProject
       ? (lastInvokedScriptByProjectId[activeProject.id] ?? null)
       : null,
-    keybindings,
-    availableEditors,
-    terminalAvailable: activeProject !== undefined,
-    terminalOpen: terminalState.terminalOpen,
-    terminalToggleShortcutLabel,
-    browserToggleShortcutLabel: browserPanelShortcutLabel,
-    diffToggleShortcutLabel: diffPanelShortcutLabel,
-    handoffBadgeLabel,
-    handoffActionLabel,
-    handoffDisabled,
-    handoffActionTargetProvider: handoffTargetProvider,
-    handoffBadgeSourceProvider,
-    handoffBadgeTargetProvider,
-    browserOpen: resolvedBrowserOpen,
-    gitCwd: threadWorkspaceCwd,
-    diffOpen: resolvedDiffOpen,
-    diffDisabledReason,
+    pullRequestDialogState,
+    runtimeMode,
+    sidebarProposedPlan,
+    sidebarSide: settings.sidebarSide,
     surfaceMode,
-    chatLayoutAction:
-      surfaceMode === "single" && onSplitSurface
-        ? {
-            kind: "split" as const,
-            label: "Split chat",
-            shortcutLabel: chatSplitShortcutLabel,
-            onClick: onSplitSurface,
-          }
-        : surfaceMode === "split" && isFocusedPane && onMaximizeSurface
-          ? {
-              kind: "maximize" as const,
-              label: "Expand this chat",
-              shortcutLabel: null,
-              onClick: onMaximizeSurface,
-            }
-          : null,
-    onRunProjectScript: onRunProjectScriptFromHeader,
-    onAddProjectScript: saveProjectScript,
-    onUpdateProjectScript: updateProjectScript,
-    onDeleteProjectScript: deleteProjectScript,
-    onToggleTerminal: toggleTerminalVisibility,
-    onToggleDiff,
-    onToggleBrowser,
-    onCreateHandoff: onCreateHandoffThread,
-    onNavigateToThread,
-  };
-  const branchToolbarNode = isGitRepo ? (
-    <BranchToolbar
-      threadId={activeThread.id}
-      onEnvModeChange={onEnvModeChange}
-      envLocked={envLocked}
-      runtimeMode={runtimeMode}
-      onRuntimeModeChange={handleRuntimeModeChange}
-      onHandoffToWorktree={onHandoffToWorktree}
-      onHandoffToLocal={onHandoffToLocal}
-      handoffBusy={handoffBusy}
-      onComposerFocusRequest={scheduleComposerFocus}
-      contextWindow={activeContextWindow}
-      cumulativeCostUsd={activeCumulativeCostUsd}
-      {...(canCheckoutPullRequestIntoThread
-        ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-        : {})}
-    />
-  ) : null;
-  const pullRequestDialogNode = (
-    <ChatPullRequestDialog
-      dialogState={pullRequestDialogState}
-      cwd={activeProject?.cwd ?? null}
-      onClose={closePullRequestDialog}
-      onPrepared={handlePreparedPullRequestThread}
-    />
-  );
-  const workspaceTerminalDrawer = terminalWorkspaceOpen ? (
-    <div
-      aria-hidden={!terminalWorkspaceTerminalTabActive}
-      className={cn(
-        "absolute inset-0 min-h-0 min-w-0 transition-all duration-200 ease-out",
-        terminalWorkspaceTerminalTabActive
-          ? "translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-1 opacity-0",
-      )}
-    >
-      <ThreadTerminalDrawer
-        key={`${activeThread.id}-workspace`}
-        {...terminalDrawerProps}
-        presentationMode="workspace"
-        isVisible={terminalWorkspaceTerminalTabActive}
-        onTogglePresentationMode={
-          terminalState.workspaceLayout === "both" ? collapseTerminalWorkspace : undefined
-        }
-      />
-    </div>
-  ) : null;
-  const planSidebarNode = planSidebarOpen ? (
-    <PlanSidebar
-      activePlan={activePlan}
-      activeProposedPlan={sidebarProposedPlan}
-      markdownCwd={threadWorkspaceCwd ?? undefined}
-      workspaceRoot={activeProject?.cwd ?? undefined}
-      timestampFormat={timestampFormat}
-      onClose={() => {
-        setPlanSidebarOpen(false);
-        // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
-        const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
-        if (turnKey) {
-          planSidebarDismissedForTurnRef.current = turnKey;
-        }
-      }}
-    />
-  ) : null;
-  const terminalDrawerNode =
-    !terminalState.terminalOpen || !activeProject || terminalWorkspaceOpen ? null : (
-      <ThreadTerminalDrawer
-        key={activeThread.id}
-        {...terminalDrawerProps}
-        presentationMode="drawer"
-        onTogglePresentationMode={expandTerminalWorkspace}
-      />
-    );
+    terminalAvailable: activeProject !== undefined,
+    terminalCount: terminalState.terminalIds.length,
+    terminalDrawerProps,
+    terminalOpen: terminalState.terminalOpen,
+    terminalRunningCount: terminalState.runningTerminalIds.length,
+    terminalToggleShortcutLabel,
+    terminalWorkspaceActiveTab: terminalState.workspaceActiveTab,
+    terminalWorkspaceLayout: terminalState.workspaceLayout,
+    terminalWorkspaceOpen,
+    terminalWorkspaceTerminalTabActive,
+    onSelectTerminalWorkspaceTab: setTerminalWorkspaceTab,
+    threadBreadcrumbs,
+    timestampFormat,
+    workspaceRoot: activeProject?.cwd ?? undefined,
+  });
 
   return (
     <>
-      <ChatViewShell
-        chatThreadPaneProps={{
-          bodyProps: {
-            branchToolbar: branchToolbarNode,
-            chatComposerPaneProps,
-            chatTranscriptPaneProps,
-            planSidebar: planSidebarNode,
-            pullRequestDialog: pullRequestDialogNode,
-            terminalWorkspaceOpen,
-            terminalWorkspaceTerminalTabActive,
-            workspaceTerminalDrawer,
-          },
-          headerProps: chatHeaderProps,
-          isElectron: isElectron,
-          rateLimitStatus: activeRateLimitStatus,
-          providerStatus: activeProviderStatus,
-          sidebarSide: settings.sidebarSide,
-          terminalDrawer: terminalDrawerNode,
-          terminalWorkspaceOpen: terminalWorkspaceOpen,
-          terminalWorkspaceTabProps,
-          threadError: activeThread.error,
-          onDismissThreadError: dismissActiveThreadError,
-        }}
-      />
+      <ChatViewShell chatThreadPaneProps={chatThreadPaneProps} />
 
       <ChatViewDialogs
         composerSlashStatusDialogProps={{
