@@ -22,8 +22,15 @@ function decodeProviderKind(
   providerName: string,
   operation: string,
 ): Effect.Effect<ProviderKind, ProviderSessionDirectoryPersistenceError> {
-  if (providerName === "codex" || providerName === "claudeAgent") {
-    return Effect.succeed(providerName);
+  const normalized = providerName
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s_-]+/g, "");
+  if (normalized === "codex") {
+    return Effect.succeed("codex");
+  }
+  if (normalized === "claudeagent" || normalized === "claudecode") {
+    return Effect.succeed("claudeAgent");
   }
   return Effect.fail(
     new ProviderSessionDirectoryPersistenceError({
@@ -35,6 +42,14 @@ function decodeProviderKind(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeOptionalNonEmptyString(value: string | null | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function mergeRuntimePayload(
@@ -92,15 +107,28 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
     }
 
     const now = new Date().toISOString();
+    const existingProvider =
+      existingRuntime === undefined
+        ? Option.none<ProviderKind>()
+        : yield* decodeProviderKind(
+            existingRuntime.providerName,
+            "ProviderSessionDirectory.upsert",
+          ).pipe(Effect.option);
     const providerChanged =
-      existingRuntime !== undefined && existingRuntime.providerName !== binding.provider;
+      existingRuntime !== undefined &&
+      Option.match(existingProvider, {
+        onNone: () => existingRuntime.providerName !== binding.provider,
+        onSome: (provider) => provider !== binding.provider,
+      });
     yield* repository
       .upsert({
         threadId: resolvedThreadId,
         providerName: binding.provider,
         adapterKey:
-          binding.adapterKey ??
-          (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),
+          normalizeOptionalNonEmptyString(binding.adapterKey) ??
+          (providerChanged
+            ? binding.provider
+            : (normalizeOptionalNonEmptyString(existingRuntime?.adapterKey) ?? binding.provider)),
         runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
         status: binding.status ?? existingRuntime?.status ?? "running",
         lastSeenAt: now,

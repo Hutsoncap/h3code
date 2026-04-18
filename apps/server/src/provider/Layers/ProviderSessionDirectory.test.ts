@@ -163,6 +163,87 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
       }
     }));
 
+  it("normalizes legacy persisted provider names before comparing provider changes", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const runtimeRepository = yield* ProviderSessionRuntimeRepository;
+      const threadId = ThreadId.makeUnsafe("thread-legacy-provider");
+
+      yield* runtimeRepository.upsert({
+        threadId,
+        providerName: "  Claude-Code ",
+        adapterKey: "claude-custom",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: new Date().toISOString(),
+        resumeCursor: null,
+        runtimePayload: null,
+      });
+
+      const provider = yield* directory.getProvider(threadId);
+      assert.equal(provider, "claudeAgent");
+
+      yield* directory.upsert({
+        provider: "claudeAgent",
+        threadId,
+      });
+
+      const binding = yield* directory.getBinding(threadId);
+      assertSome(binding, {
+        threadId,
+        provider: "claudeAgent",
+      });
+      if (Option.isSome(binding)) {
+        assert.equal(binding.value.adapterKey, "claude-custom");
+      }
+
+      const runtime = yield* runtimeRepository.getByThreadId({ threadId });
+      assert.equal(Option.isSome(runtime), true);
+      if (Option.isSome(runtime)) {
+        assert.equal(runtime.value.providerName, "claudeAgent");
+        assert.equal(runtime.value.adapterKey, "claude-custom");
+      }
+    }));
+
+  it("falls back to the provider key when persisted or explicit adapter keys are blank", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const runtimeRepository = yield* ProviderSessionRuntimeRepository;
+      const threadId = ThreadId.makeUnsafe("thread-blank-adapter");
+
+      yield* runtimeRepository.upsert({
+        threadId,
+        providerName: "codex",
+        adapterKey: "   ",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: new Date().toISOString(),
+        resumeCursor: null,
+        runtimePayload: null,
+      });
+
+      yield* directory.upsert({
+        provider: "codex",
+        threadId,
+        adapterKey: "   ",
+      });
+
+      const binding = yield* directory.getBinding(threadId);
+      assertSome(binding, {
+        threadId,
+        provider: "codex",
+      });
+      if (Option.isSome(binding)) {
+        assert.equal(binding.value.adapterKey, "codex");
+      }
+
+      const runtime = yield* runtimeRepository.getByThreadId({ threadId });
+      assert.equal(Option.isSome(runtime), true);
+      if (Option.isSome(runtime)) {
+        assert.equal(runtime.value.adapterKey, "codex");
+      }
+    }));
+
   it("rehydrates persisted mappings across layer restart", () =>
     Effect.gen(function* () {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "t3-provider-directory-"));
