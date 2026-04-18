@@ -114,4 +114,22 @@ describe("projectScripts helpers", () => {
       T3CODE_PROJECT_ROOT: "/repo",
     });
   });
+
+  it("ignores quote-wrapped blank worktree paths for cwd and runtime env resolution", () => {
+    expect(
+      projectScriptCwd({
+        project: { cwd: "/repo" },
+        worktreePath: ' "   " ',
+      }),
+    ).toBe("/repo");
+
+    expect(
+      projectScriptRuntimeEnv({
+        project: { cwd: "/repo" },
+        worktreePath: " '   ' ",
+      }),
+    ).toEqual({
+      T3CODE_PROJECT_ROOT: "/repo",
+    });
+  });
 });
