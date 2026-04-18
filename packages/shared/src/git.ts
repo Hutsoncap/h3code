@@ -12,6 +12,14 @@ const TEMP_WORKTREE_BRANCH_PATTERNS = TEMP_WORKTREE_BRANCH_PREFIXES.map(
   (prefix) => new RegExp(`^${prefix}\\/[0-9a-f]{8}$`),
 );
 
+function normalizeTemporaryWorktreeBranch(branch: string): string {
+  return branch
+    .trim()
+    .toLowerCase()
+    .replace(/^refs\/heads\//, "")
+    .replace(/['"`]/g, "");
+}
+
 export function sanitizeBranchFragment(raw: string): string {
   const normalized = raw
     .trim()
@@ -71,7 +79,7 @@ export function resolveAutoFeatureBranchName(
 }
 
 export function isTemporaryWorktreeBranch(branch: string): boolean {
-  const normalized = branch.trim().toLowerCase();
+  const normalized = normalizeTemporaryWorktreeBranch(branch);
   return TEMP_WORKTREE_BRANCH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
@@ -81,11 +89,7 @@ export function buildTemporaryWorktreeBranchName(): string {
 }
 
 export function stripTemporaryWorktreeBranchPrefix(branch: string): string {
-  const normalized = branch
-    .trim()
-    .toLowerCase()
-    .replace(/^refs\/heads\//, "")
-    .replace(/['"`]/g, "");
+  const normalized = normalizeTemporaryWorktreeBranch(branch);
 
   for (const prefix of TEMP_WORKTREE_BRANCH_PREFIXES) {
     const prefixWithSlash = `${prefix}/`;

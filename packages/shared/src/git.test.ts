@@ -21,7 +21,9 @@ describe("isTemporaryWorktreeBranch", () => {
 
   it("matches legacy temporary worktree branches during the alias window", () => {
     expect(isTemporaryWorktreeBranch("dpcode/deadbeef")).toBe(true);
+    expect(isTemporaryWorktreeBranch("DpCoDe/deadbeef")).toBe(true);
     expect(isTemporaryWorktreeBranch(" dpcode/DEADBEEF ")).toBe(true);
+    expect(isTemporaryWorktreeBranch("refs/heads/DPCode/DEADBEEF")).toBe(true);
   });
 
   it("rejects semantic branch names", () => {
@@ -37,6 +39,9 @@ describe("stripTemporaryWorktreeBranchPrefix", () => {
 
   it("strips the legacy temporary worktree prefix", () => {
     expect(stripTemporaryWorktreeBranchPrefix("dpcode/Feature-Demo")).toBe("feature-demo");
+    expect(stripTemporaryWorktreeBranchPrefix("refs/heads/DPCode/Feature-Demo")).toBe(
+      "feature-demo",
+    );
   });
 
   it("leaves semantic branches intact", () => {
