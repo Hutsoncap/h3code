@@ -21,6 +21,8 @@ export interface EditorOption {
   readonly Icon: Icon;
 }
 
+const EDITOR_LABELS = new Map<string, string>(EDITORS.map((editor) => [editor.id, editor.label]));
+
 const EDITOR_ICONS: Partial<Record<EditorId, Icon>> = {
   cursor: CursorIcon,
   trae: OpenCodeIcon,
@@ -33,14 +35,27 @@ const EDITOR_ICONS: Partial<Record<EditorId, Icon>> = {
   "file-manager": FolderClosedIcon,
 };
 
+function humanizeEditorId(editorId: string): string {
+  return editorId
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 // Build labels from the shared catalog so newly supported editors appear without
 // duplicating the editor list across multiple UI components.
 export function resolveEditorLabel(editorId: EditorId, platform: string): string {
+  const normalizedPlatform = platform.trim();
   if (editorId === "file-manager") {
-    return isMacPlatform(platform) ? "Finder" : isWindowsPlatform(platform) ? "Explorer" : "Files";
+    return isMacPlatform(normalizedPlatform)
+      ? "Finder"
+      : isWindowsPlatform(normalizedPlatform)
+        ? "Explorer"
+        : "Files";
   }
 
-  return EDITORS.find((editor) => editor.id === editorId)?.label ?? editorId;
+  return EDITOR_LABELS.get(editorId) ?? humanizeEditorId(editorId);
 }
 
 // Keep the header/picker resilient even when a brand-specific icon does not exist yet.
