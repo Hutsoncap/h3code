@@ -11,6 +11,10 @@ export default mergeConfig(
       // is running under CI load.
       testTimeout: 45_000,
       hookTimeout: 45_000,
+      // CI has been intermittently timing out while terminating Vitest fork
+      // workers after the server suite completes. Running server test files
+      // serially in CI trades some speed for deterministic worker teardown.
+      fileParallelism: !process.env.CI,
     },
   }),
 );
