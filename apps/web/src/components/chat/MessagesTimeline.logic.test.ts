@@ -204,4 +204,14 @@ describe("resolveAssistantMessageCopyState", () => {
       }),
     ).toEqual({ text: null, visible: false });
   });
+
+  it("hides copy for quote-wrapped blank responses", () => {
+    expect(
+      resolveAssistantMessageCopyState({
+        text: ' "   " ',
+        showCopyButton: true,
+        streaming: false,
+      }),
+    ).toEqual({ text: null, visible: false });
+  });
 });

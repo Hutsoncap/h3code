@@ -1,3 +1,4 @@
+import { trimOrNull } from "@t3tools/shared/model";
 import { normalizeCompactToolLabel as normalizeCompactToolLabelValue } from "../../lib/toolCallLabel";
 
 export interface TimelineDurationMessage {
@@ -40,7 +41,7 @@ export function resolveAssistantMessageCopyState({
   showCopyButton: boolean;
   streaming: boolean;
 }) {
-  const normalizedText = text?.trim() ? text : null;
+  const normalizedText = trimOrNull(text) ? text : null;
   return {
     text: normalizedText,
     visible: showCopyButton && normalizedText !== null && !streaming,
