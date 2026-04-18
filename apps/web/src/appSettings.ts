@@ -161,6 +161,7 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     chatFontSizePx: normalizeChatFontSizePx(settings.chatFontSizePx),
     customCodexModels: normalizeCustomModelSlugs(settings.customCodexModels, "codex"),
     customClaudeModels: normalizeCustomModelSlugs(settings.customClaudeModels, "claudeAgent"),
+    uiFontFamily: trimOrNull(settings.uiFontFamily) ?? "",
   };
 }
 
