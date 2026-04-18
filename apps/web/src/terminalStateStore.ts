@@ -62,7 +62,9 @@ interface ThreadTerminalState {
 const TERMINAL_STATE_STORAGE_KEY = "h3code:terminal-state:v1";
 
 function normalizeTerminalIds(terminalIds: string[]): string[] {
-  const ids = [...new Set(terminalIds.map((id) => id.trim()).filter((id) => id.length > 0))];
+  const ids = [
+    ...new Set(terminalIds.map((id) => trimOrNull(id) ?? "").filter((id) => id.length > 0)),
+  ];
   return ids.length > 0 ? ids : [DEFAULT_THREAD_TERMINAL_ID];
 }
 
@@ -73,7 +75,7 @@ function normalizeRunningTerminalIds(
   if (runningTerminalIds.length === 0) return [];
   const validTerminalIdSet = new Set(terminalIds);
   return [...new Set(runningTerminalIds)]
-    .map((id) => id.trim())
+    .map((id) => trimOrNull(id) ?? "")
     .filter((id) => id.length > 0 && validTerminalIdSet.has(id));
 }
 
