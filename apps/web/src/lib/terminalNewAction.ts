@@ -16,8 +16,9 @@ function resolveActiveTerminalGroup(
   input: ResolveTerminalNewActionInput,
 ): ThreadTerminalGroup | null {
   const normalizedActiveTerminalId = input.activeTerminalId.trim();
+  const normalizedActiveTerminalGroupId = input.activeTerminalGroupId.trim();
   return (
-    input.terminalGroups.find((group) => group.id === input.activeTerminalGroupId) ??
+    input.terminalGroups.find((group) => group.id === normalizedActiveTerminalGroupId) ??
     input.terminalGroups.find((group) =>
       collectTerminalIdsFromLayout(group.layout).includes(normalizedActiveTerminalId),
     ) ??
