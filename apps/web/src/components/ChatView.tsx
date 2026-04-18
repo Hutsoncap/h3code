@@ -47,9 +47,9 @@ import {
   supportsSkillDiscovery,
 } from "~/lib/providerDiscoveryReactQuery";
 import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
-import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
+import { serverConfigQueryOptions } from "~/lib/serverReactQuery";
 import { isElectron } from "../env";
-import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
+import { parseDiffRouteSearch } from "../diffRouteSearch";
 import {
   humanizeSubagentStatus,
   resolveSubagentPresentationForThread,
@@ -107,7 +107,6 @@ import { useComposerCommandMenuItems } from "../hooks/useComposerCommandMenuItem
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { toastManager } from "./ui/toast";
-import { projectScriptRuntimeEnv } from "~/projectScripts";
 import { newCommandId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
@@ -154,6 +153,7 @@ import { useChatViewPaneBindings } from "./chat/useChatViewPaneBindings";
 import { useChatViewShellBindings } from "./chat/useChatViewShellBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
+import { useChatSurfaceBindings } from "./chat/useChatSurfaceBindings";
 import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatTerminalShortcutBindings } from "./chat/useChatTerminalShortcutBindings";
@@ -1512,113 +1512,35 @@ export default function ChatView({
   const keybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
   const availableEditors = serverConfigQuery.data?.availableEditors ?? EMPTY_AVAILABLE_EDITORS;
   const providerStatuses = serverConfigQuery.data?.providers ?? EMPTY_PROVIDER_STATUSES;
-  const activeProviderStatus = useMemo(
-    () => providerStatuses.find((status) => status.provider === selectedProvider) ?? null,
-    [selectedProvider, providerStatuses],
-  );
-  const voiceProviderStatus = useMemo(
-    () => providerStatuses.find((status) => status.provider === "codex") ?? null,
-    [providerStatuses],
-  );
-  const refreshVoiceStatus = useCallback(() => {
-    const api = readNativeApi();
-    if (!api) return;
-    void api.server
-      .refreshProviders()
-      .then((result) => {
-        queryClient.setQueryData(serverQueryKeys.config(), (current) =>
-          current ? { ...current, providers: result.providers } : current,
-        );
-      })
-      .catch((error) => {
-        toastManager.add({
-          type: "error",
-          title: "Unable to refresh provider status",
-          description:
-            error instanceof Error ? error.message : "Unknown error refreshing provider status.",
-        });
-      });
-  }, [queryClient, toastManager]);
-  const activeProjectCwd = activeProject?.cwd ?? null;
-  const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
-  const hasNativeUserMessages = useMemo(
-    () =>
-      activeThread?.messages.some(
-        (message) => message.role === "user" && message.source === "native",
-      ) ?? false,
-    [activeThread?.messages],
-  );
-  const threadTerminalRuntimeEnv = useMemo(() => {
-    if (!activeProjectCwd) return {};
-    return projectScriptRuntimeEnv({
-      project: {
-        cwd: activeProjectCwd,
-      },
-      worktreePath: activeThreadWorktreePath,
-    });
-  }, [activeProjectCwd, activeThreadWorktreePath]);
-  // Default true while loading to avoid toolbar flicker.
-  const isGitRepo = branchesQuery.data?.isRepo ?? true;
-  const onToggleDiff = useCallback(() => {
-    if (diffEnvironmentPending && !diffOpen) {
-      return;
-    }
-    if (onToggleDiffPanel) {
-      onToggleDiffPanel();
-      return;
-    }
-    void navigate({
-      to: "/$threadId",
-      params: { threadId },
-      replace: true,
-      search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
-        return diffOpen
-          ? { ...rest, panel: undefined, diff: undefined }
-          : { ...rest, panel: "diff", diff: "1" };
-      },
-    });
-  }, [diffEnvironmentPending, diffOpen, navigate, onToggleDiffPanel, threadId]);
-  const onToggleBrowser = useCallback(() => {
-    if (onToggleBrowserPanel) {
-      onToggleBrowserPanel();
-      return;
-    }
-    void navigate({
-      to: "/$threadId",
-      params: { threadId },
-      replace: true,
-      search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
-        return browserOpen ? { ...rest, panel: undefined } : { ...rest, panel: "browser" };
-      },
-    });
-  }, [browserOpen, navigate, onToggleBrowserPanel, threadId]);
-
-  const envLocked = Boolean(
-    activeThread &&
-    (activeThread.messages.length > 0 ||
-      (activeThread.session !== null && activeThread.session.status !== "closed")),
-  );
-  const setThreadError = useCallback(
-    (targetThreadId: ThreadId | null, error: string | null) => {
-      if (!targetThreadId) return;
-      if (useStore.getState().threads.some((thread) => thread.id === targetThreadId)) {
-        setStoreThreadError(targetThreadId, error);
-        return;
-      }
-      setLocalDraftErrorsByThreadId((existing) => {
-        if ((existing[targetThreadId] ?? null) === error) {
-          return existing;
-        }
-        return {
-          ...existing,
-          [targetThreadId]: error,
-        };
-      });
-    },
-    [setStoreThreadError],
-  );
+  const {
+    activeProviderStatus,
+    dismissActiveThreadError,
+    envLocked,
+    hasNativeUserMessages,
+    isGitRepo,
+    onToggleBrowser,
+    onToggleDiff,
+    refreshVoiceStatus,
+    setThreadError,
+    threadTerminalRuntimeEnv,
+    voiceProviderStatus,
+  } = useChatSurfaceBindings({
+    activeProjectCwd: activeProject?.cwd ?? null,
+    activeThread,
+    branchesIsRepo: branchesQuery.data?.isRepo,
+    browserOpen,
+    diffEnvironmentPending,
+    diffOpen,
+    navigate,
+    onToggleBrowserPanel,
+    onToggleDiffPanel,
+    providerStatuses,
+    queryClient,
+    selectedProvider,
+    setLocalDraftErrorsByThreadId,
+    setStoreThreadError,
+    threadId,
+  });
 
   const {
     onAdvanceActivePendingUserInput,
@@ -2471,10 +2393,6 @@ export default function ChatView({
     setExpandedWorkGroups,
     threadId,
   });
-  const dismissActiveThreadError = useCallback(() => {
-    if (!activeThread) return;
-    setThreadError(activeThread.id, null);
-  }, [activeThread, setThreadError]);
   const composerPlanTitle =
     showPlanFollowUpPrompt && activeProposedPlan
       ? (proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null)
