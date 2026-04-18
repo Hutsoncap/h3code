@@ -2,6 +2,7 @@ import { ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { collectTerminalIdsFromLayout } from "./terminalPaneLayout";
+import { createTerminalGroup } from "./terminalPaneLayout";
 import { selectThreadTerminalState, useTerminalStateStore } from "./terminalStateStore";
 
 const THREAD_ID = ThreadId.makeUnsafe("thread-1");
@@ -266,6 +267,64 @@ describe("terminalStateStore actions", () => {
       );
 
       expect(mergedState.terminalStateByThreadId).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("treats quote-wrapped blank persisted labels and title overrides as absent", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useTerminalStateStore: freshUseTerminalStateStore } =
+        await import("./terminalStateStore");
+      const persistApi = freshUseTerminalStateStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseTerminalStateStore.getState>,
+          ) => ReturnType<typeof freshUseTerminalStateStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          terminalStateByThreadId: {
+            [THREAD_ID]: {
+              entryPoint: "chat",
+              terminalOpen: true,
+              presentationMode: "drawer",
+              workspaceLayout: "both",
+              workspaceActiveTab: "terminal",
+              terminalHeight: 280,
+              terminalIds: ["default"],
+              terminalLabelsById: { default: ' "   " ' },
+              terminalTitleOverridesById: { default: " '' " },
+              terminalCliKindsById: {},
+              terminalAttentionStatesById: {},
+              runningTerminalIds: [],
+              activeTerminalId: "default",
+              terminalGroups: [createTerminalGroup("group-default", "default")],
+              activeTerminalGroupId: "group-default",
+            },
+          },
+        },
+        freshUseTerminalStateStore.getInitialState(),
+      );
+
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.terminalLabelsById).toEqual({
+        default: "Terminal 1",
+      });
+      expect(mergedState.terminalStateByThreadId[THREAD_ID]?.terminalTitleOverridesById).toEqual(
+        {},
+      );
     } finally {
       vi.unstubAllGlobals();
     }

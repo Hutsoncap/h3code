@@ -6,6 +6,7 @@
  */
 
 import { type TerminalActivityState, type TerminalCliKind } from "@t3tools/shared/terminalThreads";
+import { trimOrNull } from "@t3tools/shared/model";
 import type { ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -82,7 +83,7 @@ function normalizeTerminalLabels(
 ): Record<string, string> {
   const validTerminalIdSet = new Set(terminalIds);
   const normalizedEntries = Object.entries(terminalLabelsById ?? {})
-    .map(([terminalId, label]) => [terminalId.trim(), label.trim()] as const)
+    .map(([terminalId, label]) => [trimOrNull(terminalId) ?? "", trimOrNull(label) ?? ""] as const)
     .filter(([terminalId, label]) => terminalId.length > 0 && label.length > 0)
     .filter(([terminalId]) => validTerminalIdSet.has(terminalId))
     .toSorted(([leftId], [rightId]) => leftId.localeCompare(rightId));
@@ -95,7 +96,10 @@ function normalizeTerminalTitleOverrides(
 ): Record<string, string> {
   const validTerminalIdSet = new Set(terminalIds);
   const normalizedEntries = Object.entries(terminalTitleOverridesById ?? {})
-    .map(([terminalId, titleOverride]) => [terminalId.trim(), titleOverride.trim()] as const)
+    .map(
+      ([terminalId, titleOverride]) =>
+        [trimOrNull(terminalId) ?? "", trimOrNull(titleOverride) ?? ""] as const,
+    )
     .filter(
       ([terminalId, titleOverride]) =>
         terminalId.length > 0 && titleOverride.length > 0 && validTerminalIdSet.has(terminalId),
@@ -160,8 +164,8 @@ function resolveTerminalDisplayTitle(options: {
   terminalTitleOverridesById: Record<string, string>;
 }): string {
   return (
-    options.terminalTitleOverridesById[options.terminalId]?.trim() ||
-    options.terminalLabelsById[options.terminalId]?.trim() ||
+    trimOrNull(options.terminalTitleOverridesById[options.terminalId]) ||
+    trimOrNull(options.terminalLabelsById[options.terminalId]) ||
     ""
   );
 }
@@ -203,8 +207,8 @@ function ensureTerminalLabels(options: {
 }): Record<string, string> {
   const nextLabelsById = { ...options.terminalLabelsById };
   for (const terminalId of options.terminalIds) {
-    const existingLabel = nextLabelsById[terminalId]?.trim();
-    if (existingLabel && existingLabel.length > 0) {
+    const existingLabel = trimOrNull(nextLabelsById[terminalId]);
+    if (existingLabel) {
       continue;
     }
     nextLabelsById[terminalId] = createUniqueTerminalTitle({
