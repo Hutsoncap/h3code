@@ -92,4 +92,77 @@ describe("workspaceStore persistence", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("treats quote-wrapped blank persisted workspace titles as absent", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useWorkspaceStore: freshUseWorkspaceStore } = await import("./workspaceStore");
+      const persistApi = freshUseWorkspaceStore.persist as unknown as {
+        getOptions: () => {
+          merge: (
+            persistedState: unknown,
+            currentState: ReturnType<typeof freshUseWorkspaceStore.getState>,
+          ) => ReturnType<typeof freshUseWorkspaceStore.getState>;
+        };
+      };
+
+      const mergedState = persistApi.getOptions().merge(
+        {
+          homeDir: null,
+          workspacePages: [
+            {
+              id: "workspace-1",
+              title: ' "   " ',
+              layoutPresetId: "single-terminal",
+              createdAt: "2026-04-05T10:00:00.000Z",
+              updatedAt: "2026-04-05T10:00:00.000Z",
+            },
+          ],
+        },
+        freshUseWorkspaceStore.getInitialState(),
+      );
+
+      expect(mergedState.workspacePages).toEqual([
+        {
+          id: "workspace-1",
+          title: "Workspace 1",
+          layoutPresetId: "single",
+          createdAt: "2026-04-05T10:00:00.000Z",
+          updatedAt: "2026-04-05T10:00:00.000Z",
+        },
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("treats quote-wrapped blank rename requests as absent", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage);
+    vi.resetModules();
+    try {
+      const { useWorkspaceStore: freshUseWorkspaceStore } = await import("./workspaceStore");
+
+      const workspaceId = freshUseWorkspaceStore.getState().workspacePages[0]!.id;
+      freshUseWorkspaceStore.getState().renameWorkspace(workspaceId, ' "   " ');
+
+      expect(freshUseWorkspaceStore.getState().workspacePages[0]?.title).toBe("Workspace 1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
