@@ -1,6 +1,7 @@
 // Purpose: Scores sidebar palette results for actions, projects, and chat threads.
 // Keeps search local and deterministic so the palette can rank title hits above
 // message-content hits while still surfacing a useful snippet for chat matches.
+import { trimOrNull } from "@t3tools/shared/model";
 import { basenameOfPath } from "../vscode-icons";
 
 export interface SidebarSearchAction {
@@ -50,11 +51,13 @@ export interface SidebarSearchThreadMatch {
 }
 
 function normalizeText(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
+  const normalized = trimOrNull(value);
+  return normalized ? normalized.replaceAll(/\s+/g, " ").toLowerCase() : "";
 }
 
 function normalizeDisplayText(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ");
+  const normalized = trimOrNull(value);
+  return normalized ? normalized.replaceAll(/\s+/g, " ") : "";
 }
 
 function tokenizeQuery(value: string): string[] {
