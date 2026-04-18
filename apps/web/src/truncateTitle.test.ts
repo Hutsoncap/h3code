@@ -25,4 +25,11 @@ describe("truncateTitle", () => {
     expect(truncateTitle("abcdefghij", 0)).toBe("");
     expect(truncateTitle("abcdefghij", -1)).toBe("");
   });
+
+  it("falls back to the default budget for non-finite values", () => {
+    const title = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+
+    expect(truncateTitle(title, Number.NaN)).toBe(truncateTitle(title));
+    expect(truncateTitle(title, Number.POSITIVE_INFINITY)).toBe(truncateTitle(title));
+  });
 });
