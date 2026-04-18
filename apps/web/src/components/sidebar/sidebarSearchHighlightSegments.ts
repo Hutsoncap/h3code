@@ -1,3 +1,5 @@
+import { trimOrNull } from "@t3tools/shared/model";
+
 export interface SidebarSearchHighlightSegment {
   highlighted: boolean;
   key: string;
@@ -5,8 +7,12 @@ export interface SidebarSearchHighlightSegment {
 }
 
 function tokenizeHighlightQuery(query: string): string[] {
-  const tokens = query
-    .trim()
+  const normalizedQuery = trimOrNull(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const tokens = normalizedQuery
     .toLowerCase()
     .split(/\s+/)
     .filter((token) => token.length > 0)
