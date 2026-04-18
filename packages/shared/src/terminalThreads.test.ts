@@ -152,6 +152,33 @@ describe("terminalThreads", () => {
       });
     });
 
+    it("treats quote-wrapped blank titles as absent before falling back", () => {
+      expect(
+        resolveTerminalVisualIdentity({
+          fallbackTitle: GENERIC_TERMINAL_THREAD_TITLE,
+          title: ' "   " ',
+        }),
+      ).toEqual({
+        cliKind: null,
+        iconKey: "terminal",
+        state: "idle",
+        title: GENERIC_TERMINAL_THREAD_TITLE,
+      });
+
+      expect(
+        resolveTerminalVisualIdentity({
+          cliKind: "claude",
+          fallbackTitle: GENERIC_TERMINAL_THREAD_TITLE,
+          title: " '   ' ",
+        }),
+      ).toEqual({
+        cliKind: "claude",
+        iconKey: "claude",
+        state: "idle",
+        title: "Claude Code",
+      });
+    });
+
     it("uses provider defaults when cli kind is known or inferred", () => {
       expect(
         resolveTerminalVisualIdentity({
