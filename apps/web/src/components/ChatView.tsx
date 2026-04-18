@@ -140,13 +140,7 @@ import {
   useComposerDraftStore,
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
-import {
-  formatTerminalContextLabel,
-  insertInlineTerminalContextPlaceholder,
-  removeInlineTerminalContextPlaceholder,
-  type TerminalContextDraft,
-  type TerminalContextSelection,
-} from "../lib/terminalContext";
+import { formatTerminalContextLabel, type TerminalContextDraft } from "../lib/terminalContext";
 import { deriveLatestContextWindowSnapshot, deriveCumulativeCostUsd } from "../lib/contextWindow";
 import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
 import {
@@ -176,6 +170,7 @@ import { useChatComposerAttachmentBindings } from "./chat/useChatComposerAttachm
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
+import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
@@ -730,29 +725,6 @@ export default function ChatView({
   const sendInFlightRef = useRef(false);
   const terminalOpenByThreadRef = useRef<Record<string, boolean>>({});
   const activatedThreadIdRef = useRef<ThreadId | null>(null);
-
-  const removeComposerTerminalContextFromDraft = useCallback(
-    (contextId: string) => {
-      const contextIndex = composerTerminalContexts.findIndex(
-        (context) => context.id === contextId,
-      );
-      if (contextIndex < 0) {
-        return;
-      }
-      const nextPrompt = removeInlineTerminalContextPlaceholder(promptRef.current, contextIndex);
-      promptRef.current = nextPrompt.prompt;
-      setPrompt(nextPrompt.prompt);
-      removeComposerDraftTerminalContext(threadId, contextId);
-      setComposerCursor(nextPrompt.cursor);
-      setComposerTrigger(
-        detectComposerTrigger(
-          nextPrompt.prompt,
-          expandCollapsedComposerCursor(nextPrompt.prompt, nextPrompt.cursor),
-        ),
-      );
-    },
-    [composerTerminalContexts, removeComposerDraftTerminalContext, setPrompt, threadId],
-  );
 
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
@@ -1929,48 +1901,20 @@ export default function ChatView({
     onTranscriptReady: appendVoiceTranscriptToComposer,
     refreshVoiceStatus,
   });
-  const addTerminalContextToDraft = useCallback(
-    (selection: TerminalContextSelection) => {
-      if (!activeThread) {
-        return;
-      }
-      const snapshot = composerEditorRef.current?.readSnapshot() ?? {
-        value: promptRef.current,
-        cursor: composerCursor,
-        expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
-        terminalContextIds: composerTerminalContexts.map((context) => context.id),
-      };
-      const insertion = insertInlineTerminalContextPlaceholder(
-        snapshot.value,
-        snapshot.expandedCursor,
-      );
-      const nextCollapsedCursor = collapseExpandedComposerCursor(
-        insertion.prompt,
-        insertion.cursor,
-      );
-      const inserted = insertComposerDraftTerminalContext(
-        activeThread.id,
-        insertion.prompt,
-        {
-          id: randomUUID(),
-          threadId: activeThread.id,
-          createdAt: new Date().toISOString(),
-          ...selection,
-        },
-        insertion.contextIndex,
-      );
-      if (!inserted) {
-        return;
-      }
-      promptRef.current = insertion.prompt;
-      setComposerCursor(nextCollapsedCursor);
-      setComposerTrigger(detectComposerTrigger(insertion.prompt, insertion.cursor));
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAt(nextCollapsedCursor);
-      });
-    },
-    [activeThread, composerCursor, composerTerminalContexts, insertComposerDraftTerminalContext],
-  );
+  const { addTerminalContextToDraft, removeComposerTerminalContextFromDraft } =
+    useChatComposerTerminalContextBindings({
+      activeThreadId,
+      composerCursor,
+      composerEditorRef,
+      composerTerminalContexts,
+      insertComposerDraftTerminalContext,
+      promptRef,
+      removeComposerDraftTerminalContext,
+      setComposerCursor,
+      setComposerTrigger,
+      setPrompt,
+      threadId,
+    });
   const resolveNextSplitViewThreadAfterTerminalDelete = useCallback((splitViewId: string) => {
     const nextSplitView = useSplitViewStore.getState().splitViewsById[splitViewId];
     const nextThreadId = nextSplitView ? resolveSplitViewFocusedThreadId(nextSplitView) : null;
