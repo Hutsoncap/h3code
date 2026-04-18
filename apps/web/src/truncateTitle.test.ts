@@ -7,6 +7,11 @@ describe("truncateTitle", () => {
     expect(truncateTitle("   hello world   ")).toBe("hello world");
   });
 
+  it("treats quote-wrapped blank placeholders as empty titles", () => {
+    expect(truncateTitle(' "   " ')).toBe("");
+    expect(truncateTitle(" '   ' ")).toBe("");
+  });
+
   it("returns trimmed text when within max length", () => {
     expect(truncateTitle("alpha", 10)).toBe("alpha");
   });
