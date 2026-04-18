@@ -40,10 +40,24 @@ function getTimestampFormatter(
   return formatter;
 }
 
+function parseTimestampInput(isoDate: string): Date | null {
+  const normalizedIsoDate = isoDate.trim();
+  if (normalizedIsoDate.length === 0) {
+    return null;
+  }
+
+  const date = new Date(normalizedIsoDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function formatTimestamp(isoDate: string, timestampFormat: TimestampFormat): string {
-  return getTimestampFormatter(timestampFormat, true).format(new Date(isoDate));
+  const parsedDate = parseTimestampInput(isoDate);
+  if (!parsedDate) return "";
+  return getTimestampFormatter(timestampFormat, true).format(parsedDate);
 }
 
 export function formatShortTimestamp(isoDate: string, timestampFormat: TimestampFormat): string {
-  return getTimestampFormatter(timestampFormat, false).format(new Date(isoDate));
+  const parsedDate = parseTimestampInput(isoDate);
+  if (!parsedDate) return "";
+  return getTimestampFormatter(timestampFormat, false).format(parsedDate);
 }

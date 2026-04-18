@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getTimestampFormatOptions } from "./timestampFormat";
+import {
+  formatShortTimestamp,
+  formatTimestamp,
+  getTimestampFormatOptions,
+} from "./timestampFormat";
 
 describe("getTimestampFormatOptions", () => {
   it("omits hour12 when locale formatting is requested", () => {
@@ -26,5 +30,16 @@ describe("getTimestampFormatOptions", () => {
       minute: "2-digit",
       hour12: false,
     });
+  });
+
+  it("returns an empty string for blank or malformed timestamps", () => {
+    expect(formatTimestamp("", "locale")).toBe("");
+    expect(formatShortTimestamp("not-a-date", "24-hour")).toBe("");
+  });
+
+  it("trims valid timestamps before formatting", () => {
+    expect(formatTimestamp(" 2026-03-17T19:12:29.000Z ", "locale")).toBe(
+      formatTimestamp("2026-03-17T19:12:29.000Z", "locale"),
+    );
   });
 });
