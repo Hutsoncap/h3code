@@ -83,7 +83,7 @@ interface RestoreFailedComposerSendDraftInput {
   mentions: ProviderMentionReference[];
 }
 
-interface DispatchChatTurnInput {
+export interface DispatchChatTurnInput {
   activeProject: Project;
   baseBranchForWorktree: string | null;
   composerImagesForSend: ComposerImageAttachment[];
