@@ -157,6 +157,52 @@ describe("tryHandleProjectFaviconRequest", () => {
     });
   });
 
+  it("skips non-image source hrefs and continues scanning later icon metadata", async () => {
+    const projectDir = makeTempDir("t3code-favicon-route-non-image-");
+    const iconPath = path.join(projectDir, "public", "brand", "safe.svg");
+    fs.mkdirSync(path.dirname(iconPath), { recursive: true });
+    fs.mkdirSync(path.join(projectDir, "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, "index.html"),
+      '<link rel="icon" href="/package.json">',
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(projectDir, "src", "root.tsx"),
+      'const links = [{ href: "/brand/safe.svg", rel: "icon" }];',
+      "utf8",
+    );
+    fs.writeFileSync(path.join(projectDir, "package.json"), '{"name":"not-an-icon"}', "utf8");
+    fs.writeFileSync(iconPath, "<svg>brand-safe</svg>", "utf8");
+
+    await withRouteServer(async (baseUrl) => {
+      const pathname = `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`;
+      const response = await request(baseUrl, pathname);
+      expect(response.statusCode).toBe(200);
+      expect(response.contentType).toContain("image/svg+xml");
+      expect(response.body).toBe("<svg>brand-safe</svg>");
+    });
+  });
+
+  it("falls back when source icon metadata points to a traversal-style target", async () => {
+    const projectDir = makeTempDir("t3code-favicon-route-traversal-");
+    fs.mkdirSync(path.join(projectDir, "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, "src", "root.tsx"),
+      'const links = [{ href: "../package.json", rel: "icon" }];',
+      "utf8",
+    );
+    fs.writeFileSync(path.join(projectDir, "package.json"), '{"name":"not-an-icon"}', "utf8");
+
+    await withRouteServer(async (baseUrl) => {
+      const pathname = `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`;
+      const response = await request(baseUrl, pathname);
+      expect(response.statusCode).toBe(200);
+      expect(response.contentType).toContain("image/svg+xml");
+      expect(response.body).toContain('data-fallback="project-favicon"');
+    });
+  });
+
   it("serves a fallback favicon when no icon exists", async () => {
     const projectDir = makeTempDir("t3code-favicon-route-fallback-");
 

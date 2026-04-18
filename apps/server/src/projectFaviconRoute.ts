@@ -60,9 +60,25 @@ function extractIconHref(source: string): string | null {
   return null;
 }
 
+function sanitizeSourceIconHref(href: string): string | null {
+  if (href.includes("\0") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href) || href.startsWith("//")) {
+    return null;
+  }
+
+  const normalizedHref = href.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (
+    normalizedHref.length === 0 ||
+    normalizedHref.split("/").some((segment) => segment === "..")
+  ) {
+    return null;
+  }
+
+  const extension = path.extname(normalizedHref).toLowerCase();
+  return extension in FAVICON_MIME_TYPES ? normalizedHref : null;
+}
+
 function resolveIconHref(projectCwd: string, href: string): string[] {
-  const clean = href.replace(/^\//, "");
-  return [path.join(projectCwd, "public", clean), path.join(projectCwd, clean)];
+  return [path.join(projectCwd, "public", href), path.join(projectCwd, href)];
 }
 
 function isPathWithinProject(projectCwd: string, candidatePath: string): boolean {
@@ -155,7 +171,12 @@ export function tryHandleProjectFaviconRequest(url: URL, res: http.ServerRespons
         trySourceFiles(index + 1);
         return;
       }
-      const candidates = resolveIconHref(projectCwd, href);
+      const safeHref = sanitizeSourceIconHref(href);
+      if (!safeHref) {
+        trySourceFiles(index + 1);
+        return;
+      }
+      const candidates = resolveIconHref(projectCwd, safeHref);
       tryResolvedPaths(candidates, 0, () => trySourceFiles(index + 1));
     });
   };
