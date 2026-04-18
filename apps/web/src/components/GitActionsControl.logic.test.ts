@@ -1104,6 +1104,28 @@ describe("summarizeGitResult", () => {
       description: "feat: this title is intentionally extremely long so we can validate t...",
     });
   });
+
+  it("drops quote-wrapped blank description text", () => {
+    const result = summarizeGitResult({
+      action: "commit_push_pr",
+      branch: { status: "skipped_not_requested" },
+      commit: {
+        status: "created",
+        commitSha: "89abcdef01234567",
+        subject: ' "   " ',
+      },
+      push: { status: "pushed", branch: "foo" },
+      pr: {
+        status: "created",
+        number: 99,
+        title: ' "   " ',
+      },
+    });
+
+    assert.deepEqual(result, {
+      title: "Created PR #99",
+    });
+  });
 });
 
 describe("resolveAutoFeatureBranchName", () => {

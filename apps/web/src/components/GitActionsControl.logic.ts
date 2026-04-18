@@ -4,6 +4,7 @@ import type {
   GitStatusResult,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export type GitActionIconName = "commit" | "push" | "pr";
 
@@ -56,10 +57,11 @@ function truncateText(
   value: string | undefined,
   maxLength = TOAST_DESCRIPTION_MAX,
 ): string | undefined {
-  if (!value) return undefined;
-  if (value.length <= maxLength) return value;
+  const normalized = trimOrNull(value);
+  if (!normalized) return undefined;
+  if (normalized.length <= maxLength) return normalized;
   if (maxLength <= 3) return "...".slice(0, maxLength);
-  return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 export function buildGitActionProgressStages(input: {
