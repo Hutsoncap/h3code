@@ -232,6 +232,26 @@ describe("threadBootstrap", () => {
     });
   });
 
+  it("treats quote-wrapped blank context values in fresh draft seeds as absent", () => {
+    expect(
+      createFreshDraftThreadSeed({
+        createdAt: "2026-04-05T10:00:00.000Z",
+        entryPoint: "terminal",
+        options: {
+          branch: ' "   " ',
+          worktreePath: " '   ' ",
+        },
+      }),
+    ).toEqual({
+      createdAt: "2026-04-05T10:00:00.000Z",
+      branch: null,
+      worktreePath: null,
+      envMode: "local",
+      runtimeMode: "full-access",
+      entryPoint: "terminal",
+    });
+  });
+
   it("prefers draft state when resolving terminal creation payloads", () => {
     expect(
       resolveTerminalThreadCreationState({
@@ -309,6 +329,32 @@ describe("threadBootstrap", () => {
     ).toMatchObject({
       branch: null,
       worktreePath: "/repo/.worktrees/override",
+    });
+  });
+
+  it("treats quote-wrapped blank terminal creation overrides as absent before promotion", () => {
+    expect(
+      resolveTerminalThreadCreationState({
+        activeDraftThread: null,
+        activeThread: {
+          projectId: PROJECT_ID,
+          modelSelection: modelSelection("codex", "gpt-5"),
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          envMode: "worktree",
+        },
+        draftComposerState: makeComposerDraftState(),
+        draftThread: makeDraftThread(),
+        options: {
+          branch: ' "" ',
+          worktreePath: " '   ' ",
+        },
+        projectDefaultModelSelection: modelSelection("codex", "gpt-5.4"),
+        projectId: PROJECT_ID,
+      }),
+    ).toMatchObject({
+      branch: null,
+      worktreePath: null,
     });
   });
 });
