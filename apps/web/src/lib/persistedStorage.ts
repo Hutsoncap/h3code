@@ -6,15 +6,20 @@ export interface SyncStorageLike {
 
 const STORAGE_KEY_PREFIX_MIGRATIONS = [{ canonical: "h3code:", legacy: "t3code:" }] as const;
 
+function normalizeLegacyStorageKey(key: string): string | null {
+  const trimmed = key.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function resolveLegacyStorageKeys(
   key: string,
   extraLegacyKeys: readonly string[] = [],
 ): string[] {
   const aliases = new Set<string>();
   for (const legacyKey of extraLegacyKeys) {
-    if (legacyKey !== key) {
-      aliases.add(legacyKey);
-    }
+    const normalizedLegacyKey = normalizeLegacyStorageKey(legacyKey);
+    if (!normalizedLegacyKey || normalizedLegacyKey === key) continue;
+    aliases.add(normalizedLegacyKey);
   }
 
   for (const migration of STORAGE_KEY_PREFIX_MIGRATIONS) {
