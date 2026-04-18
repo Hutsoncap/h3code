@@ -30,6 +30,15 @@ describe("projectScriptKeybindings", () => {
     ).toBeNull();
   });
 
+  it("returns null when keybinding is a quote-wrapped blank placeholder", () => {
+    expect(
+      decodeProjectScriptKeybindingRule({
+        keybinding: ' "   " ',
+        command: commandForProjectScript("lint"),
+      }),
+    ).toBeNull();
+  });
+
   it("rejects invalid keybinding values", () => {
     expect(() =>
       decodeProjectScriptKeybindingRule({

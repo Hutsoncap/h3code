@@ -12,7 +12,21 @@ function normalizeProjectScriptKeybindingInput(
   keybinding: string | null | undefined,
 ): string | null {
   const trimmed = keybinding?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return null;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 export function decodeProjectScriptKeybindingRule(input: {
