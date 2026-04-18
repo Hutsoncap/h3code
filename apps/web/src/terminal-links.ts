@@ -137,6 +137,18 @@ function inferHomeFromCwd(cwd: string): string | undefined {
   return undefined;
 }
 
+function normalizePathContext(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return trimmed;
+
+  const quote = trimmed[0];
+  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) {
+    return trimmed;
+  }
+
+  return trimmed.slice(1, -1).trim().length === 0 ? "" : trimmed;
+}
+
 function splitPathAndPosition(value: string): {
   path: string;
   line: string | undefined;
@@ -268,7 +280,7 @@ export function isTerminalLinkActivation(
 
 export function resolvePathLinkTarget(rawPath: string, cwd: string): string {
   const { path, line, column } = splitPathAndPosition(rawPath);
-  const normalizedCwd = cwd.trim();
+  const normalizedCwd = normalizePathContext(cwd);
 
   let resolvedPath = path;
   if (path.startsWith("~/")) {
