@@ -3,6 +3,7 @@
 // for provider runtime events so UI components can stay presentation-only.
 
 import type { OrchestrationThread } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export interface RateLimitWindow {
   window: string;
@@ -89,7 +90,7 @@ export function normalizeRateLimitLabel(
 ): string {
   const durationLabel = windowLabelFromDuration(windowDurationMins);
   if (durationLabel) return durationLabel;
-  const trimmedLabel = label?.trim();
+  const trimmedLabel = trimOrNull(label);
   if (!trimmedLabel) return "Current";
 
   const normalized = trimmedLabel.toLowerCase().replace(/[_\s-]+/g, "_");
