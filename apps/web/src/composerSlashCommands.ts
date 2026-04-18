@@ -1,4 +1,5 @@
 import type { GitBranch, ProviderKind } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export const BUILT_IN_COMPOSER_SLASH_COMMANDS = [
   "clear",
@@ -30,7 +31,8 @@ export type FastSlashCommandAction = "toggle" | "on" | "off" | "status" | "inval
 export type ForkSlashCommandTarget = "local" | "worktree";
 
 function normalizeSlashCommandName(value: string): string {
-  return value.trim().replace(/^\/+/, "").toLowerCase();
+  const normalized = trimOrNull(value);
+  return normalized ? normalized.replace(/^\/+/, "").toLowerCase() : "";
 }
 
 const CLAUDE_NATIVE_COMMAND_ALIASES: Record<string, readonly string[]> = {
@@ -180,7 +182,7 @@ export function filterComposerSlashCommands(
   query: string,
   commands: ReadonlyArray<ComposerSlashCommand> = BUILT_IN_COMPOSER_SLASH_COMMANDS,
 ): ComposerSlashCommandDefinition[] {
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = trimOrNull(query)?.toLowerCase() ?? "";
   const matches = commands.filter((command) => {
     if (!normalizedQuery) {
       return true;
@@ -197,7 +199,7 @@ export function filterComposerSlashCommands(
 }
 
 function hasMeaningfulComposerText(prompt: string): boolean {
-  return prompt.trim().length > 0;
+  return trimOrNull(prompt) !== null;
 }
 
 export function canOfferForkSlashCommand(input: {
@@ -237,8 +239,8 @@ export function canOfferReviewSlashCommand(input: {
 export function buildSubagentsPrompt(existingPrompt: string): string {
   const cannedPrompt =
     "Run subagents for different tasks. Delegate distinct work in parallel when helpful and then synthesize the results.";
-  const trimmedPrompt = existingPrompt.trim();
-  return trimmedPrompt.length > 0 ? `${trimmedPrompt}\n\n${cannedPrompt}` : cannedPrompt;
+  const trimmedPrompt = trimOrNull(existingPrompt);
+  return trimmedPrompt ? `${trimmedPrompt}\n\n${cannedPrompt}` : cannedPrompt;
 }
 
 export function buildReviewPrompt(input: { target: "changes" | "base-branch" }): string {

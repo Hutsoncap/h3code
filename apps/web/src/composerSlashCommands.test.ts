@@ -25,6 +25,17 @@ describe("composerSlashCommands", () => {
   it("filters slash commands by query", () => {
     expect(filterComposerSlashCommands("rev").map((entry) => entry.command)).toEqual(["review"]);
     expect(filterComposerSlashCommands("fast").map((entry) => entry.command)).toEqual(["fast"]);
+    expect(filterComposerSlashCommands(' "   " ').map((entry) => entry.command)).toEqual([
+      "clear",
+      "model",
+      "plan",
+      "default",
+      "review",
+      "fork",
+      "status",
+      "subagents",
+      "fast",
+    ]);
   });
 
   it("parses slash invocations with optional arguments", () => {
@@ -93,6 +104,17 @@ describe("composerSlashCommands", () => {
 
     expect(
       canOfferForkSlashCommand({
+        prompt: ' "   " ',
+        imageCount: 0,
+        terminalContextCount: 0,
+        selectedSkillCount: 0,
+        selectedMentionCount: 0,
+        interactionMode: "default",
+      }),
+    ).toBe(true);
+
+    expect(
+      canOfferForkSlashCommand({
         prompt: "hello",
         imageCount: 0,
         terminalContextCount: 0,
@@ -127,6 +149,16 @@ describe("composerSlashCommands", () => {
 
     expect(
       canOfferReviewSlashCommand({
+        prompt: " '   ' ",
+        imageCount: 0,
+        terminalContextCount: 0,
+        selectedSkillCount: 0,
+        selectedMentionCount: 0,
+      }),
+    ).toBe(true);
+
+    expect(
+      canOfferReviewSlashCommand({
         prompt: "",
         imageCount: 1,
         terminalContextCount: 0,
@@ -138,6 +170,9 @@ describe("composerSlashCommands", () => {
 
   it("builds slash-command canned prompts", () => {
     expect(buildSubagentsPrompt("")).toContain("Run subagents");
+    expect(buildSubagentsPrompt(' "   " ')).toBe(
+      "Run subagents for different tasks. Delegate distinct work in parallel when helpful and then synthesize the results.",
+    );
     expect(buildSubagentsPrompt("Already there")).toContain("Already there\n\nRun subagents");
     expect(buildReviewPrompt({ target: "changes" })).toContain("uncommitted changes");
     expect(buildReviewPrompt({ target: "base-branch" })).toContain("base branch");
