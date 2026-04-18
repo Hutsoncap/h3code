@@ -53,7 +53,7 @@ export function normalizeWorkspaceRootForComparison(
   value: string,
   options?: NormalizeWorkspaceRootForComparisonOptions,
 ): string {
-  const trimmed = value.trim();
+  const trimmed = normalizeOptionalMetadataValue(value) ?? "";
   if (trimmed.length === 0) {
     return "";
   }

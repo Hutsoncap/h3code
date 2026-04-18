@@ -12,6 +12,10 @@ describe("normalizeWorkspaceRootForComparison", () => {
     expect(normalizeWorkspaceRootForComparison("  /repo//worktree///  ")).toBe("/repo/worktree");
   });
 
+  it("treats quote-wrapped blank roots as absent", () => {
+    expect(normalizeWorkspaceRootForComparison(' "   " ')).toBe("");
+  });
+
   it("lowercases and normalizes windows roots when the platform is win32", () => {
     expect(
       normalizeWorkspaceRootForComparison(" C:\\Repo\\Worktree\\ ", { platform: "win32" }),
