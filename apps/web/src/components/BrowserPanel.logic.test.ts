@@ -13,6 +13,10 @@ describe("browserAddressDisplayValue", () => {
     expect(browserAddressDisplayValue({ url: "about:blank" })).toBe("");
   });
 
+  it("treats quote-wrapped blank tab urls as empty", () => {
+    expect(browserAddressDisplayValue({ url: ' "   " ' })).toBe("");
+  });
+
   it("keeps real urls visible", () => {
     expect(browserAddressDisplayValue({ url: "https://x.com/" })).toBe("https://x.com/");
   });
@@ -108,7 +112,7 @@ describe("buildBrowserAddressSuggestions", () => {
       ],
       recentHistory: [
         {
-          url: "about:blank",
+          url: ' "   " ',
           title: "Blank",
           tabId: "tab-1",
         },
