@@ -4,6 +4,7 @@
 // Exports: Draft answer helpers and progress derivation used by ChatView/composer panels.
 
 import type { UserInputQuestion } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export interface PendingUserInputDraftAnswer {
   selectedOptionLabels?: string[];
@@ -29,13 +30,11 @@ function normalizeDraftAnswer(value: string | undefined): string | null {
     return null;
   }
 
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  return trimOrNull(value);
 }
 
 function normalizeOptionLabel(value: string): string | null {
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
+  return trimOrNull(value);
 }
 
 // Normalize option selections so UI and submit logic can share one canonical list.
@@ -46,8 +45,8 @@ function normalizeSelectedOptionLabels(value: string[] | undefined): string[] {
 
   const normalized = value
     .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+    .map((entry) => trimOrNull(entry))
+    .filter((entry): entry is string => entry !== null);
 
   return Array.from(new Set(normalized));
 }
@@ -73,10 +72,9 @@ export function setPendingUserInputCustomAnswer(
   draft: PendingUserInputDraftAnswer | undefined,
   customAnswer: string,
 ): PendingUserInputDraftAnswer {
-  const selectedOptionLabels =
-    customAnswer.trim().length > 0
-      ? undefined
-      : normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+  const selectedOptionLabels = normalizeDraftAnswer(customAnswer)
+    ? undefined
+    : normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
 
   return {
     customAnswer,
@@ -179,7 +177,7 @@ export function derivePendingUserInputProgress(
     selectedOptionLabels: normalizeSelectedOptionLabels(activeDraft?.selectedOptionLabels),
     customAnswer,
     resolvedAnswer,
-    usingCustomAnswer: customAnswer.trim().length > 0,
+    usingCustomAnswer: normalizeDraftAnswer(customAnswer) !== null,
     answeredQuestionCount,
     isLastQuestion,
     isComplete: buildPendingUserInputAnswers(questions, draftAnswers) !== null,

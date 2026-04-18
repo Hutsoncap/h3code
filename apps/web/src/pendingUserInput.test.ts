@@ -57,6 +57,20 @@ describe("resolvePendingUserInputAnswer", () => {
     });
   });
 
+  it("preserves the preset selection when a custom answer is quote-wrapped blank", () => {
+    expect(
+      setPendingUserInputCustomAnswer(
+        {
+          selectedOptionLabels: ["Preserve existing tags"],
+        },
+        ' "   " ',
+      ),
+    ).toEqual({
+      customAnswer: ' "   " ',
+      selectedOptionLabels: ["Preserve existing tags"],
+    });
+  });
+
   it("returns all selected options for multi-select questions", () => {
     expect(
       resolvePendingUserInputAnswer(
@@ -72,6 +86,23 @@ describe("resolvePendingUserInputAnswer", () => {
         },
       ),
     ).toEqual(["CLI", "Desktop"]);
+  });
+
+  it("ignores quote-wrapped blank custom answers and option labels", () => {
+    expect(
+      resolvePendingUserInputAnswer(
+        {
+          id: "scope",
+          header: "Scope",
+          question: "What should the plan target first?",
+          options: [],
+        },
+        {
+          selectedOptionLabels: [' "   " ', " Scaffold only "],
+          customAnswer: " '   ' ",
+        },
+      ),
+    ).toBe("Scaffold only");
   });
 });
 
@@ -290,6 +321,27 @@ describe("pending user input question progress", () => {
       answeredQuestionCount: 1,
       isLastQuestion: false,
       isComplete: false,
+      canAdvance: true,
+    });
+  });
+
+  it("does not treat quote-wrapped blank custom answers as active progress", () => {
+    expect(
+      derivePendingUserInputProgress(
+        questions,
+        {
+          scope: {
+            selectedOptionLabels: [' "   " ', "Orchestration-first"],
+            customAnswer: " '   ' ",
+          },
+        },
+        0,
+      ),
+    ).toMatchObject({
+      questionIndex: 0,
+      selectedOptionLabels: ["Orchestration-first"],
+      resolvedAnswer: "Orchestration-first",
+      usingCustomAnswer: false,
       canAdvance: true,
     });
   });
