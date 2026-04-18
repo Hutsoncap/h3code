@@ -63,23 +63,30 @@ interface ProjectScriptRuntimeEnvInput {
   extraEnv?: Record<string, string>;
 }
 
+function normalizedWorktreePath(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function projectScriptCwd(input: {
   project: {
     cwd: string;
   };
   worktreePath?: string | null;
 }): string {
-  return input.worktreePath ?? input.project.cwd;
+  return normalizedWorktreePath(input.worktreePath) ?? input.project.cwd;
 }
 
 export function projectScriptRuntimeEnv(
   input: ProjectScriptRuntimeEnvInput,
 ): Record<string, string> {
+  const worktreePath = normalizedWorktreePath(input.worktreePath);
   const env: Record<string, string> = {
     T3CODE_PROJECT_ROOT: input.project.cwd,
   };
-  if (input.worktreePath) {
-    env.T3CODE_WORKTREE_PATH = input.worktreePath;
+  if (worktreePath) {
+    env.T3CODE_WORKTREE_PATH = worktreePath;
   }
   if (input.extraEnv) {
     return { ...env, ...input.extraEnv };
