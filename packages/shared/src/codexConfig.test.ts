@@ -43,6 +43,10 @@ describe("parseCodexConfigModelProvider", () => {
       ),
     ).toBeUndefined();
   });
+
+  it("treats whitespace-only quoted model providers as missing", () => {
+    expect(parseCodexConfigModelProvider('model_provider = "   "\n')).toBeUndefined();
+  });
 });
 
 describe("parseCodexConfigProviderEnvKey", () => {
@@ -73,6 +77,15 @@ describe("parseCodexConfigProviderEnvKey", () => {
       ),
     ).toBe("MY_COMPANY_PROXY_KEY");
   });
+
+  it("ignores whitespace-only env_key values", () => {
+    expect(
+      parseCodexConfigProviderEnvKey(
+        ["[model_providers.portkey]", 'env_key = "   "'].join("\n"),
+        "portkey",
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe("parseCodexConfigActiveProviderEnvKey", () => {
@@ -91,6 +104,10 @@ describe("parseCodexConfigActiveProviderEnvKey", () => {
 
   it("returns undefined for the default openai provider", () => {
     expect(parseCodexConfigActiveProviderEnvKey('model_provider = "openai"\n')).toBeUndefined();
+  });
+
+  it("ignores whitespace-only custom provider values", () => {
+    expect(parseCodexConfigActiveProviderEnvKey('model_provider = "   "\n')).toBeUndefined();
   });
 });
 

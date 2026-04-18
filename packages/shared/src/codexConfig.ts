@@ -10,14 +10,16 @@ import { join } from "node:path";
 
 function readQuotedAssignmentValue(trimmedLine: string, key: string): string | undefined {
   const match = trimmedLine.match(new RegExp(`^${key}\\s*=\\s*(?:"([^"]+)"|'([^']+)')`));
-  return match?.[1] ?? match?.[2];
+  const value = (match?.[1] ?? match?.[2])?.trim();
+  return value ? value : undefined;
 }
 
 function readModelProviderSectionName(trimmedLine: string): string | undefined {
   const match = trimmedLine.match(
     /^\[\s*model_providers\.(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+))\s*\]$/,
   );
-  return match?.[1] ?? match?.[2] ?? match?.[3];
+  const value = (match?.[1] ?? match?.[2] ?? match?.[3])?.trim();
+  return value ? value : undefined;
 }
 
 export function parseCodexConfigModelProvider(content: string): string | undefined {
