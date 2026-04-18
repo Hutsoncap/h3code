@@ -1,7 +1,14 @@
 export function truncateTitle(text: string, maxLength = 50): string {
   const trimmed = text.trim();
-  if (trimmed.length <= maxLength) {
+  const normalizedMaxLength = Number.isFinite(maxLength) ? Math.max(0, Math.floor(maxLength)) : 0;
+
+  if (trimmed.length <= normalizedMaxLength) {
     return trimmed;
   }
-  return `${trimmed.slice(0, maxLength)}...`;
+
+  if (normalizedMaxLength <= 3) {
+    return ".".repeat(normalizedMaxLength);
+  }
+
+  return `${trimmed.slice(0, normalizedMaxLength - 3)}...`;
 }

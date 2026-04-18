@@ -12,6 +12,17 @@ describe("truncateTitle", () => {
   });
 
   it("appends ellipsis when text exceeds max length", () => {
-    expect(truncateTitle("abcdefghij", 5)).toBe("abcde...");
+    expect(truncateTitle("abcdefghij", 5)).toBe("ab...");
+  });
+
+  it("keeps the final output within tiny length budgets", () => {
+    expect(truncateTitle("abcdefghij", 3)).toBe("...");
+    expect(truncateTitle("abcdefghij", 2)).toBe("..");
+    expect(truncateTitle("abcdefghij", 1)).toBe(".");
+  });
+
+  it("returns an empty string for zero or negative budgets", () => {
+    expect(truncateTitle("abcdefghij", 0)).toBe("");
+    expect(truncateTitle("abcdefghij", -1)).toBe("");
   });
 });
