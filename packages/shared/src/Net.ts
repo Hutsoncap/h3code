@@ -28,7 +28,21 @@ const closeServer = (server: Net.Server) => {
 
 function normalizeLoopbackHost(host: string | undefined): string {
   const trimmed = host?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : "127.0.0.1";
+  if (!trimmed) {
+    return "127.0.0.1";
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return "127.0.0.1";
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 const tryReservePort = (port: number): Effect.Effect<number, NetError> =>
