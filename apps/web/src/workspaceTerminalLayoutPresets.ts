@@ -2,6 +2,7 @@
 // Purpose: Define reusable workspace terminal layout presets and map them to pane trees.
 // Layer: Workspace terminal domain helpers
 
+import { trimOrNull } from "@t3tools/shared/model";
 import {
   DEFAULT_THREAD_TERMINAL_ID,
   type ThreadTerminalGroup,
@@ -65,7 +66,9 @@ export const WORKSPACE_LAYOUT_PRESETS: readonly WorkspaceLayoutPresetDefinition[
 ] as const;
 
 function normalizeTerminalIds(terminalIds: readonly string[]): string[] {
-  const ids = [...new Set(terminalIds.map((terminalId) => terminalId.trim()).filter(Boolean))];
+  const ids = [
+    ...new Set(terminalIds.map((terminalId) => trimOrNull(terminalId) ?? "").filter(Boolean)),
+  ];
   return ids.length > 0 ? ids : [DEFAULT_THREAD_TERMINAL_ID];
 }
 
@@ -138,7 +141,7 @@ export function ensureTerminalIdsForPreset(
   const requiredSlotCount = getWorkspaceLayoutPresetSlotCount(presetId);
   const nextTerminalIds = [...normalizedTerminalIds];
   while (nextTerminalIds.length < requiredSlotCount) {
-    const nextTerminalId = createTerminalId().trim();
+    const nextTerminalId = trimOrNull(createTerminalId()) ?? "";
     if (nextTerminalId.length === 0 || nextTerminalIds.includes(nextTerminalId)) {
       continue;
     }
@@ -215,8 +218,9 @@ export function createWorkspaceTerminalGroupFromPreset(input: {
 }): ThreadTerminalGroup {
   const normalizedPresetId = normalizePresetId(input.presetId);
   const normalizedTerminalIds = normalizeTerminalIds(input.terminalIds);
-  const resolvedActiveTerminalId = normalizedTerminalIds.includes(input.activeTerminalId ?? "")
-    ? (input.activeTerminalId ?? normalizedTerminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
+  const normalizedActiveTerminalId = trimOrNull(input.activeTerminalId);
+  const resolvedActiveTerminalId = normalizedTerminalIds.includes(normalizedActiveTerminalId ?? "")
+    ? (normalizedActiveTerminalId ?? normalizedTerminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID)
     : (normalizedTerminalIds[0] ?? DEFAULT_THREAD_TERMINAL_ID);
 
   return {
