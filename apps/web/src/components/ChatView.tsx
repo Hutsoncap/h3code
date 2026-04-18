@@ -175,7 +175,6 @@ import {
   type QueuedComposerPlanFollowUp,
   type QueuedComposerTurn,
   useComposerDraftStore,
-  useComposerThreadDraft,
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
 import {
@@ -215,6 +214,7 @@ import { ChatComposerStatusBanner } from "./chat/ChatComposerStatusBanner";
 import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
+import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
@@ -689,9 +689,6 @@ export default function ChatView({
   const setStoreThreadError = useStore((store) => store.setError);
   const setStoreThreadWorkspace = useStore((store) => store.setThreadWorkspace);
   const { settings } = useAppSettings();
-  const setStickyComposerModelSelection = useComposerDraftStore(
-    (store) => store.setStickyModelSelection,
-  );
   const timestampFormat = settings.timestampFormat;
   const navigate = useNavigate();
   const { handleNewThread } = useHandleNewThread();
@@ -705,11 +702,41 @@ export default function ChatView({
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
   const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
-  const composerDraft = useComposerThreadDraft(threadId);
-  const prompt = composerDraft.prompt;
-  const composerImages = composerDraft.images;
-  const composerTerminalContexts = composerDraft.terminalContexts;
-  const queuedComposerTurns = composerDraft.queuedTurns;
+  const {
+    addComposerImage,
+    addComposerImagesToDraft,
+    addComposerTerminalContextsToDraft,
+    clearComposerDraftContent,
+    clearComposerDraftPersistedAttachments,
+    clearProjectDraftThreadId,
+    composerDraft,
+    composerImages,
+    composerSendState,
+    composerTerminalContexts,
+    draftThread,
+    enqueueQueuedComposerTurn,
+    getDraftThread,
+    getDraftThreadByProjectId,
+    insertComposerDraftTerminalContext,
+    insertQueuedComposerTurn,
+    nonPersistedComposerImageIds,
+    prompt,
+    queuedComposerTurns,
+    removeComposerDraftTerminalContext,
+    removeComposerImageFromDraft,
+    removeQueuedComposerTurnFromDraft,
+    setComposerDraftInteractionMode,
+    setComposerDraftModelSelection,
+    setComposerDraftPrompt,
+    setComposerDraftProviderModelOptions,
+    setComposerDraftRuntimeMode,
+    setComposerDraftTerminalContexts,
+    setDraftThreadContext,
+    setProjectDraftThreadId,
+    setPrompt,
+    setStickyComposerModelSelection,
+    syncComposerDraftPersistedAttachments,
+  } = useChatComposerDraftBindings(threadId);
   const {
     isRecording: isVoiceRecording,
     durationMs: voiceRecordingDurationMs,
@@ -719,64 +746,6 @@ export default function ChatView({
     cancelRecording: cancelVoiceRecording,
   } = useVoiceRecorder();
   const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false);
-  const composerSendState = useMemo(
-    () =>
-      deriveComposerSendState({
-        prompt,
-        imageCount: composerImages.length,
-        terminalContexts: composerTerminalContexts,
-      }),
-    [composerImages.length, composerTerminalContexts, prompt],
-  );
-  const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
-  const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
-  const setComposerDraftModelSelection = useComposerDraftStore((store) => store.setModelSelection);
-  const setComposerDraftProviderModelOptions = useComposerDraftStore(
-    (store) => store.setProviderModelOptions,
-  );
-  const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
-  const setComposerDraftInteractionMode = useComposerDraftStore(
-    (store) => store.setInteractionMode,
-  );
-  const enqueueQueuedComposerTurn = useComposerDraftStore((store) => store.enqueueQueuedTurn);
-  const insertQueuedComposerTurn = useComposerDraftStore((store) => store.insertQueuedTurn);
-  const removeQueuedComposerTurnFromDraft = useComposerDraftStore(
-    (store) => store.removeQueuedTurn,
-  );
-  const addComposerDraftImage = useComposerDraftStore((store) => store.addImage);
-  const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
-  const removeComposerDraftImage = useComposerDraftStore((store) => store.removeImage);
-  const insertComposerDraftTerminalContext = useComposerDraftStore(
-    (store) => store.insertTerminalContext,
-  );
-  const addComposerDraftTerminalContexts = useComposerDraftStore(
-    (store) => store.addTerminalContexts,
-  );
-  const removeComposerDraftTerminalContext = useComposerDraftStore(
-    (store) => store.removeTerminalContext,
-  );
-  const setComposerDraftTerminalContexts = useComposerDraftStore(
-    (store) => store.setTerminalContexts,
-  );
-  const clearComposerDraftPersistedAttachments = useComposerDraftStore(
-    (store) => store.clearPersistedAttachments,
-  );
-  const syncComposerDraftPersistedAttachments = useComposerDraftStore(
-    (store) => store.syncPersistedAttachments,
-  );
-  const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
-  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const getDraftThreadByProjectId = useComposerDraftStore(
-    (store) => store.getDraftThreadByProjectId,
-  );
-  const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
-  const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
-  const clearProjectDraftThreadId = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadId,
-  );
-  const draftThread = useComposerDraftStore(
-    (store) => store.draftThreadsByThreadId[threadId] ?? null,
-  );
   const allThreads = useStore((store) => store.threads);
   const serverThread = useStore(useMemo(() => createThreadSelector(threadId), [threadId]));
   const fallbackDraftProjectId = draftThread?.projectId ?? null;
@@ -892,36 +861,6 @@ export default function ChatView({
   const storeResizeTerminalSplit = useTerminalStateStore((s) => s.resizeTerminalSplit);
   const storeClearTerminalState = useTerminalStateStore((s) => s.clearTerminalState);
 
-  const setPrompt = useCallback(
-    (nextPrompt: string) => {
-      setComposerDraftPrompt(threadId, nextPrompt);
-    },
-    [setComposerDraftPrompt, threadId],
-  );
-  const addComposerImage = useCallback(
-    (image: ComposerImageAttachment) => {
-      addComposerDraftImage(threadId, image);
-    },
-    [addComposerDraftImage, threadId],
-  );
-  const addComposerImagesToDraft = useCallback(
-    (images: ComposerImageAttachment[]) => {
-      addComposerDraftImages(threadId, images);
-    },
-    [addComposerDraftImages, threadId],
-  );
-  const addComposerTerminalContextsToDraft = useCallback(
-    (contexts: TerminalContextDraft[]) => {
-      addComposerDraftTerminalContexts(threadId, contexts);
-    },
-    [addComposerDraftTerminalContexts, threadId],
-  );
-  const removeComposerImageFromDraft = useCallback(
-    (imageId: string) => {
-      removeComposerDraftImage(threadId, imageId);
-    },
-    [removeComposerDraftImage, threadId],
-  );
   const removeComposerTerminalContextFromDraft = useCallback(
     (contextId: string) => {
       const contextIndex = composerTerminalContexts.findIndex(

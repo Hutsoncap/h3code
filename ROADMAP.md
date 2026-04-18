@@ -41,23 +41,25 @@ The product risk is becoming an Electron kitchen sink — browser, editor, space
 
 Whenever you pick up a sub-PR, flip its status and add your worktree name (e.g. `🚧 worktree: bold-heisenberg`). When merged, flip to ✅ with the PR number.
 
+**Source-of-truth rule:** this file is the authoritative roadmap state. Before starting new roadmap work or posting a roadmap heartbeat, reconcile this file against `main`, open PRs, and active worktrees. If this file is stale, update it first and only then continue coding or report status.
+
 ---
 
 ## Phase 0 — Prerequisites: seams, safety nets, and naming
 
 **These land before any Phase 1 work starts.** The existing `.plans/` directory already identifies the seams the roadmap needs; they are not background cleanup, they are the foundation every subsequent feature PR stands on. Each item below is an existing plan in `.plans/` unless noted; read the linked file for the authoritative spec. This roadmap references them — it does not redefine them.
 
-| ID       | Title                                             | Source                                                                                           | Status                                                                                                                                                                                                                                                    |
-| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | ✅ #7 — desktop IPC payloads validated                                                                                                                                                                                                                    |
-| **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md)       | ✅ #9 — persisted-state hydration validated                                                                                                                                                                                                               |
-| **p0.3** | Split ChatView.tsx                                | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md)                   | 🚧 #17/#19/#20/#24/#30/#32/#34/#36/#38/#42/#50 — composer, body, thread, empty-state, image-dialog, dialogs, shell, footer, active-plan-card, status-banner, pull-request-dialog, and pull-request controller seams extracted; more ChatView seams remain |
-| **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | ✅ #13 — codex app-server helpers split                                                                                                                                                                                                                   |
-| **p0.5** | Event-state test expansion                        | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md)               | ✅ #4 — store event-state coverage expanded                                                                                                                                                                                                               |
-| **p0.6** | Unify process/session abstraction                 | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | ✅ #10 — terminal runtime/session handles unified                                                                                                                                                                                                         |
-| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | ✅ #3 — CI actually runs                                                                                                                                                                                                                                  |
-| **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | ✅ #2 — lefthook wired up                                                                                                                                                                                                                                 |
-| **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | ✅ #8 — H3 Code naming + compatibility sweep                                                                                                                                                                                                              |
+| ID       | Title                                             | Source                                                                                           | Status                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **p0.1** | Typed IPC boundaries                              | [.plans/02-typed-ipc-boundaries.md](.plans/02-typed-ipc-boundaries.md)                           | ✅ #7 — desktop IPC payloads validated                                                                                                                                                                                                                                                                                                                                                                |
+| **p0.2** | Zod (or Effect/Schema) persisted-state validation | [.plans/05-zod-persisted-state-validation.md](.plans/05-zod-persisted-state-validation.md)       | ✅ #9 — persisted-state hydration validated                                                                                                                                                                                                                                                                                                                                                           |
+| **p0.3** | Split ChatView.tsx                                | [.plans/04-split-chatview-component.md](.plans/04-split-chatview-component.md)                   | 🚧 worktree: `/Users/hutson/Code/h3code` (`codex/p0.3-chatview-composer-draft-bindings`) — #17/#19/#20/#24/#30/#32/#34/#36/#38/#42/#50 extracted many UI seams; current slice is extracting composer-draft/store bindings out of [apps/web/src/components/ChatView.tsx](apps/web/src/components/ChatView.tsx), which is still ~6.1k lines on `main`, so Phase 1 remains blocked until more seams land |
+| **p0.4** | Split codexAppServerManager.ts                    | [.plans/03-split-codex-app-server-manager.md](.plans/03-split-codex-app-server-manager.md)       | ✅ #13 — codex app-server helpers split                                                                                                                                                                                                                                                                                                                                                               |
+| **p0.5** | Event-state test expansion                        | [.plans/09-event-state-test-expansion.md](.plans/09-event-state-test-expansion.md)               | ✅ #4 — store event-state coverage expanded                                                                                                                                                                                                                                                                                                                                                           |
+| **p0.6** | Unify process/session abstraction                 | [.plans/10-unify-process-session-abstraction.md](.plans/10-unify-process-session-abstraction.md) | ✅ #10 — terminal runtime/session handles unified                                                                                                                                                                                                                                                                                                                                                     |
+| **p0.7** | CI quality gates                                  | [.plans/07-ci-quality-gates.md](.plans/07-ci-quality-gates.md)                                   | ✅ #3 — CI actually runs                                                                                                                                                                                                                                                                                                                                                                              |
+| **p0.8** | Pre-commit format + lint                          | [.plans/08-precommit-format-and-lint.md](.plans/08-precommit-format-and-lint.md)                 | ✅ #2 — lefthook wired up                                                                                                                                                                                                                                                                                                                                                                             |
+| **p0.9** | Product naming unification                        | (new — this roadmap)                                                                             | ✅ #8 — H3 Code naming + compatibility sweep                                                                                                                                                                                                                                                                                                                                                          |
 
 ### Why these, why now
 
@@ -94,6 +96,14 @@ Every one of these directly lifts a constraint that Phase 1+ would otherwise hit
 ### Phase 0 exit criteria
 
 Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7, p0.9 are ✅ merged**. p0.4, p0.6, p0.8 are strongly preferred but can land in parallel with v1a if scope conflicts allow it — document any deviation at the top of the affected sub-PR.
+
+**Current gate status (2026-04-18):** p0.1, p0.2, p0.4, p0.5, p0.6, p0.7, p0.8, and p0.9 are merged. **p0.3 is still open, so no Phase 1 slice is legitimately started yet.** Recent merged work has been almost entirely hardening and normalization in the always-open lane.
+
+**Execution priority until `p0.3` closes:**
+
+1. Resume and finish **p0.3**.
+2. Once `p0.3` is ✅ on `main`, start **v1a** immediately.
+3. Do **not** start new hardening-only slices while `p0.3` is open unless they directly unblock the active `p0.3` work or are required to keep an already-open PR green.
 
 ---
 
@@ -315,6 +325,20 @@ The gap today: you can view diffs and chat with agents, but you can't open `foo.
 
 Per [AGENTS.md](AGENTS.md): performance and reliability come first. This lane runs in parallel with the feature phases and has no fixed sequencing — any agent with spare cycles can pick up an item. Every feature PR must land without regressing these, and some items trail each major feature.
 
+**Constraint:** while a required Phase 0 or Phase 1 gate item is open, this lane is subordinate to that gate work. Hardening may continue only when it directly unblocks the active roadmap item, repairs a failing check on an already-open PR, or prevents a proven regression from blocking the roadmap path.
+
+The detailed table below is only granular through `hX41`; after that, work accelerated into many PR-sized micro-hardening slices. To keep this file useful, the authoritative current state is tracked as waves plus live lanes here, not by pretending the old per-row table is still current.
+
+### Current hardening snapshot
+
+| Track           | Scope                                                                                                                                       | Status                                                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **hX42–hX88**   | Parser, contract, whitespace, title/label, cache, and terminal/thread/workspace normalization sweep across shared, server, and web surfaces | ✅ #75–#123 — completed and merged                                                                                                                                                  |
+| **hX89–hX137**  | Quote-wrapped blank normalization sweep across browser, project, workspace, provider, shell, model, and UI state surfaces                   | ✅ #124–#171 — completed and merged                                                                                                                                                 |
+| **hX138–hX159** | Runtime terminal metadata, layout, settings, store, error-copy, and route-fallback quoted-blank sweep                                       | ✅ #172–#193 — completed and merged                                                                                                                                                 |
+| **hX160**       | Branch toolbar error fallback hardening                                                                                                     | 👀 PR [#194](https://github.com/Hutsoncap/h3code/pull/194) — CI green and merge-ready                                                                                               |
+| **hX161**       | WebSocket transport response-error fallback hardening                                                                                       | 🚧 worktree: `/Users/hutson/Code/h3code-hx161-ws-transport-error-quoted-blank` — patch in place, focused `apps/web/src/wsTransport.test.ts` passes, full verification still pending |
+
 | ID       | Title                                                                                                                                                                                                                         | Status                                                                                                                                                                                                                                                                  |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **hX1**  | Persisted-state migration test harness — every live web zustand/persist store gets an explicit legacy `t3code:` to `h3code:` key migration test covering the current on-disk shape                                            | ✅ #15 — persisted-store migration harness added                                                                                                                                                                                                                        |
@@ -389,7 +413,7 @@ Phase 1+ (only after Phase 0 gate)
   v6b — needs v6a
   v7a — any time; earlier is better
 
-Hardening lane (hX1–hX19, hX22) — runs continuously in parallel with all phases,
+Hardening lane (hX1+) — runs continuously in parallel with all phases,
 including Phase 0. Items that overlap with a Phase 0 plan are absorbed
 into that plan (e.g. hX1 persisted-state migration harness is a
 deliverable of p0.2).
@@ -409,9 +433,10 @@ Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narro
 
 ### Per-PR protocol (every agent follows this)
 
-1. **Before starting** — flip this file: sub-PR status to `🚧 worktree: <name>`. Open a draft PR early so others see the work.
-2. **While working** — keep changes scoped to the sub-PR. If you discover adjacent work worth doing, note it at the bottom of this file under "Spawned follow-ups" and keep going.
-3. **Completion gates:**
+1. **Roadmap first** — before starting new work, before reporting status, and immediately after any merge/PR/lane change, reconcile this file against `main`, open PRs, and active worktrees. If the roadmap is stale, update it first.
+2. **Before starting** — flip this file: sub-PR status to `🚧 worktree: <name>`. Open a draft PR early so others see the work.
+3. **While working** — keep changes scoped to the sub-PR. If you discover adjacent work worth doing, note it at the bottom of this file under "Spawned follow-ups" and keep going.
+4. **Completion gates:**
    - **Required by [AGENTS.md](AGENTS.md):**
      - `bun fmt` — formats the workspace (oxfmt).
      - `bun lint` — lints the workspace (oxlint).
@@ -419,12 +444,12 @@ Each sub-PR is sized for one agent in one worktree. Genuine parallelism is narro
    - **Required by this roadmap** (separate policy, not AGENTS.md):
      - `bun run test` — runs Vitest on the PR's area. **Never use `bun test`** (different binary; AGENTS.md forbids it).
    - Treat the AGENTS.md trio as heavyweight workspace checks — bundle them into one final verification pass per task and avoid rerunning them repeatedly during iteration. Tests can be run more frequently on the scoped area you're editing.
-4. **Review gates:**
+5. **Review gates:**
    - `code-review` skill — mandatory on every PR.
    - `frontend-design` skill — mandatory on any PR that changes UI (new components, styling, layout, copy in views, interaction behavior). Skippable for pure refactors with no user-visible change.
    - **Complexity pass** — self-review by the authoring agent before marking the PR ready. Re-read the diff and strip speculative abstractions, unused options, dead branches, and premature generalizations. Not a separate reviewer and not a specific tool — the `simplify` skill can be used if available, but any method that produces the outcome is fine.
-5. **Codex parity check** on every PR that touches agent, MCP, model, or prompt surfaces — confirm explicitly in the PR body.
-6. **On merge** — flip this file: sub-PR status to `✅ #<PR number> — <one-line summary>`. If scope shifted, update downstream sub-PR notes.
+6. **Codex parity check** on every PR that touches agent, MCP, model, or prompt surfaces — confirm explicitly in the PR body.
+7. **On merge** — flip this file: sub-PR status to `✅ #<PR number> — <one-line summary>`. If scope shifted, update downstream sub-PR notes.
 
 ### Branch + PR naming
 
