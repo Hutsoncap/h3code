@@ -5,6 +5,15 @@ function normalizeWorktreePath(path: string | null): string | null {
   if (!trimmed) {
     return null;
   }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      return unquoted || null;
+    }
+  }
+
   return trimmed;
 }
 
@@ -33,13 +42,13 @@ export function getOrphanedWorktreePathForThread(
 }
 
 export function formatWorktreePathForDisplay(worktreePath: string): string {
-  const trimmed = worktreePath.trim();
-  if (!trimmed) {
+  const normalizedInput = normalizeWorktreePath(worktreePath);
+  if (!normalizedInput) {
     return worktreePath;
   }
 
-  const normalized = trimmed.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalized = normalizedInput.replace(/\\/g, "/").replace(/\/+$/, "");
   const parts = normalized.split("/");
   const lastPart = parts[parts.length - 1]?.trim() ?? "";
-  return lastPart.length > 0 ? lastPart : trimmed;
+  return lastPart.length > 0 ? lastPart : normalizedInput;
 }
