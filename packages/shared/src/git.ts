@@ -1,3 +1,5 @@
+import { trimOrNull } from "./model";
+
 /**
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
  * Strips quotes, collapses separators, limits to 64 chars.
@@ -60,7 +62,7 @@ export function resolveAutoFeatureBranchName(
   existingBranchNames: readonly string[],
   preferredBranch?: string,
 ): string {
-  const preferred = preferredBranch?.trim();
+  const preferred = trimOrNull(preferredBranch);
   const resolvedBase = sanitizeFeatureBranchName(
     preferred && preferred.length > 0 ? preferred : AUTO_FEATURE_BRANCH_FALLBACK,
   );
