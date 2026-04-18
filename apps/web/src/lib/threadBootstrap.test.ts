@@ -88,6 +88,16 @@ describe("threadBootstrap", () => {
       worktreePath: null,
       entryPoint: "terminal",
     });
+    expect(
+      buildDraftThreadContextPatch("terminal", {
+        branch: "  ",
+        worktreePath: "  /repo/.worktrees/new-branch  ",
+      }),
+    ).toEqual({
+      branch: null,
+      worktreePath: "/repo/.worktrees/new-branch",
+      entryPoint: "terminal",
+    });
   });
 
   it("recognizes when the active route draft can be reused", () => {
@@ -202,6 +212,26 @@ describe("threadBootstrap", () => {
     });
   });
 
+  it("normalizes whitespace-only context values in fresh draft seeds", () => {
+    expect(
+      createFreshDraftThreadSeed({
+        createdAt: "2026-04-05T10:00:00.000Z",
+        entryPoint: "terminal",
+        options: {
+          branch: "   ",
+          worktreePath: "  /repo/.worktrees/new-terminal  ",
+        },
+      }),
+    ).toEqual({
+      createdAt: "2026-04-05T10:00:00.000Z",
+      branch: null,
+      worktreePath: "/repo/.worktrees/new-terminal",
+      envMode: "local",
+      runtimeMode: "full-access",
+      entryPoint: "terminal",
+    });
+  });
+
   it("prefers draft state when resolving terminal creation payloads", () => {
     expect(
       resolveTerminalThreadCreationState({
@@ -253,6 +283,32 @@ describe("threadBootstrap", () => {
       envMode: "local",
       worktreePath: null,
       branch: "feature/terminal-bootstrap",
+    });
+  });
+
+  it("normalizes whitespace-only terminal creation overrides before promotion", () => {
+    expect(
+      resolveTerminalThreadCreationState({
+        activeDraftThread: null,
+        activeThread: {
+          projectId: PROJECT_ID,
+          modelSelection: modelSelection("codex", "gpt-5"),
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          envMode: "worktree",
+        },
+        draftComposerState: makeComposerDraftState(),
+        draftThread: makeDraftThread(),
+        options: {
+          branch: "   ",
+          worktreePath: "  /repo/.worktrees/override  ",
+        },
+        projectDefaultModelSelection: modelSelection("codex", "gpt-5.4"),
+        projectId: PROJECT_ID,
+      }),
+    ).toMatchObject({
+      branch: null,
+      worktreePath: "/repo/.worktrees/override",
     });
   });
 });

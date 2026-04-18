@@ -76,6 +76,11 @@ export interface TerminalThreadCreationState {
   worktreePath: string | null;
 }
 
+function normalizeThreadContextValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
 // Normalize the currently active server thread into a stable snapshot for pure helpers.
 export function createActiveThreadSnapshot(
   activeThread:
@@ -163,8 +168,8 @@ export function createFreshDraftThreadSeed(input: {
 }): Omit<DraftThreadState, "projectId" | "interactionMode"> {
   return {
     createdAt: input.createdAt,
-    branch: input.options?.branch ?? null,
-    worktreePath: input.options?.worktreePath ?? null,
+    branch: normalizeThreadContextValue(input.options?.branch),
+    worktreePath: normalizeThreadContextValue(input.options?.worktreePath),
     envMode: input.options?.envMode ?? "local",
     runtimeMode: DEFAULT_RUNTIME_MODE,
     entryPoint: input.entryPoint,
@@ -197,9 +202,11 @@ export function buildDraftThreadContextPatch(
   const shouldClearWorktreeForLocalMode =
     options?.envMode === "local" && options?.worktreePath === undefined;
   return {
-    ...(options?.branch !== undefined ? { branch: options.branch ?? null } : {}),
+    ...(options?.branch !== undefined
+      ? { branch: normalizeThreadContextValue(options.branch) }
+      : {}),
     ...(options?.worktreePath !== undefined || shouldClearWorktreeForLocalMode
-      ? { worktreePath: options?.worktreePath ?? null }
+      ? { worktreePath: normalizeThreadContextValue(options?.worktreePath) }
       : {}),
     ...(options?.envMode !== undefined ? { envMode: options.envMode } : {}),
     entryPoint,
@@ -272,11 +279,11 @@ export function resolveTerminalThreadCreationState(
       : (inheritedEnvMode ?? "local"),
     branch:
       input.options?.branch !== undefined
-        ? (input.options.branch ?? null)
+        ? normalizeThreadContextValue(input.options.branch)
         : (input.draftThread?.branch ?? null),
     worktreePath: (() => {
       if (input.options?.worktreePath !== undefined) {
-        return input.options.worktreePath ?? null;
+        return normalizeThreadContextValue(input.options.worktreePath);
       }
       if (explicitEnvMode === "local") {
         return null;
