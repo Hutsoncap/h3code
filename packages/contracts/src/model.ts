@@ -10,14 +10,14 @@ export type ProviderReasoningEffort = CodexReasoningEffort | ClaudeCodeEffort;
 export const CodexModelOptions = Schema.Struct({
   reasoningEffort: Schema.optional(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
   fastMode: Schema.optional(Schema.Boolean),
-});
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
 export type CodexModelOptions = typeof CodexModelOptions.Type;
 
 export const ClaudeModelOptions = Schema.Struct({
   thinking: Schema.optional(Schema.Boolean),
   effort: Schema.optional(Schema.Literals(CLAUDE_CODE_EFFORT_OPTIONS)),
   fastMode: Schema.optional(Schema.Boolean),
-});
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
 export type ClaudeModelOptions = typeof ClaudeModelOptions.Type;
 
 export const ProviderModelOptions = Schema.Struct({
