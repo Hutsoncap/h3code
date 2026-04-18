@@ -1,3 +1,5 @@
+import { trimOrNull } from "@t3tools/shared/model";
+
 import { collectTerminalIdsFromLayout } from "../terminalPaneLayout";
 import type { ThreadTerminalGroup } from "../types";
 
@@ -15,8 +17,8 @@ export type TerminalNewAction =
 function resolveActiveTerminalGroup(
   input: ResolveTerminalNewActionInput,
 ): ThreadTerminalGroup | null {
-  const normalizedActiveTerminalId = input.activeTerminalId.trim();
-  const normalizedActiveTerminalGroupId = input.activeTerminalGroupId.trim();
+  const normalizedActiveTerminalId = trimOrNull(input.activeTerminalId) ?? "";
+  const normalizedActiveTerminalGroupId = trimOrNull(input.activeTerminalGroupId) ?? "";
   return (
     input.terminalGroups.find((group) => group.id === normalizedActiveTerminalGroupId) ??
     input.terminalGroups.find((group) =>
@@ -36,8 +38,8 @@ export function resolveTerminalNewAction(input: ResolveTerminalNewActionInput): 
   const activeGroupTerminalIds = activeGroup
     ? collectTerminalIdsFromLayout(activeGroup.layout)
     : [];
-  const normalizedActiveTerminalId = input.activeTerminalId.trim();
-  const normalizedGroupActiveTerminalId = activeGroup?.activeTerminalId.trim() ?? "";
+  const normalizedActiveTerminalId = trimOrNull(input.activeTerminalId) ?? "";
+  const normalizedGroupActiveTerminalId = trimOrNull(activeGroup?.activeTerminalId) ?? "";
 
   if (
     normalizedGroupActiveTerminalId &&
