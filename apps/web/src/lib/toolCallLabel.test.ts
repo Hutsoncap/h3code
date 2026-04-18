@@ -89,4 +89,23 @@ describe("deriveReadableToolTitle", () => {
       }),
     ).toBe("mcp xcodebuildmcp list sims");
   });
+
+  it("ignores quote-wrapped blank payload descriptors and falls back to the command label", () => {
+    expect(
+      deriveReadableToolTitle({
+        title: "Tool call",
+        fallbackLabel: "Ran command",
+        itemType: "command_execution",
+        requestKind: "command",
+        command: "pwd",
+        payload: {
+          data: {
+            item: {
+              toolName: ' "   " ',
+            },
+          },
+        },
+      }),
+    ).toBe("Show working directory");
+  });
 });
