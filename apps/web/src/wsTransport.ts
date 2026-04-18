@@ -50,6 +50,15 @@ function asError(value: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 export class WsTransport {
   private ws: WebSocket | null = null;
   private currentSocket: WebSocket | null = null;
@@ -84,6 +93,9 @@ export class WsTransport {
   ): Promise<T> {
     if (typeof method !== "string" || method.length === 0) {
       throw new Error("Request method is required");
+    }
+    if (params !== undefined && !isPlainObject(params)) {
+      throw new Error("Request params must be a plain object or undefined");
     }
 
     const id = String(this.nextId++);

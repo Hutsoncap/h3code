@@ -142,6 +142,24 @@ describe("WsTransport", () => {
     transport.dispose();
   });
 
+  it.each([
+    ["a primitive", 1],
+    ["an array", []],
+    ["a null value", null],
+    ["a malformed object", new Date()],
+  ])("rejects %s before sending a request", async (_label, params) => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+    socket.open();
+
+    await expect(transport.request("projects.list", params)).rejects.toThrow(
+      "Request params must be a plain object or undefined",
+    );
+    expect(socket.sent).toHaveLength(0);
+
+    transport.dispose();
+  });
+
   it("drops malformed envelopes without crashing transport", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const transport = new WsTransport("ws://localhost:3020");
