@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultTerminalTitleForCliKind } from "@t3tools/shared/terminalThreads";
 import {
   ApprovalRequestId,
   EventId,
@@ -10,6 +11,7 @@ import {
 import {
   buildInputNeededCopy,
   buildTaskCompletionCopy,
+  collectCompletedTerminalCandidates,
   collectCompletedThreadCandidates,
   collectInputNeededThreadCandidates,
 } from "./taskCompletion.logic";
@@ -49,6 +51,27 @@ function makeThread(overrides: Partial<Thread>): Thread {
     worktreePath: null,
     turnDiffSummaries: [],
     activities: [],
+    ...overrides,
+  };
+}
+
+function makeTerminalNotificationThreadState(
+  overrides: {
+    runningTerminalIds?: string[];
+    terminalAttentionStatesById?: Record<string, "attention" | "review">;
+    terminalCliKindsById?: Record<string, "codex" | "claude">;
+    terminalIds?: string[];
+    terminalLabelsById?: Record<string, string>;
+    terminalTitleOverridesById?: Record<string, string>;
+  } = {},
+) {
+  return {
+    runningTerminalIds: [],
+    terminalAttentionStatesById: {},
+    terminalCliKindsById: {},
+    terminalIds: ["terminal-1"],
+    terminalLabelsById: {},
+    terminalTitleOverridesById: {},
     ...overrides,
   };
 }
@@ -335,6 +358,62 @@ describe("buildTaskCompletionCopy", () => {
       title: "Polish notifications",
       body: "Finished the task and everything looks good.",
     });
+  });
+});
+
+describe("collectCompletedTerminalCandidates", () => {
+  it("falls back to the cli default when label placeholders are quote-wrapped blanks", () => {
+    expect(
+      collectCompletedTerminalCandidates(
+        {
+          "thread-1": makeTerminalNotificationThreadState({
+            runningTerminalIds: ["terminal-1"],
+            terminalCliKindsById: { "terminal-1": "codex" },
+          }),
+        },
+        {
+          "thread-1": makeTerminalNotificationThreadState({
+            terminalAttentionStatesById: { "terminal-1": "review" },
+            terminalCliKindsById: { "terminal-1": "codex" },
+            terminalLabelsById: { "terminal-1": '""' },
+            terminalTitleOverridesById: { "terminal-1": '"   "' },
+          }),
+        },
+      ),
+    ).toEqual([
+      {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        terminalId: "terminal-1",
+        cliKind: "codex",
+        title: defaultTerminalTitleForCliKind("codex"),
+      },
+    ]);
+  });
+
+  it("falls back to the generic terminal title when quoted placeholders are blank", () => {
+    expect(
+      collectCompletedTerminalCandidates(
+        {
+          "thread-1": makeTerminalNotificationThreadState({
+            runningTerminalIds: ["terminal-1"],
+          }),
+        },
+        {
+          "thread-1": makeTerminalNotificationThreadState({
+            terminalAttentionStatesById: { "terminal-1": "review" },
+            terminalLabelsById: { "terminal-1": "''" },
+            terminalTitleOverridesById: { "terminal-1": "`   `" },
+          }),
+        },
+      ),
+    ).toEqual([
+      {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        terminalId: "terminal-1",
+        cliKind: null,
+        title: "Terminal",
+      },
+    ]);
   });
 });
 

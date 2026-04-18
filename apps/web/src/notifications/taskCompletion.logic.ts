@@ -165,14 +165,26 @@ function resolveTerminalNotificationState(
   return "idle";
 }
 
+function normalizeTerminalNotificationTitleCandidate(
+  value: string | null | undefined,
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return /^(["'`])\s*\1$/.test(trimmed) ? undefined : trimmed;
+}
+
 function resolveTerminalNotificationTitle(
   threadState: TerminalNotificationThreadState | undefined,
   terminalId: string,
 ): { cliKind: TerminalCliKind | null; title: string } {
   const cliKind = threadState?.terminalCliKindsById?.[terminalId] ?? null;
   const title =
-    threadState?.terminalTitleOverridesById?.[terminalId]?.trim() ||
-    threadState?.terminalLabelsById?.[terminalId]?.trim() ||
+    normalizeTerminalNotificationTitleCandidate(
+      threadState?.terminalTitleOverridesById?.[terminalId],
+    ) ||
+    normalizeTerminalNotificationTitleCandidate(threadState?.terminalLabelsById?.[terminalId]) ||
     (cliKind ? defaultTerminalTitleForCliKind(cliKind) : "Terminal");
   return { cliKind, title };
 }
