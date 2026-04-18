@@ -194,6 +194,7 @@ describe("subagentAccentColor", () => {
 describe("normalizeSubagentStatusKind", () => {
   it("maps common provider statuses into Remodex-style buckets", () => {
     expect(normalizeSubagentStatusKind("in_progress")).toBe("running");
+    expect(normalizeSubagentStatusKind(" in__progress ")).toBe("running");
     expect(normalizeSubagentStatusKind("completed")).toBe("completed");
     expect(normalizeSubagentStatusKind("errored")).toBe("failed");
     expect(normalizeSubagentStatusKind("interrupted")).toBe("stopped");
