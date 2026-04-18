@@ -3,6 +3,7 @@
 // model consumed by the local toolbar popover.
 
 import type { ProviderKind } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 import type { ProviderRateLimit, RateLimitWindow } from "~/lib/rateLimits";
 import { normalizeRateLimitLabel } from "~/lib/rateLimits";
@@ -44,9 +45,7 @@ function asFiniteNumber(value: unknown): number | undefined {
 }
 
 function asString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  return typeof value === "string" ? (trimOrNull(value) ?? undefined) : undefined;
 }
 
 function toWindowDurationMins(periodDurationMs: number | undefined): number | undefined {

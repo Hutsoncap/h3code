@@ -191,4 +191,62 @@ describe("openUsageRateLimits", () => {
       },
     ]);
   });
+
+  it("treats quote-wrapped blank metadata as absent before applying canonical fallbacks", () => {
+    expect(
+      normalizeOpenUsageSnapshot(
+        {
+          providerId: ' "   " ',
+          fetchedAt: "2099-04-08T18:00:00.000Z",
+          lines: [
+            {
+              type: "progress",
+              label: ' "   " ',
+              used: 20,
+              limit: 100,
+              resetsAt: ' "   " ',
+            },
+          ],
+        },
+        "claudeAgent",
+      ),
+    ).toEqual({
+      provider: "claudeAgent",
+      updatedAt: "2099-04-08T18:00:00.000Z",
+      limits: [
+        {
+          window: "Current",
+          usedPercent: 20,
+        },
+      ],
+    });
+
+    expect(
+      normalizeOpenUsageUsageLines({
+        lines: [
+          {
+            type: "text",
+            label: "Today",
+            value: "$5.17 · 9.2M tokens",
+            subtitle: ' "   " ',
+          },
+          {
+            type: "text",
+            label: ' "   " ',
+            value: "$2.04 · 3.1M tokens",
+          },
+          {
+            type: "text",
+            label: "Yesterday",
+            value: ' "   " ',
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        label: "Today",
+        value: "$5.17 · 9.2M tokens",
+      },
+    ]);
+  });
 });
