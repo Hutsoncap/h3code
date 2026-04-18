@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildReviewPrompt,
+  buildSlashReviewComposerPrompt,
   buildSubagentsPrompt,
   canOfferForkSlashCommand,
   canOfferReviewSlashCommand,
@@ -43,6 +44,10 @@ describe("composerSlashCommands", () => {
       command: "review",
       args: "current diff",
     });
+    expect(parseComposerSlashInvocation('/review "   "')).toEqual({
+      command: "review",
+      args: "",
+    });
     expect(parseComposerSlashInvocation("/fast")).toEqual({
       command: "fast",
       args: "",
@@ -60,6 +65,7 @@ describe("composerSlashCommands", () => {
 
   it("parses /fast actions", () => {
     expect(parseFastSlashCommandAction("/fast")).toBe("toggle");
+    expect(parseFastSlashCommandAction('/fast "   "')).toBe("toggle");
     expect(parseFastSlashCommandAction("/fast on")).toBe("on");
     expect(parseFastSlashCommandAction("/fast off")).toBe("off");
     expect(parseFastSlashCommandAction("/fast status")).toBe("status");
@@ -78,6 +84,10 @@ describe("composerSlashCommands", () => {
     });
     expect(parseForkSlashCommandArgs("  worktree  ")).toEqual({
       target: "worktree",
+      invalid: false,
+    });
+    expect(parseForkSlashCommandArgs(' "   " ')).toEqual({
+      target: null,
       invalid: false,
     });
     expect(parseForkSlashCommandArgs("follow up on the bug")).toEqual({
@@ -176,6 +186,9 @@ describe("composerSlashCommands", () => {
     expect(buildSubagentsPrompt("Already there")).toContain("Already there\n\nRun subagents");
     expect(buildReviewPrompt({ target: "changes" })).toContain("uncommitted changes");
     expect(buildReviewPrompt({ target: "base-branch" })).toContain("base branch");
+    expect(buildSlashReviewComposerPrompt(' "   " ')).toBe(
+      "Review the local code changes for bugs, risks, behavioural regressions, and missing tests. Findings first, ordered by severity.\nFocus on the current uncommitted changes.",
+    );
   });
 
   it("filters app slash commands when a provider exposes the same command natively", () => {
