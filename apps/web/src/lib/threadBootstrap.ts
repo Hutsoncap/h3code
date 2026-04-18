@@ -78,7 +78,21 @@ export interface TerminalThreadCreationState {
 
 function normalizeThreadContextValue(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return null;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 // Normalize the currently active server thread into a stable snapshot for pure helpers.
