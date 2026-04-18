@@ -203,6 +203,21 @@ describe("getDesktopUpdateActionError", () => {
     };
     expect(getDesktopUpdateActionError(result)).toBeNull();
   });
+
+  it("ignores quote-wrapped blank messages for accepted failed attempts", () => {
+    const result: DesktopUpdateActionResult = {
+      accepted: true,
+      completed: false,
+      state: {
+        ...baseState,
+        status: "error",
+        message: ' "   " ',
+        errorContext: "download",
+        canRetry: true,
+      },
+    };
+    expect(getDesktopUpdateActionError(result)).toBeNull();
+  });
 });
 
 describe("desktop update UI helpers", () => {
