@@ -6,6 +6,8 @@
  *
  * @module providerStatusCache
  */
+import path from "node:path";
+
 import { ServerProviderStatus } from "@t3tools/contracts";
 import { Cause, Effect, FileSystem, Path, Schema } from "effect";
 
@@ -33,7 +35,7 @@ export function resolveProviderStatusCachePath(input: {
   readonly stateDir: string;
   readonly provider: ServerProviderStatus["provider"];
 }): string {
-  return `${input.stateDir}/provider-status/${input.provider}.json`;
+  return path.normalize(`${input.stateDir}/provider-status/${input.provider}.json`);
 }
 
 // Ignore unreadable or malformed cache entries so the server can still boot
