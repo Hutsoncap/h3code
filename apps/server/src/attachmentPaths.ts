@@ -3,8 +3,12 @@ import path from "node:path";
 export const ATTACHMENTS_ROUTE_PREFIX = "/attachments";
 
 export function normalizeAttachmentRelativePath(rawRelativePath: string): string | null {
+  if (rawRelativePath.includes("\0") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRelativePath)) {
+    return null;
+  }
+
   const normalized = path.normalize(rawRelativePath).replace(/^[/\\]+/, "");
-  if (normalized.length === 0 || normalized.startsWith("..") || normalized.includes("\0")) {
+  if (normalized.length === 0 || normalized.startsWith("..")) {
     return null;
   }
   return normalized.replace(/\\/g, "/");
