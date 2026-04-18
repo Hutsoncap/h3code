@@ -68,6 +68,53 @@ describe("threadEnvironment", () => {
     });
   });
 
+  it("falls back to the active root branch when the source branch is blank", () => {
+    expect(
+      resolveForkThreadEnvironment({
+        target: "local",
+        activeRootBranch: "main",
+        sourceThread: {
+          branch: "   ",
+          envMode: "local",
+          worktreePath: null,
+        },
+      }),
+    ).toEqual({
+      target: "local",
+      envMode: "local",
+      branch: "main",
+      worktreePath: null,
+      associatedWorktreePath: null,
+      associatedWorktreeBranch: null,
+      associatedWorktreeRef: null,
+    });
+  });
+
+  it("trims padded worktree metadata before reusing a worktree fork locally", () => {
+    expect(
+      resolveForkThreadEnvironment({
+        target: "local",
+        activeRootBranch: "main",
+        sourceThread: {
+          branch: "  feature/worktree-branch  ",
+          envMode: "worktree",
+          worktreePath: "  /repo/.worktrees/feature-worktree-branch  ",
+          associatedWorktreePath: "   ",
+          associatedWorktreeBranch: "  feature/worktree-branch  ",
+          associatedWorktreeRef: "   ",
+        },
+      }),
+    ).toEqual({
+      target: "local",
+      envMode: "worktree",
+      branch: "feature/worktree-branch",
+      worktreePath: "/repo/.worktrees/feature-worktree-branch",
+      associatedWorktreePath: "/repo/.worktrees/feature-worktree-branch",
+      associatedWorktreeBranch: "feature/worktree-branch",
+      associatedWorktreeRef: "feature/worktree-branch",
+    });
+  });
+
   it("marks diff state as pending when a worktree chat has no materialized path yet", () => {
     expect(
       resolveDiffEnvironmentState({

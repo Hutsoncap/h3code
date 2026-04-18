@@ -69,6 +69,11 @@ export interface DiffEnvironmentState {
   disabledReason: string | null;
 }
 
+function normalizeThreadContextValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
 // Diff surfaces stay disabled while a worktree-intended chat is still waiting for its path.
 export function resolveDiffEnvironmentState(input: {
   projectCwd?: string | null | undefined;
@@ -110,14 +115,17 @@ export function resolveForkThreadEnvironment(input: {
     envMode: input.sourceThread.envMode,
     worktreePath: input.sourceThread.worktreePath,
   });
-  const sourceBranch = input.sourceThread.branch ?? input.activeRootBranch;
-  const sourceWorktreePath = input.sourceThread.worktreePath ?? null;
+  const sourceBranch =
+    normalizeThreadContextValue(input.sourceThread.branch) ??
+    normalizeThreadContextValue(input.activeRootBranch);
+  const sourceWorktreePath = normalizeThreadContextValue(input.sourceThread.worktreePath);
   const sourceAssociatedWorktreePath =
-    input.sourceThread.associatedWorktreePath ?? sourceWorktreePath;
+    normalizeThreadContextValue(input.sourceThread.associatedWorktreePath) ?? sourceWorktreePath;
   const sourceAssociatedWorktreeBranch =
-    input.sourceThread.associatedWorktreeBranch ?? sourceBranch;
+    normalizeThreadContextValue(input.sourceThread.associatedWorktreeBranch) ?? sourceBranch;
   const sourceAssociatedWorktreeRef =
-    input.sourceThread.associatedWorktreeRef ?? sourceAssociatedWorktreeBranch;
+    normalizeThreadContextValue(input.sourceThread.associatedWorktreeRef) ??
+    sourceAssociatedWorktreeBranch;
 
   if (input.target === "worktree") {
     const associatedWorktree = deriveAssociatedWorktreeMetadata({
