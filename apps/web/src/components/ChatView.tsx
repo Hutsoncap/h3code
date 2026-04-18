@@ -17,7 +17,6 @@ import {
 } from "@t3tools/contracts";
 import { applyClaudePromptEffortPrefix, getModelCapabilities } from "@t3tools/shared/model";
 import {
-  resolveThreadWorkspaceState,
   resolveThreadBranchSourceCwd,
   resolveThreadWorkspaceCwd as resolveSharedThreadWorkspaceCwd,
 } from "@t3tools/shared/threadEnvironment";
@@ -31,7 +30,6 @@ import { isElectron } from "../env";
 import { parseDiffRouteSearch } from "../diffRouteSearch";
 import { resolveSubagentPresentationForThread } from "../lib/subagentPresentation";
 import {
-  clampCollapsedComposerCursor,
   type ComposerTrigger,
   collapseExpandedComposerCursor,
   detectComposerTrigger,
@@ -65,21 +63,16 @@ import {
   type Thread,
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
-import { useThreadWorkspaceHandoff } from "../hooks/useThreadWorkspaceHandoff";
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { toastManager } from "./ui/toast";
-import { newCommandId } from "~/lib/utils";
-import { readNativeApi } from "~/nativeApi";
 import { useAppSettings } from "../appSettings";
 import {
   type ComposerImageAttachment,
-  type DraftThreadEnvMode,
   type QueuedComposerPlanFollowUp,
   type QueuedComposerTurn,
 } from "../composerDraftStore";
 import { deriveLatestContextWindowSnapshot, deriveCumulativeCostUsd } from "../lib/contextWindow";
 import { type TerminalContextDraft } from "../lib/terminalContext";
-import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
 import {
   resolveSplitViewFocusedThreadId,
   selectSplitView,
@@ -116,11 +109,12 @@ import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatTerminalShortcutBindings } from "./chat/useChatTerminalShortcutBindings";
 import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
-import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import { useChatPendingInteractionBindings } from "./chat/useChatPendingInteractionBindings";
 import { useChatQueuedTurnBindings } from "./chat/useChatQueuedTurnBindings";
 import { useChatProjectScriptBindings } from "./chat/useChatProjectScriptBindings";
+import { useChatTerminalDrawerBindings } from "./chat/useChatTerminalDrawerBindings";
 import { useChatTurnDispatchBindings } from "./chat/useChatTurnDispatchBindings";
+import { useChatViewRuntimeBindings } from "./chat/useChatViewRuntimeBindings";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
@@ -134,10 +128,7 @@ import {
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import {
-  resolveDiffEnvironmentState,
-  resolveThreadEnvironmentMode,
-} from "../lib/threadEnvironment";
+import { resolveDiffEnvironmentState } from "../lib/threadEnvironment";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
@@ -400,12 +391,9 @@ export default function ChatView({
   >({});
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const [expandedWorkGroups, setExpandedWorkGroups] = useState<Record<string, boolean>>({});
-  const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [composerCommandPicker, setComposerCommandPicker] = useState<
     null | "fork-target" | "review-target"
   >(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const [composerCursor, setComposerCursor] = useState(() =>
     collapseExpandedComposerCursor(prompt, prompt.length),
@@ -430,7 +418,6 @@ export default function ChatView({
   }, [threadId]);
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
-  const composerFormHeightRef = useRef(0);
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
   const queuedComposerTurnsRef = useRef<QueuedComposerTurn[]>([]);
   const autoDispatchingQueuedTurnRef = useRef(false);
@@ -803,7 +790,6 @@ export default function ChatView({
   const [keepSettledActiveTurnLayout, setKeepSettledActiveTurnLayout] = useState(false);
   const previousActiveTurnLayoutLiveRef = useRef(activeTurnLayoutLive);
   const previousActiveTurnLayoutKeyRef = useRef<string | null>(null);
-  const nowIso = new Date(nowTick).toISOString();
   const activeWorkStartedAt = hasLiveTurnTail
     ? (activeLatestTurn?.startedAt ?? localDispatch?.startedAt ?? null)
     : deriveActiveWorkStartedAt(
@@ -1196,55 +1182,19 @@ export default function ChatView({
       setTerminalOpen,
       setThreadError,
     });
-  const stopActiveThreadSession = useCallback(async () => {
-    const api = readNativeApi();
-    if (
-      !api ||
-      !isServerThread ||
-      !activeThread ||
-      activeThread.session === null ||
-      activeThread.session.status === "closed"
-    ) {
-      return;
-    }
-
-    await api.orchestration.dispatchCommand({
-      type: "thread.session.stop",
-      commandId: newCommandId(),
-      threadId: activeThread.id,
-      createdAt: new Date().toISOString(),
-    });
-  }, [activeThread, isServerThread]);
   const {
-    handoffBusy,
-    worktreeHandoffDialogOpen,
-    setWorktreeHandoffDialogOpen,
-    worktreeHandoffName,
-    setWorktreeHandoffName,
-    onHandoffToWorktree,
-    onHandoffToLocal,
     confirmWorktreeHandoff,
-  } = useThreadWorkspaceHandoff({
-    activeProject,
-    activeThread,
-    activeRootBranch,
-    activeThreadAssociatedWorktree,
-    isServerThread,
-    stopActiveThreadSession,
-    runProjectScript,
-    setStoreThreadWorkspace,
-    syncServerReadModel,
-  });
-  // Scroll behavior is isolated in a dedicated controller so the renderer tree only wires events.
-  const messageCount = timelineEntries.length;
-  const {
-    messagesScrollElement,
-    showScrollToBottom,
-    setMessagesBottomAnchorRef,
-    setMessagesScrollContainerRef,
+    envMode,
+    envState,
+    expandedWorkGroups,
     forceStickToBottom,
+    handoffBusy,
+    isComposerFooterCompact,
+    messagesScrollElement,
+    nowIso,
+    onHandoffToLocal,
+    onHandoffToWorktree,
     onTimelineHeightChange,
-    onComposerHeightChange,
     onMessagesClickCapture,
     onMessagesPointerCancel,
     onMessagesPointerDown,
@@ -1254,108 +1204,50 @@ export default function ChatView({
     onMessagesTouchMove,
     onMessagesTouchStart,
     onMessagesWheel,
-  } = useChatAutoScrollController({
-    threadId: activeThread?.id ?? null,
-    isStreaming: isWorking,
-    messageCount,
+    onRevertToTurnCount,
+    setExpandedWorkGroups,
+    setMessagesBottomAnchorRef,
+    setMessagesScrollContainerRef,
+    setWorktreeHandoffDialogOpen,
+    setWorktreeHandoffName,
+    showScrollToBottom,
+    worktreeHandoffDialogOpen,
+    worktreeHandoffName,
+  } = useChatViewRuntimeBindings({
+    activeProject,
+    activeRootBranch,
+    activeThread,
+    activeThreadAssociatedWorktree,
+    autoDispatchingQueuedTurnRef,
+    composerCursorSetter: setComposerCursor,
+    composerFooterHasWideActions,
+    composerFormRef,
+    composerImages,
+    composerImagesRef,
+    composerTerminalContexts,
+    composerTerminalContextsRef,
+    draftThreadEnvMode: draftThread?.envMode ?? null,
+    focusComposer,
+    hasLiveTurn,
+    isConnecting,
+    isRevertingCheckpoint,
+    isSendBusy,
+    isServerThread,
+    isWorking,
+    messageCount: timelineEntries.length,
+    prompt,
+    promptRef,
+    queuedComposerTurns,
+    queuedComposerTurnsRef,
+    resolvedThreadEnvMode,
+    resolvedThreadWorktreePath,
+    runProjectScript,
+    setIsRevertingCheckpoint,
+    setStoreThreadWorkspace,
+    setThreadError,
+    syncServerReadModel,
+    terminalOpen: terminalState.terminalOpen,
   });
-
-  useLayoutEffect(() => {
-    const composerForm = composerFormRef.current;
-    if (!composerForm) return;
-    const measureComposerFormWidth = () => composerForm.clientWidth;
-
-    composerFormHeightRef.current = composerForm.getBoundingClientRect().height;
-    setIsComposerFooterCompact(
-      shouldUseCompactComposerFooter(measureComposerFormWidth(), {
-        hasWideActions: composerFooterHasWideActions,
-      }),
-    );
-    if (typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver((entries) => {
-      const [entry] = entries;
-      if (!entry) return;
-
-      const nextCompact = shouldUseCompactComposerFooter(measureComposerFormWidth(), {
-        hasWideActions: composerFooterHasWideActions,
-      });
-      setIsComposerFooterCompact((previous) => (previous === nextCompact ? previous : nextCompact));
-
-      const nextHeight = entry.contentRect.height;
-      const previousHeight = composerFormHeightRef.current;
-      composerFormHeightRef.current = nextHeight;
-
-      onComposerHeightChange(previousHeight, nextHeight);
-    });
-
-    observer.observe(composerForm);
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeThread?.id, composerFooterHasWideActions, onComposerHeightChange]);
-
-  useEffect(() => {
-    setExpandedWorkGroups({});
-  }, [activeThread?.id]);
-
-  useEffect(() => {
-    setIsRevertingCheckpoint(false);
-  }, [activeThread?.id]);
-
-  useEffect(() => {
-    if (!activeThread?.id || terminalState.terminalOpen) return;
-    const frame = window.requestAnimationFrame(() => {
-      focusComposer();
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [activeThread?.id, focusComposer, terminalState.terminalOpen]);
-
-  useEffect(() => {
-    composerImagesRef.current = composerImages;
-  }, [composerImages]);
-
-  useEffect(() => {
-    composerTerminalContextsRef.current = composerTerminalContexts;
-  }, [composerTerminalContexts]);
-
-  useEffect(() => {
-    queuedComposerTurnsRef.current = queuedComposerTurns;
-  }, [queuedComposerTurns]);
-
-  useEffect(() => {
-    autoDispatchingQueuedTurnRef.current = false;
-  }, [threadId]);
-
-  useEffect(() => {
-    promptRef.current = prompt;
-    setComposerCursor((existing) => clampCollapsedComposerCursor(prompt, existing));
-  }, [prompt]);
-
-  const activeWorktreePath = activeThread?.worktreePath;
-  const envMode: DraftThreadEnvMode = isServerThread
-    ? resolveThreadEnvironmentMode({
-        envMode: activeThread?.envMode,
-        worktreePath: activeWorktreePath ?? null,
-      })
-    : (draftThread?.envMode ?? "local");
-  const envState = resolveThreadWorkspaceState({
-    envMode: resolvedThreadEnvMode,
-    worktreePath: resolvedThreadWorktreePath,
-  });
-
-  useEffect(() => {
-    if (!isWorking) return;
-    setNowTick(Date.now());
-    const timer = window.setInterval(() => {
-      setNowTick(Date.now());
-    }, 1000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [isWorking]);
 
   const { beginLocalDispatch, dispatchChatTurn, onInterrupt, resetLocalDispatch } =
     useChatTurnDispatchBindings({
@@ -1438,118 +1330,32 @@ export default function ChatView({
     terminalWorkspaceTerminalTabActive,
     toggleTerminalVisibility,
   });
-  const terminalDrawerProps = useMemo(
-    () => ({
-      threadId,
-      cwd: gitCwd ?? activeProject?.cwd ?? "",
-      runtimeEnv: threadTerminalRuntimeEnv,
-      height: terminalState.terminalHeight,
-      terminalIds: terminalState.terminalIds,
-      terminalLabelsById: terminalState.terminalLabelsById,
-      terminalTitleOverridesById: terminalState.terminalTitleOverridesById,
-      terminalCliKindsById: terminalState.terminalCliKindsById,
-      terminalAttentionStatesById: terminalState.terminalAttentionStatesById ?? {},
-      runningTerminalIds: terminalState.runningTerminalIds,
-      activeTerminalId: terminalState.activeTerminalId,
-      terminalGroups: terminalState.terminalGroups,
-      activeTerminalGroupId: terminalState.activeTerminalGroupId,
-      focusRequestId: terminalFocusRequestId,
-      onSplitTerminal: splitTerminalRight,
-      onSplitTerminalDown: splitTerminalDown,
-      onNewTerminal: createNewTerminal,
-      onNewTerminalTab: createNewTerminalTab,
-      onMoveTerminalToGroup: moveTerminalToNewGroup,
-      splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
-      splitDownShortcutLabel: splitTerminalDownShortcutLabel ?? undefined,
-      newShortcutLabel: newTerminalShortcutLabel ?? undefined,
-      closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
-      workspaceCloseShortcutLabel: closeWorkspaceShortcutLabel ?? undefined,
-      onActiveTerminalChange: activateTerminal,
-      onCloseTerminal: closeTerminal,
-      onCloseTerminalGroup: closeTerminalGroup,
-      onHeightChange: setTerminalHeight,
-      onResizeTerminalSplit: resizeTerminalSplit,
-      onTerminalMetadataChange: setTerminalMetadata,
-      onTerminalActivityChange: setTerminalActivity,
-      onAddTerminalContext: addTerminalContextToDraft,
-    }),
-    [
-      activeProject?.cwd,
-      activateTerminal,
-      addTerminalContextToDraft,
-      closeTerminal,
-      closeTerminalShortcutLabel,
-      closeWorkspaceShortcutLabel,
-      createNewTerminal,
-      createNewTerminalTab,
-      moveTerminalToNewGroup,
-      gitCwd,
-      newTerminalShortcutLabel,
-      closeTerminalGroup,
-      resizeTerminalSplit,
-      setTerminalActivity,
-      setTerminalHeight,
-      setTerminalMetadata,
-      splitTerminalRight,
-      splitTerminalDown,
-      splitTerminalShortcutLabel,
-      splitTerminalDownShortcutLabel,
-      terminalFocusRequestId,
-      terminalState.activeTerminalGroupId,
-      terminalState.activeTerminalId,
-      terminalState.terminalAttentionStatesById,
-      terminalState.terminalCliKindsById,
-      terminalState.terminalGroups,
-      terminalState.terminalHeight,
-      terminalState.terminalIds,
-      terminalState.terminalLabelsById,
-      terminalState.terminalTitleOverridesById,
-      terminalState.runningTerminalIds,
-      threadId,
-      threadTerminalRuntimeEnv,
-    ],
-  );
-
-  const onRevertToTurnCount = useCallback(
-    async (turnCount: number) => {
-      const api = readNativeApi();
-      if (!api || !activeThread || isRevertingCheckpoint) return;
-
-      if (hasLiveTurn || isSendBusy || isConnecting) {
-        setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
-        return;
-      }
-      const confirmed = await api.dialogs.confirm(
-        [
-          `Revert this thread to checkpoint ${turnCount}?`,
-          "This will discard newer messages and turn diffs in this thread.",
-          "This action cannot be undone.",
-        ].join("\n"),
-      );
-      if (!confirmed) {
-        return;
-      }
-
-      setIsRevertingCheckpoint(true);
-      setThreadError(activeThread.id, null);
-      try {
-        await api.orchestration.dispatchCommand({
-          type: "thread.checkpoint.revert",
-          commandId: newCommandId(),
-          threadId: activeThread.id,
-          turnCount,
-          createdAt: new Date().toISOString(),
-        });
-      } catch (err) {
-        setThreadError(
-          activeThread.id,
-          err instanceof Error ? err.message : "Failed to revert thread state.",
-        );
-      }
-      setIsRevertingCheckpoint(false);
-    },
-    [activeThread, hasLiveTurn, isConnecting, isRevertingCheckpoint, isSendBusy, setThreadError],
-  );
+  const terminalDrawerProps = useChatTerminalDrawerBindings({
+    activateTerminal,
+    activeProjectCwd: activeProject?.cwd,
+    addTerminalContextToDraft,
+    closeTerminal,
+    closeTerminalGroup,
+    closeTerminalShortcutLabel,
+    closeWorkspaceShortcutLabel,
+    createNewTerminal,
+    createNewTerminalTab,
+    gitCwd,
+    moveTerminalToNewGroup,
+    newTerminalShortcutLabel,
+    resizeTerminalSplit,
+    setTerminalActivity,
+    setTerminalHeight,
+    setTerminalMetadata,
+    splitTerminalDown,
+    splitTerminalDownShortcutLabel,
+    splitTerminalRight,
+    splitTerminalShortcutLabel,
+    terminalFocusRequestId,
+    terminalState,
+    threadId,
+    threadTerminalRuntimeEnv,
+  });
 
   const { dispatchQueuedChatTurn, onSend, removeQueuedComposerTurn, restoreQueuedTurnToComposer } =
     useChatSendBindings({
