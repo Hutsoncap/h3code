@@ -533,15 +533,16 @@ function normalizeActivities(
 }
 
 function isNonFatalThreadErrorMessage(message: string | null | undefined): boolean {
-  if (!message) {
+  const normalized = trimOrNull(message)?.toLowerCase();
+  if (!normalized) {
     return false;
   }
-  const normalized = message.trim().toLowerCase();
   return normalized.includes("write_stdin failed: stdin is closed for this session");
 }
 
 function normalizeThreadErrorMessage(message: string | null | undefined): string | null {
-  return message && !isNonFatalThreadErrorMessage(message) ? message : null;
+  const normalized = trimOrNull(message);
+  return normalized && !isNonFatalThreadErrorMessage(normalized) ? normalized : null;
 }
 
 function normalizeThreadSession(
@@ -551,10 +552,7 @@ function normalizeThreadSession(
   if (!incoming) {
     return null;
   }
-  const nextLastError =
-    incoming.lastError && !isNonFatalThreadErrorMessage(incoming.lastError)
-      ? incoming.lastError
-      : undefined;
+  const nextLastError = normalizeThreadErrorMessage(incoming.lastError) ?? undefined;
   const nextSession = {
     provider: toLegacyProvider(incoming.providerName),
     status: toLegacySessionStatus(incoming.status),

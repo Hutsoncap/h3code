@@ -1089,6 +1089,28 @@ describe("store read model sync", () => {
     expect(next.threads[0]?.session?.lastError).toBeUndefined();
   });
 
+  it("treats quote-wrapped blank runtime errors as absent during read model sync", () => {
+    const initialState = makeState(makeThread());
+    const readModel = makeReadModel(
+      makeReadModelThread({
+        session: {
+          threadId: ThreadId.makeUnsafe("thread-1"),
+          status: "error",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: ' "   " ',
+          updatedAt: "2026-02-27T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const next = syncServerReadModel(initialState, readModel);
+
+    expect(next.threads[0]?.error).toBeNull();
+    expect(next.threads[0]?.session?.lastError).toBeUndefined();
+  });
+
   it("reconciles snapshot state even when thread updatedAt matches a prior live event", () => {
     const sourceProposedPlan = {
       threadId: ThreadId.makeUnsafe("thread-source"),
