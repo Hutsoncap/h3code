@@ -29,6 +29,13 @@ describe("resolveThreadEnvironmentMode", () => {
     expect(resolveThreadEnvironmentMode({ envMode: "local", worktreePath: "   " })).toBe("local");
     expect(resolveThreadEnvironmentMode({ worktreePath: "   " })).toBe("local");
   });
+
+  it("ignores quote-wrapped blank worktree paths", () => {
+    expect(resolveThreadEnvironmentMode({ envMode: "local", worktreePath: ' "   " ' })).toBe(
+      "local",
+    );
+    expect(resolveThreadEnvironmentMode({ worktreePath: " '   ' " })).toBe("local");
+  });
 });
 
 describe("resolveThreadWorkspaceState", () => {
@@ -49,6 +56,12 @@ describe("resolveThreadWorkspaceState", () => {
 
   it("keeps whitespace-only worktree threads pending", () => {
     expect(resolveThreadWorkspaceState({ envMode: "worktree", worktreePath: "   " })).toBe(
+      "worktree-pending",
+    );
+  });
+
+  it("keeps quote-wrapped blank worktree threads pending", () => {
+    expect(resolveThreadWorkspaceState({ envMode: "worktree", worktreePath: ' "   " ' })).toBe(
       "worktree-pending",
     );
   });
@@ -96,6 +109,17 @@ describe("resolveThreadWorkspaceCwd", () => {
     ).toBeNull();
     expect(isPendingThreadWorktree({ envMode: "worktree", worktreePath: "   " })).toBe(true);
   });
+
+  it("treats quote-wrapped blank worktree paths as pending", () => {
+    expect(
+      resolveThreadWorkspaceCwd({
+        projectCwd: "/repo",
+        envMode: "worktree",
+        worktreePath: ' "   " ',
+      }),
+    ).toBeNull();
+    expect(isPendingThreadWorktree({ envMode: "worktree", worktreePath: " '   ' " })).toBe(true);
+  });
 });
 
 describe("resolveThreadBranchSourceCwd", () => {
@@ -113,6 +137,15 @@ describe("resolveThreadBranchSourceCwd", () => {
       resolveThreadBranchSourceCwd({
         projectCwd: "/repo",
         worktreePath: "   ",
+      }),
+    ).toBe("/repo");
+  });
+
+  it("falls back to the project root for quote-wrapped blank worktree paths", () => {
+    expect(
+      resolveThreadBranchSourceCwd({
+        projectCwd: "/repo",
+        worktreePath: ' "   " ',
       }),
     ).toBe("/repo");
   });
