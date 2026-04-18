@@ -108,10 +108,8 @@ import { useThreadWorkspaceHandoff } from "../hooks/useThreadWorkspaceHandoff";
 import { useComposerCommandMenuItems } from "../hooks/useComposerCommandMenuItems";
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import { isMacPlatform } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
-import { projectScriptRuntimeEnv, projectScriptIdFromCommand } from "~/projectScripts";
+import { projectScriptRuntimeEnv } from "~/projectScripts";
 import { newCommandId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
@@ -120,7 +118,6 @@ import {
   getProviderStartOptions,
   useAppSettings,
 } from "../appSettings";
-import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -161,6 +158,7 @@ import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalActionBindings } from "./chat/useChatTerminalActionBindings";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
+import { useChatTerminalShortcutBindings } from "./chat/useChatTerminalShortcutBindings";
 import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
@@ -204,14 +202,6 @@ const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 const EMPTY_PROVIDER_NATIVE_COMMANDS: ProviderNativeCommandDescriptor[] = [];
 const EMPTY_PROVIDER_SKILLS: ProviderSkillDescriptor[] = [];
-function eventTargetsComposer(
-  event: globalThis.KeyboardEvent,
-  composerForm: HTMLFormElement | null,
-): boolean {
-  if (!composerForm) return false;
-  const target = event.target;
-  return target instanceof Node ? composerForm.contains(target) : false;
-}
 const EMPTY_AVAILABLE_EDITORS: EditorId[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
@@ -697,8 +687,6 @@ export default function ChatView({
       }) => Promise<boolean>)
   >(null);
   const sendInFlightRef = useRef(false);
-  const terminalOpenByThreadRef = useRef<Record<string, boolean>>({});
-  const activatedThreadIdRef = useRef<ThreadId | null>(null);
 
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
@@ -1706,44 +1694,6 @@ export default function ChatView({
   }, [activeProjectCwd, activeThreadWorktreePath]);
   // Default true while loading to avoid toolbar flicker.
   const isGitRepo = branchesQuery.data?.isRepo ?? true;
-  const terminalToggleShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.toggle"),
-    [keybindings],
-  );
-  const splitTerminalShortcutLabel = useMemo(
-    () =>
-      shortcutLabelForCommand(keybindings, "terminal.splitRight") ??
-      shortcutLabelForCommand(keybindings, "terminal.split"),
-    [keybindings],
-  );
-  const splitTerminalDownShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.splitDown"),
-    [keybindings],
-  );
-  const newTerminalShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.new"),
-    [keybindings],
-  );
-  const closeTerminalShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.close"),
-    [keybindings],
-  );
-  const closeWorkspaceShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.workspace.closeActive"),
-    [keybindings],
-  );
-  const diffPanelShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "diff.toggle"),
-    [keybindings],
-  );
-  const browserPanelShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "browser.toggle"),
-    [keybindings],
-  );
-  const chatSplitShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "chat.split"),
-    [keybindings],
-  );
   const onToggleDiff = useCallback(() => {
     if (diffEnvironmentPending && !diffOpen) {
       return;
@@ -1946,93 +1896,6 @@ export default function ChatView({
     navigateHome: navigateHomeAfterTerminalDelete,
     navigateToThread: navigateToSplitViewThreadAfterTerminalDelete,
   });
-  // Desktop accelerators like Cmd+T can be claimed by Electron before the page sees keydown.
-  useEffect(() => {
-    const onMenuAction = window.desktopBridge?.onMenuAction;
-    if (typeof onMenuAction !== "function" || !isFocusedPane) {
-      return;
-    }
-
-    const unsubscribe = onMenuAction((action) => {
-      if (action !== "new-terminal-tab") return;
-      createTerminalFromShortcut();
-    });
-
-    return () => {
-      unsubscribe?.();
-    };
-  }, [createTerminalFromShortcut, isFocusedPane]);
-  const terminalDrawerProps = useMemo(
-    () => ({
-      threadId,
-      cwd: gitCwd ?? activeProject?.cwd ?? "",
-      runtimeEnv: threadTerminalRuntimeEnv,
-      height: terminalState.terminalHeight,
-      terminalIds: terminalState.terminalIds,
-      terminalLabelsById: terminalState.terminalLabelsById,
-      terminalTitleOverridesById: terminalState.terminalTitleOverridesById,
-      terminalCliKindsById: terminalState.terminalCliKindsById,
-      terminalAttentionStatesById: terminalState.terminalAttentionStatesById ?? {},
-      runningTerminalIds: terminalState.runningTerminalIds,
-      activeTerminalId: terminalState.activeTerminalId,
-      terminalGroups: terminalState.terminalGroups,
-      activeTerminalGroupId: terminalState.activeTerminalGroupId,
-      focusRequestId: terminalFocusRequestId,
-      onSplitTerminal: splitTerminalRight,
-      onSplitTerminalDown: splitTerminalDown,
-      onNewTerminal: createNewTerminal,
-      onNewTerminalTab: createNewTerminalTab,
-      onMoveTerminalToGroup: moveTerminalToNewGroup,
-      splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
-      splitDownShortcutLabel: splitTerminalDownShortcutLabel ?? undefined,
-      newShortcutLabel: newTerminalShortcutLabel ?? undefined,
-      closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
-      workspaceCloseShortcutLabel: closeWorkspaceShortcutLabel ?? undefined,
-      onActiveTerminalChange: activateTerminal,
-      onCloseTerminal: closeTerminal,
-      onCloseTerminalGroup: closeTerminalGroup,
-      onHeightChange: setTerminalHeight,
-      onResizeTerminalSplit: resizeTerminalSplit,
-      onTerminalMetadataChange: setTerminalMetadata,
-      onTerminalActivityChange: setTerminalActivity,
-      onAddTerminalContext: addTerminalContextToDraft,
-    }),
-    [
-      activeProject?.cwd,
-      activateTerminal,
-      addTerminalContextToDraft,
-      closeTerminal,
-      closeTerminalShortcutLabel,
-      closeWorkspaceShortcutLabel,
-      createNewTerminal,
-      createNewTerminalTab,
-      moveTerminalToNewGroup,
-      gitCwd,
-      newTerminalShortcutLabel,
-      closeTerminalGroup,
-      resizeTerminalSplit,
-      setTerminalActivity,
-      setTerminalHeight,
-      setTerminalMetadata,
-      splitTerminalRight,
-      splitTerminalDown,
-      splitTerminalShortcutLabel,
-      splitTerminalDownShortcutLabel,
-      terminalFocusRequestId,
-      terminalState.activeTerminalGroupId,
-      terminalState.activeTerminalId,
-      terminalState.terminalAttentionStatesById,
-      terminalState.terminalCliKindsById,
-      terminalState.terminalGroups,
-      terminalState.terminalHeight,
-      terminalState.terminalIds,
-      terminalState.terminalLabelsById,
-      terminalState.terminalTitleOverridesById,
-      terminalState.runningTerminalIds,
-      threadId,
-      threadTerminalRuntimeEnv,
-    ],
-  );
   const { runProjectScript, saveProjectScript, updateProjectScript, deleteProjectScript } =
     useChatProjectScriptBindings({
       activeProject: activeProject ?? null,
@@ -2519,260 +2382,126 @@ export default function ChatView({
       setThreadError,
       settingsEnableAssistantStreaming: settings.enableAssistantStreaming,
     });
-
-  useEffect(() => {
-    if (!activeThreadId) return;
-    const previous = terminalOpenByThreadRef.current[activeThreadId] ?? false;
-    const current = Boolean(terminalState.terminalOpen);
-
-    if (!previous && current) {
-      terminalOpenByThreadRef.current[activeThreadId] = current;
-      requestTerminalFocus();
-      return;
-    } else if (previous && !current) {
-      terminalOpenByThreadRef.current[activeThreadId] = current;
-      const frame = window.requestAnimationFrame(() => {
-        focusComposer();
-      });
-      return () => {
-        window.cancelAnimationFrame(frame);
-      };
-    }
-
-    terminalOpenByThreadRef.current[activeThreadId] = current;
-  }, [activeThreadId, focusComposer, requestTerminalFocus, terminalState.terminalOpen]);
-
-  useEffect(() => {
-    if (!activeThreadId) {
-      activatedThreadIdRef.current = null;
-      return;
-    }
-    if (activatedThreadIdRef.current === activeThreadId) {
-      return;
-    }
-    activatedThreadIdRef.current = activeThreadId;
-    if (terminalState.entryPoint !== "terminal") {
-      return;
-    }
-    openTerminalThreadPage();
-  }, [activeThreadId, openTerminalThreadPage, terminalState.entryPoint]);
-
-  useEffect(() => {
-    if (!terminalWorkspaceOpen) {
-      return;
-    }
-
-    if (terminalState.workspaceActiveTab === "terminal") {
-      requestTerminalFocus();
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      focusComposer();
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [
-    focusComposer,
-    requestTerminalFocus,
-    terminalState.workspaceActiveTab,
-    terminalWorkspaceOpen,
-  ]);
-
-  useEffect(() => {
-    if (surfaceMode === "split" && !isFocusedPane) {
-      return;
-    }
-
-    const handler = (event: globalThis.KeyboardEvent) => {
-      if (!activeThreadId || event.defaultPrevented) return;
-      // Mirror terminal interrupt semantics without stealing regular copy shortcuts.
-      if (
-        hasLiveTurn &&
-        isMacPlatform(navigator.platform) &&
-        event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "c" &&
-        eventTargetsComposer(event, composerFormRef.current)
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        void onInterrupt();
-        return;
-      }
-      const shortcutContext = {
-        terminalFocus: isTerminalFocused(),
-        terminalOpen: Boolean(terminalState.terminalOpen),
-        terminalWorkspaceOpen,
-        terminalWorkspaceTerminalOnly: terminalState.workspaceLayout === "terminal-only",
-        terminalWorkspaceTerminalTabActive,
-        terminalWorkspaceChatTabActive,
-      };
-
-      const command = resolveShortcutCommand(event, keybindings, {
-        context: shortcutContext,
-      });
-      if (!command) return;
-
-      if (command === "terminal.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleTerminalVisibility();
-        return;
-      }
-
-      if (command === "terminal.split" || command === "terminal.splitRight") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminalRight();
-        return;
-      }
-
-      if (command === "terminal.splitLeft") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminalLeft();
-        return;
-      }
-
-      if (command === "terminal.splitDown") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminalDown();
-        return;
-      }
-
-      if (command === "terminal.splitUp") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminalUp();
-        return;
-      }
-
-      if (command === "terminal.close") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) return;
-        closeTerminal(terminalState.activeTerminalId);
-        return;
-      }
-
-      if (command === "terminal.new") {
-        event.preventDefault();
-        event.stopPropagation();
-        createTerminalFromShortcut();
-        return;
-      }
-
-      if (command === "terminal.workspace.newFullWidth") {
-        event.preventDefault();
-        event.stopPropagation();
-        openNewFullWidthTerminal();
-        return;
-      }
-
-      if (command === "terminal.workspace.closeActive") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeActiveWorkspaceView();
-        return;
-      }
-
-      if (command === "terminal.workspace.terminal") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalWorkspaceOpen) return;
-        setTerminalWorkspaceTab("terminal");
-        return;
-      }
-
-      if (command === "terminal.workspace.chat") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalWorkspaceOpen) return;
-        setTerminalWorkspaceTab("chat");
-        return;
-      }
-
-      if (command === "diff.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        onToggleDiff();
-        return;
-      }
-
-      if (command === "browser.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!isElectron) return;
-        onToggleBrowser();
-        return;
-      }
-
-      if (command === "chat.split") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (surfaceMode === "single" && onSplitSurface) {
-          onSplitSurface();
-        }
-        return;
-      }
-
-      const scriptId = projectScriptIdFromCommand(command);
-      if (!scriptId || !activeProject) return;
-      const script = activeProject.scripts.find((entry) => entry.id === scriptId);
-      if (!script) return;
-      event.preventDefault();
-      event.stopPropagation();
-      void runProjectScript(script);
-    };
-    window.addEventListener("keydown", handler, { capture: true });
-    return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [
-    activeProject,
-    terminalState.terminalOpen,
-    terminalState.activeTerminalId,
-    terminalState.workspaceLayout,
+  const {
+    browserPanelShortcutLabel,
+    chatSplitShortcutLabel,
+    closeTerminalShortcutLabel,
+    closeWorkspaceShortcutLabel,
+    diffPanelShortcutLabel,
+    newTerminalShortcutLabel,
+    splitTerminalDownShortcutLabel,
+    splitTerminalShortcutLabel,
+    terminalToggleShortcutLabel,
+  } = useChatTerminalShortcutBindings({
+    activeProjectScripts: activeProject?.scripts,
     activeThreadId,
-    closeTerminal,
     closeActiveWorkspaceView,
+    closeTerminal,
+    composerFormRef,
     createTerminalFromShortcut,
-    setTerminalOpen,
-    openNewFullWidthTerminal,
-    runProjectScript,
+    focusComposer,
+    hasLiveTurn,
+    isElectron,
+    isFocusedPane,
     keybindings,
+    onInterrupt,
+    onSplitSurface,
+    onToggleBrowser,
+    onToggleDiff,
+    openNewFullWidthTerminal,
+    openTerminalThreadPage,
+    requestTerminalFocus,
+    runProjectScript,
+    setTerminalOpen,
+    setTerminalWorkspaceTab,
     splitTerminalDown,
     splitTerminalLeft,
     splitTerminalRight,
     splitTerminalUp,
+    surfaceMode,
+    terminalState: {
+      activeTerminalId: terminalState.activeTerminalId,
+      entryPoint: terminalState.entryPoint,
+      open: terminalState.terminalOpen,
+      workspaceActiveTab: terminalState.workspaceActiveTab,
+      workspaceLayout: terminalState.workspaceLayout,
+    },
     terminalWorkspaceChatTabActive,
     terminalWorkspaceOpen,
     terminalWorkspaceTerminalTabActive,
-    onToggleBrowser,
-    onToggleDiff,
-    onInterrupt,
-    onSplitSurface,
-    isFocusedPane,
-    hasLiveTurn,
-    setTerminalWorkspaceTab,
-    surfaceMode,
     toggleTerminalVisibility,
-  ]);
+  });
+  const terminalDrawerProps = useMemo(
+    () => ({
+      threadId,
+      cwd: gitCwd ?? activeProject?.cwd ?? "",
+      runtimeEnv: threadTerminalRuntimeEnv,
+      height: terminalState.terminalHeight,
+      terminalIds: terminalState.terminalIds,
+      terminalLabelsById: terminalState.terminalLabelsById,
+      terminalTitleOverridesById: terminalState.terminalTitleOverridesById,
+      terminalCliKindsById: terminalState.terminalCliKindsById,
+      terminalAttentionStatesById: terminalState.terminalAttentionStatesById ?? {},
+      runningTerminalIds: terminalState.runningTerminalIds,
+      activeTerminalId: terminalState.activeTerminalId,
+      terminalGroups: terminalState.terminalGroups,
+      activeTerminalGroupId: terminalState.activeTerminalGroupId,
+      focusRequestId: terminalFocusRequestId,
+      onSplitTerminal: splitTerminalRight,
+      onSplitTerminalDown: splitTerminalDown,
+      onNewTerminal: createNewTerminal,
+      onNewTerminalTab: createNewTerminalTab,
+      onMoveTerminalToGroup: moveTerminalToNewGroup,
+      splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
+      splitDownShortcutLabel: splitTerminalDownShortcutLabel ?? undefined,
+      newShortcutLabel: newTerminalShortcutLabel ?? undefined,
+      closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
+      workspaceCloseShortcutLabel: closeWorkspaceShortcutLabel ?? undefined,
+      onActiveTerminalChange: activateTerminal,
+      onCloseTerminal: closeTerminal,
+      onCloseTerminalGroup: closeTerminalGroup,
+      onHeightChange: setTerminalHeight,
+      onResizeTerminalSplit: resizeTerminalSplit,
+      onTerminalMetadataChange: setTerminalMetadata,
+      onTerminalActivityChange: setTerminalActivity,
+      onAddTerminalContext: addTerminalContextToDraft,
+    }),
+    [
+      activeProject?.cwd,
+      activateTerminal,
+      addTerminalContextToDraft,
+      closeTerminal,
+      closeTerminalShortcutLabel,
+      closeWorkspaceShortcutLabel,
+      createNewTerminal,
+      createNewTerminalTab,
+      moveTerminalToNewGroup,
+      gitCwd,
+      newTerminalShortcutLabel,
+      closeTerminalGroup,
+      resizeTerminalSplit,
+      setTerminalActivity,
+      setTerminalHeight,
+      setTerminalMetadata,
+      splitTerminalRight,
+      splitTerminalDown,
+      splitTerminalShortcutLabel,
+      splitTerminalDownShortcutLabel,
+      terminalFocusRequestId,
+      terminalState.activeTerminalGroupId,
+      terminalState.activeTerminalId,
+      terminalState.terminalAttentionStatesById,
+      terminalState.terminalCliKindsById,
+      terminalState.terminalGroups,
+      terminalState.terminalHeight,
+      terminalState.terminalIds,
+      terminalState.terminalLabelsById,
+      terminalState.terminalTitleOverridesById,
+      terminalState.runningTerminalIds,
+      threadId,
+      threadTerminalRuntimeEnv,
+    ],
+  );
 
   const onRevertToTurnCount = useCallback(
     async (turnCount: number) => {
