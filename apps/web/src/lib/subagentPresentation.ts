@@ -8,6 +8,7 @@ import {
   extractSubagentIdentityHints as extractParsedSubagentIdentityHints,
   resolveSubagentIdentityFromDirectory,
 } from "@t3tools/shared/subagents";
+import { trimOrNull } from "@t3tools/shared/model";
 
 const SUBAGENT_ACCENT_PALETTE = [
   "#b84e44",
@@ -87,7 +88,7 @@ function fallbackSubagentLabel(value: string | null): string | null {
 }
 
 function normalizeWhitespace(value: string | null | undefined): string | null {
-  const normalized = value?.trim().replace(/\s+/g, " ") ?? "";
+  const normalized = trimOrNull(value)?.replace(/\s+/g, " ") ?? "";
   return normalized.length > 0 ? normalized : null;
 }
 

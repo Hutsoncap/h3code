@@ -53,6 +53,16 @@ describe("resolveSubagentPresentation", () => {
 
     expect(presentation.primaryLabel).toBe("019d8cae-0628-7bf1-bf86-5cbc31cd582c");
   });
+
+  it("treats quote-wrapped blank titles as absent and falls back to the provider label", () => {
+    const presentation = resolveSubagentPresentation({
+      title: ' "   " ',
+      fallbackId: "subagent:thread-1:agent-1",
+    });
+
+    expect(presentation.title).toBeNull();
+    expect(presentation.primaryLabel).toBe("agent-1");
+  });
 });
 
 describe("resolveSubagentPresentationForThread", () => {
