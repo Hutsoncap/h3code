@@ -4,6 +4,7 @@ import {
   isBuiltInComposerSlashCommand,
   type ComposerSlashCommand,
 } from "./composerSlashCommands";
+import { trimOrNull } from "@t3tools/shared/model";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 export type ComposerTriggerKind = "mention" | "slash-command" | "slash-model" | "skill";
@@ -283,7 +284,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
     if (modelMatch) {
       return {
         kind: "slash-model",
-        query: (modelMatch[1] ?? "").trim(),
+        query: trimOrNull(modelMatch[1] ?? "") ?? "",
         rangeStart: lineStart,
         rangeEnd: cursor,
       };
