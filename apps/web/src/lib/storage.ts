@@ -80,18 +80,59 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof value === "object" && value !== null && "then" in value;
 }
 
+function shouldValidatePersistedStorageValue(value: string): boolean {
+  const trimmed = value.trimStart();
+  if (trimmed.length === 0) return false;
+
+  const firstChar = trimmed[0];
+  if (firstChar === undefined) return false;
+
+  return (
+    firstChar === "{" ||
+    firstChar === "[" ||
+    firstChar === '"' ||
+    firstChar === "-" ||
+    (firstChar >= "0" && firstChar <= "9") ||
+    firstChar === "t" ||
+    firstChar === "f" ||
+    firstChar === "n"
+  );
+}
+
+function isValidPersistedStorageValue(value: string): boolean {
+  if (!shouldValidatePersistedStorageValue(value)) {
+    return true;
+  }
+
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readAliasedStorageItem(
   baseStorage: StateStorage,
   name: string,
 ): Promise<string | null> {
   const currentValue = await getStorageItem(baseStorage, name);
   if (currentValue !== null) {
-    return currentValue;
+    if (isValidPersistedStorageValue(currentValue)) {
+      return currentValue;
+    }
+
+    await removeStorageItem(baseStorage, name);
   }
 
   for (const legacyKey of resolveLegacyStorageKeys(name)) {
     const legacyValue = await getStorageItem(baseStorage, legacyKey);
     if (legacyValue === null) {
+      continue;
+    }
+
+    if (!isValidPersistedStorageValue(legacyValue)) {
+      await removeStorageItem(baseStorage, legacyKey);
       continue;
     }
 
@@ -110,13 +151,23 @@ export function createAliasedStateStorage(baseStorage: StateStorage): StateStora
       if (isPromiseLike(currentValue)) {
         return readAliasedStorageItem(baseStorage, name);
       }
+
       if (currentValue !== null) {
-        return currentValue;
+        if (isValidPersistedStorageValue(currentValue)) {
+          return currentValue;
+        }
+
+        removeStorageItem(baseStorage, name);
       }
 
       for (const legacyKey of resolveLegacyStorageKeys(name)) {
         const legacyValue = getStorageItem(baseStorage, legacyKey);
         if (legacyValue === null || isPromiseLike(legacyValue)) {
+          continue;
+        }
+
+        if (!isValidPersistedStorageValue(legacyValue)) {
+          removeStorageItem(baseStorage, legacyKey);
           continue;
         }
 
