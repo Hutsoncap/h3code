@@ -103,13 +103,7 @@ import {
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import { useStore } from "../store";
-import {
-  buildPlanImplementationThreadTitle,
-  buildPlanImplementationPrompt,
-  proposedPlanTitle,
-  resolvePlanFollowUpSubmission,
-} from "../proposedPlan";
-import { truncateTitle } from "../truncateTitle";
+import { proposedPlanTitle, resolvePlanFollowUpSubmission } from "../proposedPlan";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -137,7 +131,7 @@ import {
   projectScriptIdFromCommand,
   setupProjectScript,
 } from "~/projectScripts";
-import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
+import { newCommandId, newMessageId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
   getCustomModelOptionsByProvider,
@@ -151,7 +145,6 @@ import {
   type DraftThreadEnvMode,
   type PersistedComposerImageAttachment,
   type QueuedComposerChatTurn,
-  type QueuedComposerPlanFollowUp,
   type QueuedComposerTurn,
   useComposerDraftStore,
   useEffectiveComposerModelState,
@@ -200,6 +193,7 @@ import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindi
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import { useChatPendingInteractionBindings } from "./chat/useChatPendingInteractionBindings";
+import { useChatQueuedTurnBindings } from "./chat/useChatQueuedTurnBindings";
 import { useChatProjectScriptBindings } from "./chat/useChatProjectScriptBindings";
 import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
@@ -3200,7 +3194,7 @@ export default function ChatView({
         return true;
       }
       clearComposerInput(activeThread.id);
-      return onSubmitPlanFollowUp({
+      return submitPlanFollowUp({
         text: followUp.text,
         interactionMode: followUp.interactionMode,
         dispatchMode,
@@ -3561,344 +3555,78 @@ export default function ChatView({
     return turnStartSucceeded;
   };
 
-  async function onSubmitPlanFollowUp({
-    text,
-    interactionMode: nextInteractionMode,
-    dispatchMode,
-    queuedTurn,
-  }: {
-    text: string;
-    interactionMode: "default" | "plan";
-    dispatchMode: "queue" | "steer";
-    queuedTurn?: QueuedComposerPlanFollowUp;
-  }): Promise<boolean> {
-    const api = readNativeApi();
-    if (
-      !api ||
-      !activeThread ||
-      !isServerThread ||
-      isSendBusy ||
-      isConnecting ||
-      sendInFlightRef.current
-    ) {
-      return false;
-    }
-
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return false;
-    }
-
-    const threadIdForSend = activeThread.id;
-    const messageIdForSend = newMessageId();
-    const messageCreatedAt = new Date().toISOString();
-    const outgoingMessageText = formatOutgoingPrompt({
-      provider: queuedTurn?.selectedProvider ?? selectedProvider,
-      model: queuedTurn?.selectedModel ?? selectedModel,
-      effort: queuedTurn?.selectedPromptEffort ?? selectedPromptEffort,
-      text: trimmed,
-    });
-
-    sendInFlightRef.current = true;
-    beginLocalDispatch();
-    setThreadError(threadIdForSend, null);
-    setOptimisticUserMessages((existing) => [
-      ...existing,
-      {
-        id: messageIdForSend,
-        role: "user",
-        text: outgoingMessageText,
-        createdAt: messageCreatedAt,
-        streaming: false,
-        source: "native",
-      },
-    ]);
-    forceStickToBottom();
-
-    try {
-      await persistThreadSettingsForNextTurn({
-        threadId: threadIdForSend,
-        createdAt: messageCreatedAt,
-        modelSelection: queuedTurn?.modelSelection ?? selectedModelSelection,
-        runtimeMode: queuedTurn?.runtimeMode ?? runtimeMode,
-        interactionMode: nextInteractionMode,
-      });
-
-      // Keep the mode toggle and plan-follow-up banner in sync immediately
-      // while the same-thread implementation turn is starting.
-      setComposerDraftInteractionMode(threadIdForSend, nextInteractionMode);
-
-      await api.orchestration.dispatchCommand({
-        type: "thread.turn.start",
-        commandId: newCommandId(),
-        threadId: threadIdForSend,
-        message: {
-          messageId: messageIdForSend,
-          role: "user",
-          text: outgoingMessageText,
-          attachments: [],
-        },
-        modelSelection: queuedTurn?.modelSelection ?? selectedModelSelection,
-        ...((queuedTurn?.providerOptionsForDispatch ?? providerOptionsForDispatch)
-          ? {
-              providerOptions: queuedTurn?.providerOptionsForDispatch ?? providerOptionsForDispatch,
-            }
-          : {}),
-        assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
-        dispatchMode,
-        runtimeMode: queuedTurn?.runtimeMode ?? runtimeMode,
-        interactionMode: nextInteractionMode,
-        ...(nextInteractionMode === "default" && activeProposedPlan
-          ? {
-              sourceProposedPlan: {
-                threadId: activeThread.id,
-                planId: activeProposedPlan.id,
-              },
-            }
-          : {}),
-        createdAt: messageCreatedAt,
-      });
-      // Optimistically open the plan sidebar when implementing (not refining).
-      // "default" mode here means the agent is executing the plan, which produces
-      // step-tracking activities that the sidebar will display.
-      if (nextInteractionMode === "default") {
-        planSidebarDismissedForTurnRef.current = null;
-        setPlanSidebarOpen(true);
-      }
-      sendInFlightRef.current = false;
-      return true;
-    } catch (err) {
-      setOptimisticUserMessages((existing) =>
-        existing.filter((message) => message.id !== messageIdForSend),
-      );
-      setThreadError(
-        threadIdForSend,
-        err instanceof Error ? err.message : "Failed to send plan follow-up.",
-      );
-      sendInFlightRef.current = false;
-      resetLocalDispatch();
-      return false;
-    }
-  }
-
   const onSendRef = useRef(onSend);
-  const onSubmitPlanFollowUpRef = useRef(onSubmitPlanFollowUp);
   onSendRef.current = onSend;
-  onSubmitPlanFollowUpRef.current = onSubmitPlanFollowUp;
 
-  const dispatchQueuedComposerTurn = useCallback(
-    async (queuedTurn: QueuedComposerTurn, dispatchMode: "queue" | "steer"): Promise<boolean> => {
-      if (queuedTurn.kind === "chat") {
-        return onSendRef.current(undefined, dispatchMode, queuedTurn);
-      }
-      return onSubmitPlanFollowUpRef.current({
-        text: queuedTurn.text,
-        interactionMode: queuedTurn.interactionMode,
-        dispatchMode,
-        queuedTurn,
-      });
-    },
+  const dispatchQueuedChatTurn = useCallback(
+    async (dispatchMode: "queue" | "steer", queuedTurn: QueuedComposerChatTurn) =>
+      onSendRef.current(undefined, dispatchMode, queuedTurn),
     [],
   );
 
-  const onSteerQueuedComposerTurn = useCallback(
-    async (queuedTurn: QueuedComposerTurn) => {
-      const previousQueue = queuedComposerTurnsRef.current;
-      const queuedIndex = previousQueue.findIndex((entry) => entry.id === queuedTurn.id);
-      if (queuedIndex < 0) {
-        return;
-      }
-      removeQueuedComposerTurnFromDraft(threadId, queuedTurn.id);
-      const succeeded = await dispatchQueuedComposerTurn(queuedTurn, "steer");
-      if (succeeded) {
-        return;
-      }
-      insertQueuedComposerTurn(threadId, queuedTurn, queuedIndex);
+  const handlePlanImplementationStarted = useCallback(() => {
+    planSidebarDismissedForTurnRef.current = null;
+    setPlanSidebarOpen(true);
+  }, []);
+
+  const handleImplementationThreadOpened = useCallback(
+    async (nextThreadId: ThreadIdType) => {
+      planSidebarOpenOnNextThreadRef.current = true;
+      await navigate({
+        to: "/$threadId",
+        params: { threadId: nextThreadId },
+      });
     },
-    [
-      dispatchQueuedComposerTurn,
-      insertQueuedComposerTurn,
-      removeQueuedComposerTurnFromDraft,
-      threadId,
-    ],
+    [navigate],
   );
 
-  const onEditQueuedComposerTurn = useCallback(
-    (queuedTurn: QueuedComposerTurn) => {
-      removeQueuedComposerTurn(queuedTurn.id);
-      restoreQueuedTurnToComposer(queuedTurn);
-    },
-    [removeQueuedComposerTurn, restoreQueuedTurnToComposer],
-  );
-
-  useEffect(() => {
-    if (autoDispatchingQueuedTurnRef.current) {
-      return;
-    }
-    if (
-      hasLiveTurn ||
-      phase === "disconnected" ||
-      isSendBusy ||
-      isConnecting ||
-      sendInFlightRef.current ||
-      activePendingApproval !== null ||
-      activePendingProgress !== null ||
-      pendingUserInputs.length > 0 ||
-      queuedComposerTurns.length === 0
-    ) {
-      return;
-    }
-    const nextQueuedTurn = queuedComposerTurns[0];
-    if (!nextQueuedTurn) {
-      return;
-    }
-    autoDispatchingQueuedTurnRef.current = true;
-    void (async () => {
-      const succeeded = await dispatchQueuedComposerTurn(nextQueuedTurn, "queue");
-      if (succeeded) {
-        removeQueuedComposerTurnFromDraft(threadId, nextQueuedTurn.id);
-      }
-      autoDispatchingQueuedTurnRef.current = false;
-    })();
-  }, [
-    activePendingApproval,
-    activePendingProgress,
-    dispatchQueuedComposerTurn,
-    phase,
-    isConnecting,
-    isSendBusy,
-    pendingUserInputs.length,
-    hasLiveTurn,
-    queuedComposerTurns,
-    removeQueuedComposerTurnFromDraft,
-    threadId,
-  ]);
-
-  const onImplementPlanInNewThread = useCallback(async () => {
-    const api = readNativeApi();
-    if (
-      !api ||
-      !activeThread ||
-      !activeProject ||
-      !activeProposedPlan ||
-      !isServerThread ||
-      isSendBusy ||
-      isConnecting ||
-      sendInFlightRef.current
-    ) {
-      return;
-    }
-
-    const createdAt = new Date().toISOString();
-    const nextThreadId = newThreadId();
-    const planMarkdown = activeProposedPlan.planMarkdown;
-    const implementationPrompt = buildPlanImplementationPrompt(planMarkdown);
-    const outgoingImplementationPrompt = formatOutgoingPrompt({
-      provider: selectedProvider,
-      model: selectedModel,
-      effort: selectedPromptEffort,
-      text: implementationPrompt,
-    });
-    const nextThreadTitle = truncateTitle(buildPlanImplementationThreadTitle(planMarkdown));
-    const nextThreadModelSelection: ModelSelection = selectedModelSelection;
-
-    sendInFlightRef.current = true;
-    beginLocalDispatch();
-    const finish = () => {
-      sendInFlightRef.current = false;
-      resetLocalDispatch();
-    };
-
-    await api.orchestration
-      .dispatchCommand({
-        type: "thread.create",
-        commandId: newCommandId(),
-        threadId: nextThreadId,
-        projectId: activeProject.id,
-        title: nextThreadTitle,
-        modelSelection: nextThreadModelSelection,
-        runtimeMode,
-        interactionMode: "default",
-        envMode: activeThread.envMode ?? (activeThread.worktreePath ? "worktree" : "local"),
-        branch: activeThread.branch,
-        worktreePath: activeThread.worktreePath,
-        associatedWorktreePath: activeThreadAssociatedWorktree.associatedWorktreePath,
-        associatedWorktreeBranch: activeThreadAssociatedWorktree.associatedWorktreeBranch,
-        associatedWorktreeRef: activeThreadAssociatedWorktree.associatedWorktreeRef,
-        createdAt,
-      })
-      .then(() => {
-        return api.orchestration.dispatchCommand({
-          type: "thread.turn.start",
-          commandId: newCommandId(),
-          threadId: nextThreadId,
-          message: {
-            messageId: newMessageId(),
-            role: "user",
-            text: outgoingImplementationPrompt,
-            attachments: [],
-          },
-          modelSelection: selectedModelSelection,
-          ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
-          assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
-          dispatchMode: "queue",
-          runtimeMode,
-          interactionMode: "default",
-          createdAt,
-        });
-      })
-      .then(() => api.orchestration.getSnapshot())
-      .then((snapshot) => {
-        syncServerReadModel(snapshot);
-        // Signal that the plan sidebar should open on the new thread.
-        planSidebarOpenOnNextThreadRef.current = true;
-        return navigate({
-          to: "/$threadId",
-          params: { threadId: nextThreadId },
-        });
-      })
-      .catch(async (err) => {
-        await api.orchestration
-          .dispatchCommand({
-            type: "thread.delete",
-            commandId: newCommandId(),
-            threadId: nextThreadId,
-          })
-          .catch(() => undefined);
-        await api.orchestration
-          .getSnapshot()
-          .then((snapshot) => {
-            syncServerReadModel(snapshot);
-          })
-          .catch(() => undefined);
-        toastManager.add({
-          type: "error",
-          title: "Could not start implementation thread",
-          description:
-            err instanceof Error ? err.message : "An error occurred while creating the new thread.",
-        });
-      })
-      .then(finish, finish);
-  }, [
+  const {
+    onEditQueuedComposerTurn,
+    onImplementPlanInNewThread,
+    onSteerQueuedComposerTurn,
+    submitPlanFollowUp,
+  } = useChatQueuedTurnBindings({
     activeProject,
     activeProposedPlan,
     activeThread,
     activeThreadAssociatedWorktree,
+    autoDispatchingQueuedTurnRef,
     beginLocalDispatch,
+    dispatchQueuedChatTurn,
+    forceStickToBottom,
+    formatOutgoingPrompt,
+    handleImplementationThreadOpened,
+    handlePlanImplementationStarted,
+    hasActivePendingApproval: activePendingApproval !== null,
+    hasActivePendingProgress: activePendingProgress !== null,
+    hasLiveTurn,
+    insertQueuedComposerTurn,
     isConnecting,
+    isDisconnected: phase === "disconnected",
     isSendBusy,
     isServerThread,
-    navigate,
-    resetLocalDispatch,
-    runtimeMode,
-    selectedPromptEffort,
-    selectedModelSelection,
+    pendingUserInputCount: pendingUserInputs.length,
+    persistThreadSettingsForNextTurn,
     providerOptionsForDispatch,
-    selectedProvider,
-    settings.enableAssistantStreaming,
-    syncServerReadModel,
+    queuedComposerTurns,
+    queuedComposerTurnsRef,
+    removeQueuedComposerTurn,
+    removeQueuedComposerTurnFromDraft,
+    resetLocalDispatch,
+    restoreQueuedTurnToComposer,
+    runtimeMode,
     selectedModel,
-  ]);
+    selectedModelSelection,
+    selectedPromptEffort,
+    selectedProvider,
+    sendInFlightRef,
+    setComposerDraftInteractionMode,
+    setOptimisticUserMessages,
+    setThreadError,
+    settingsEnableAssistantStreaming: settings.enableAssistantStreaming,
+    syncServerReadModel,
+    threadId,
+  });
 
   const { composerTraitSelection, onProviderModelSelect, providerTraitsPicker, toggleFastMode } =
     useChatComposerModelBindings({
