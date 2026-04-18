@@ -28,4 +28,18 @@ describe("buildPatchCacheKey", () => {
       buildPatchCacheKey(patch, "diff-panel:dark"),
     );
   });
+
+  it("normalizes cache scope whitespace", () => {
+    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
+
+    expect(buildPatchCacheKey(patch, " diff-panel:light ")).toBe(
+      buildPatchCacheKey(patch, "diff-panel:light"),
+    );
+  });
+
+  it("falls back to the canonical scope when cache scope is blank", () => {
+    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
+
+    expect(buildPatchCacheKey(patch, "   ")).toBe(buildPatchCacheKey(patch));
+  });
 });
