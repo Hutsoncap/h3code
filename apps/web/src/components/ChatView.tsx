@@ -158,7 +158,7 @@ import {
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
-import { ComposerCommandItem, ComposerCommandMenu } from "./chat/ComposerCommandMenu";
+import { ComposerCommandMenu } from "./chat/ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./chat/ComposerPendingApprovalActions";
 import { ComposerExtrasMenu } from "./chat/ComposerExtrasMenu";
 import { ComposerVoiceButton } from "./chat/ComposerVoiceButton";
@@ -173,6 +173,7 @@ import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
+import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
@@ -205,7 +206,6 @@ import {
   revokeUserMessagePreviewUrls,
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { useComposerSlashCommands } from "../hooks/useComposerSlashCommands";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import {
   canCreateThreadHandoff,
@@ -382,34 +382,6 @@ const providerMentionReferencesEqual = (
   left.every(
     (mention, index) => mention.path === right[index]?.path && mention.name === right[index]?.name,
   );
-
-const extendReplacementRangeForTrailingSpace = (
-  text: string,
-  rangeEnd: number,
-  replacement: string,
-): number => {
-  if (!replacement.endsWith(" ")) {
-    return rangeEnd;
-  }
-  return text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
-};
-
-const syncTerminalContextsByIds = (
-  contexts: ReadonlyArray<TerminalContextDraft>,
-  ids: ReadonlyArray<string>,
-): TerminalContextDraft[] => {
-  const contextsById = new Map(contexts.map((context) => [context.id, context]));
-  return ids.flatMap((id) => {
-    const context = contextsById.get(id);
-    return context ? [context] : [];
-  });
-};
-
-const terminalContextIdListsEqual = (
-  contexts: ReadonlyArray<TerminalContextDraft>,
-  ids: ReadonlyArray<string>,
-): boolean =>
-  contexts.length === ids.length && contexts.every((context, index) => context.id === ids[index]);
 
 interface ThreadBreadcrumb {
   threadId: ThreadIdType;
@@ -751,12 +723,8 @@ export default function ChatView({
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerFormHeightRef = useRef(0);
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
-  const composerSelectLockRef = useRef(false);
-  const composerMenuOpenRef = useRef(false);
-  const composerMenuItemsRef = useRef<ComposerCommandItem[]>([]);
   const queuedComposerTurnsRef = useRef<QueuedComposerTurn[]>([]);
   const autoDispatchingQueuedTurnRef = useRef(false);
-  const activeComposerMenuItemRef = useRef<ComposerCommandItem | null>(null);
   const attachmentPreviewHandoffByMessageIdRef = useRef<Record<string, string[]>>({});
   const attachmentPreviewHandoffTimeoutByMessageIdRef = useRef<Record<string, number>>({});
   const sendInFlightRef = useRef(false);
@@ -1739,9 +1707,6 @@ export default function ChatView({
       null,
     [composerHighlightedItemId, composerMenuItems],
   );
-  composerMenuOpenRef.current = composerMenuOpen;
-  composerMenuItemsRef.current = composerMenuItems;
-  activeComposerMenuItemRef.current = activeComposerMenuItem;
   const nonPersistedComposerImageIdSet = useMemo(
     () => new Set(nonPersistedComposerImageIds),
     [nonPersistedComposerImageIds],
@@ -3462,108 +3427,40 @@ export default function ChatView({
     ],
   );
 
-  const readComposerSnapshot = useCallback((): {
-    value: string;
-    cursor: number;
-    expandedCursor: number;
-    terminalContextIds: string[];
-  } => {
-    const editorSnapshot = composerEditorRef.current?.readSnapshot();
-    if (editorSnapshot) {
-      return editorSnapshot;
-    }
-    return {
-      value: promptRef.current,
-      cursor: composerCursor,
-      expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
-      terminalContextIds: composerTerminalContexts.map((context) => context.id),
-    };
-  }, [composerCursor, composerTerminalContexts]);
-
-  const resolveActiveComposerTrigger = useCallback((): {
-    snapshot: { value: string; cursor: number; expandedCursor: number };
-    trigger: ComposerTrigger | null;
-  } => {
-    const snapshot = readComposerSnapshot();
-    return {
-      snapshot,
-      trigger: detectComposerTrigger(snapshot.value, snapshot.expandedCursor),
-    };
-  }, [readComposerSnapshot]);
-
-  const setComposerPromptValue = useCallback(
-    (nextPrompt: string) => {
-      promptRef.current = nextPrompt;
-      setPrompt(nextPrompt);
-      const nextCursor = collapseExpandedComposerCursor(nextPrompt, nextPrompt.length);
-      setComposerCursor(nextCursor);
-      setComposerTrigger(detectComposerTrigger(nextPrompt, nextPrompt.length));
-      setComposerHighlightedItemId(null);
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAt(nextCursor);
-      });
-    },
-    [setPrompt],
-  );
-
-  const clearComposerSlashDraft = useCallback(() => {
-    promptRef.current = "";
-    clearComposerDraftContent(threadId);
-    setComposerHighlightedItemId(null);
-    setComposerCursor(0);
-    setComposerTrigger(null);
-    scheduleComposerFocus();
-  }, [clearComposerDraftContent, scheduleComposerFocus, threadId]);
-
-  const slashEditorActions = useMemo(
-    () => ({
-      resolveActiveComposerTrigger,
-      applyPromptReplacement,
-      extendReplacementRangeForTrailingSpace,
-      clearComposerSlashDraft,
-      setComposerPromptValue,
-      scheduleComposerFocus,
-      setComposerHighlightedItemId,
-    }),
-    [
-      applyPromptReplacement,
-      clearComposerSlashDraft,
-      resolveActiveComposerTrigger,
-      scheduleComposerFocus,
-      setComposerPromptValue,
-    ],
-  );
-
   const {
-    handleForkTargetSelection,
-    handleReviewTargetSelection,
-    isSlashStatusDialogOpen,
-    setIsSlashStatusDialogOpen,
     handleStandaloneSlashCommand,
-    handleSlashCommandSelection,
-  } = useComposerSlashCommands({
+    isSlashStatusDialogOpen,
+    onComposerCommandKey,
+    onComposerMenuItemHighlighted,
+    onPromptChange,
+    onSelectComposerItem,
+    setIsSlashStatusDialogOpen,
+  } = useChatComposerCommandBindings({
+    activePendingQuestionId: activePendingProgress?.activeQuestion?.id ?? null,
     activeProject,
-    activeThread,
     activeRootBranch,
-    isServerThread,
-    supportsFastSlashCommand,
-    supportsTextNativeReviewCommand,
-    fastModeEnabled,
-    providerNativeCommands,
-    providerCommandDiscoveryCwd: composerSkillCwd,
-    selectedProvider,
+    activeThread,
+    applyPromptReplacement,
+    buildSkillMentionReplacement: (skillName) =>
+      `${skillMentionPrefix(selectedProvider)}${skillName} `,
+    clearComposerDraftContent,
+    composerCommandPicker,
+    composerCursor,
+    composerEditorRef,
+    composerHighlightedItemId,
+    composerMenuItems,
+    composerMenuOpen,
+    composerTerminalContexts,
     currentProviderModelOptions,
-    selectedModelSelection,
-    runtimeMode,
+    fastModeEnabled,
+    handleInteractionModeChange,
+    hasActivePendingUserInput: activePendingUserInput !== null,
     interactionMode,
-    threadId,
-    syncServerReadModel,
-    navigateToThread: (nextThreadId) =>
-      navigate({
-        to: "/$threadId",
-        params: { threadId: nextThreadId },
-      }),
-    handleClearConversation: async () => {
+    isServerThread,
+    onChangeActivePendingUserInputCustomAnswer,
+    onProviderModelSelect,
+    onSend,
+    openFreshThread: async () => {
       if (!activeProject) {
         toastManager.add({
           type: "warning",
@@ -3574,191 +3471,34 @@ export default function ChatView({
       }
       await handleNewThread(activeProject.id, { entryPoint: "chat" });
     },
-    handleInteractionModeChange,
-    openForkTargetPicker: () => {
-      setComposerCommandPicker("fork-target");
-      setComposerHighlightedItemId("fork-target:worktree");
-    },
-    openReviewTargetPicker: () => {
-      setComposerCommandPicker("review-target");
-      setComposerHighlightedItemId("review-target:changes");
-    },
+    providerCommandDiscoveryCwd: composerSkillCwd,
+    providerNativeCommands,
+    promptRef,
+    runtimeMode,
+    scheduleComposerFocus,
+    selectedModelSelection,
+    selectedProvider,
+    setComposerCommandPicker,
+    setComposerCursor,
     setComposerDraftProviderModelOptions,
-    editorActions: slashEditorActions,
-  });
-
-  const onSelectComposerItem = useCallback(
-    (item: ComposerCommandItem) => {
-      if (composerSelectLockRef.current) return;
-      composerSelectLockRef.current = true;
-      window.requestAnimationFrame(() => {
-        composerSelectLockRef.current = false;
+    setComposerDraftTerminalContexts,
+    setComposerHighlightedItemId,
+    setComposerTrigger,
+    setPrompt,
+    setSelectedComposerMentions,
+    setSelectedComposerSkills,
+    supportsFastSlashCommand,
+    supportsTextNativeReviewCommand,
+    syncServerReadModel,
+    threadId,
+    toggleInteractionMode,
+    navigateToThread: async (nextThreadId) => {
+      await navigate({
+        to: "/$threadId",
+        params: { threadId: nextThreadId },
       });
-      if (item.type === "fork-target") {
-        setComposerCommandPicker(null);
-        setComposerHighlightedItemId(null);
-        void handleForkTargetSelection(item.target);
-        return;
-      }
-      if (item.type === "review-target") {
-        setComposerCommandPicker(null);
-        setComposerHighlightedItemId(null);
-        void handleReviewTargetSelection(item.target);
-        return;
-      }
-      const { snapshot, trigger } = resolveActiveComposerTrigger();
-      if (!trigger) return;
-      if (item.type === "path") {
-        const replacement = `@${item.path} `;
-        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
-          snapshot.value,
-          trigger.rangeEnd,
-          replacement,
-        );
-        const applied = applyPromptReplacement(
-          trigger.rangeStart,
-          replacementRangeEnd,
-          replacement,
-          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
-        );
-        if (applied !== false) {
-          setComposerHighlightedItemId(null);
-        }
-        return;
-      }
-      if (item.type === "slash-command") {
-        handleSlashCommandSelection(item);
-        return;
-      }
-      if (item.type === "provider-native-command") {
-        const replacement = `/${item.command} `;
-        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
-          snapshot.value,
-          trigger.rangeEnd,
-          replacement,
-        );
-        const applied = applyPromptReplacement(
-          trigger.rangeStart,
-          replacementRangeEnd,
-          replacement,
-          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
-        );
-        if (applied !== false) {
-          setComposerHighlightedItemId(null);
-        }
-        return;
-      }
-      if (item.type === "skill") {
-        const replacement = `${skillMentionPrefix(selectedProvider)}${item.skill.name} `;
-        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
-          snapshot.value,
-          trigger.rangeEnd,
-          replacement,
-        );
-        const applied = applyPromptReplacement(
-          trigger.rangeStart,
-          replacementRangeEnd,
-          replacement,
-          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
-        );
-        if (applied !== false) {
-          setSelectedComposerSkills((existing) => {
-            const nextSkill = {
-              name: item.skill.name,
-              path: item.skill.path,
-            } satisfies ProviderSkillReference;
-            return existing.some(
-              (skill) => skill.name === nextSkill.name && skill.path === nextSkill.path,
-            )
-              ? existing
-              : [...existing, nextSkill];
-          });
-          setComposerHighlightedItemId(null);
-        }
-        return;
-      }
-      if (item.type === "plugin") {
-        const replacement = `@${item.plugin.name} `;
-        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
-          snapshot.value,
-          trigger.rangeEnd,
-          replacement,
-        );
-        const applied = applyPromptReplacement(
-          trigger.rangeStart,
-          replacementRangeEnd,
-          replacement,
-          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
-        );
-        if (applied !== false) {
-          setSelectedComposerMentions((existing) => {
-            const nextMention = item.mention;
-            const nextWithoutSameName = existing.filter(
-              (mention) => mention.name !== nextMention.name,
-            );
-            return [...nextWithoutSameName, nextMention];
-          });
-          setComposerHighlightedItemId(null);
-        }
-        return;
-      }
-      if (item.type === "model") {
-        onProviderModelSelect(item.provider, item.model);
-        const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
-          expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
-        });
-        if (applied !== false) {
-          setComposerHighlightedItemId(null);
-        }
-        return;
-      }
-      if (item.type === "agent") {
-        // Insert @alias() and position cursor inside parentheses
-        const replacement = `@${item.alias}()`;
-        const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, replacement, {
-          expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
-          cursorOffset: -1, // Move cursor back 1 to be inside the parentheses
-        });
-        if (applied !== false) {
-          setComposerHighlightedItemId(null);
-        }
-      }
     },
-    [
-      applyPromptReplacement,
-      composerCursor,
-      handleForkTargetSelection,
-      handleReviewTargetSelection,
-      handleSlashCommandSelection,
-      onProviderModelSelect,
-      setComposerCommandPicker,
-      selectedProvider,
-      setSelectedComposerMentions,
-      setSelectedComposerSkills,
-      resolveActiveComposerTrigger,
-    ],
-  );
-  const onComposerMenuItemHighlighted = useCallback((itemId: string | null) => {
-    setComposerHighlightedItemId(itemId);
-  }, []);
-  const nudgeComposerMenuHighlight = useCallback(
-    (key: "ArrowDown" | "ArrowUp") => {
-      if (composerMenuItems.length === 0) {
-        return;
-      }
-      const highlightedIndex = composerMenuItems.findIndex(
-        (item) => item.id === composerHighlightedItemId,
-      );
-      const normalizedIndex =
-        highlightedIndex >= 0 ? highlightedIndex : key === "ArrowDown" ? -1 : 0;
-      const offset = key === "ArrowDown" ? 1 : -1;
-      const nextIndex =
-        (normalizedIndex + offset + composerMenuItems.length) % composerMenuItems.length;
-      const nextItem = composerMenuItems[nextIndex];
-      setComposerHighlightedItemId(nextItem?.id ?? null);
-    },
-    [composerHighlightedItemId, composerMenuItems],
-  );
+  });
   const isComposerMenuLoading =
     (composerTriggerKind === "mention" &&
       ((mentionTriggerQuery.length > 0 && composerPathQueryDebouncer.state.isPending) ||
@@ -3768,91 +3508,6 @@ export default function ChatView({
         providerPluginsQuery.isFetching)) ||
     (composerTriggerKind === "slash-command" &&
       (providerCommandsQuery.isLoading || providerCommandsQuery.isFetching));
-
-  const onPromptChange = useCallback(
-    (
-      nextPrompt: string,
-      nextCursor: number,
-      expandedCursor: number,
-      cursorAdjacentToMention: boolean,
-      terminalContextIds: string[],
-    ) => {
-      if (activePendingProgress?.activeQuestion && activePendingUserInput) {
-        onChangeActivePendingUserInputCustomAnswer(
-          activePendingProgress.activeQuestion.id,
-          nextPrompt,
-          nextCursor,
-          expandedCursor,
-          cursorAdjacentToMention,
-        );
-        return;
-      }
-      promptRef.current = nextPrompt;
-      setPrompt(nextPrompt);
-      if (composerCommandPicker !== null && nextPrompt.trim().length > 0) {
-        setComposerCommandPicker(null);
-      }
-      if (!terminalContextIdListsEqual(composerTerminalContexts, terminalContextIds)) {
-        setComposerDraftTerminalContexts(
-          threadId,
-          syncTerminalContextsByIds(composerTerminalContexts, terminalContextIds),
-        );
-      }
-      setComposerCursor(nextCursor);
-      setComposerTrigger(
-        cursorAdjacentToMention ? null : detectComposerTrigger(nextPrompt, expandedCursor),
-      );
-    },
-    [
-      activePendingProgress?.activeQuestion,
-      activePendingUserInput,
-      composerTerminalContexts,
-      composerCommandPicker,
-      onChangeActivePendingUserInputCustomAnswer,
-      setPrompt,
-      setComposerDraftTerminalContexts,
-      setComposerCommandPicker,
-      threadId,
-    ],
-  );
-
-  const onComposerCommandKey = (
-    key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
-    event: KeyboardEvent,
-  ) => {
-    if (key === "Tab" && event.shiftKey) {
-      toggleInteractionMode();
-      return true;
-    }
-
-    const { trigger } = resolveActiveComposerTrigger();
-    const menuIsActive = composerMenuOpenRef.current || trigger !== null;
-
-    if (menuIsActive) {
-      const currentItems = composerMenuItemsRef.current;
-      if (key === "ArrowDown" && currentItems.length > 0) {
-        nudgeComposerMenuHighlight("ArrowDown");
-        return true;
-      }
-      if (key === "ArrowUp" && currentItems.length > 0) {
-        nudgeComposerMenuHighlight("ArrowUp");
-        return true;
-      }
-      if (key === "Tab" || key === "Enter") {
-        const selectedItem = activeComposerMenuItemRef.current ?? currentItems[0];
-        if (selectedItem) {
-          onSelectComposerItem(selectedItem);
-          return true;
-        }
-      }
-    }
-
-    if (key === "Enter" && !event.shiftKey) {
-      void onSend(undefined, event.metaKey || event.ctrlKey ? "steer" : "queue");
-      return true;
-    }
-    return false;
-  };
   const onToggleWorkGroup = useCallback((groupId: string) => {
     setExpandedWorkGroups((existing) => ({
       ...existing,
