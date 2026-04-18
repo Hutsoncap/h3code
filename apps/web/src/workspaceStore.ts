@@ -3,6 +3,7 @@
 // Layer: Workspace view-model state
 
 import { type ThreadId } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createAliasedStateStorage } from "./lib/storage";
@@ -50,7 +51,7 @@ function nowIso(): string {
 }
 
 function trimWorkspaceTitle(title: string): string {
-  return title.trim().replace(/\s+/g, " ");
+  return trimOrNull(title)?.replace(/\s+/g, " ") ?? "";
 }
 
 function normalizeWorkspaceHomeDir(homeDir: string | null | undefined): string | null {
