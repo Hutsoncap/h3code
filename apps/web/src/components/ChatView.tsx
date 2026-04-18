@@ -172,6 +172,7 @@ import { ChatComposerStatusBanner } from "./chat/ChatComposerStatusBanner";
 import { ChatPullRequestDialog } from "./chat/ChatPullRequestDialog";
 import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
+import { useChatComposerAttachmentBindings } from "./chat/useChatComposerAttachmentBindings";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
@@ -658,7 +659,6 @@ export default function ChatView({
     useMemo(() => createProjectSelector(fallbackDraftProjectId), [fallbackDraftProjectId]),
   );
   const promptRef = useRef(prompt);
-  const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
@@ -728,7 +728,6 @@ export default function ChatView({
   const attachmentPreviewHandoffByMessageIdRef = useRef<Record<string, string[]>>({});
   const attachmentPreviewHandoffTimeoutByMessageIdRef = useRef<Record<string, number>>({});
   const sendInFlightRef = useRef(false);
-  const dragDepthRef = useRef(0);
   const terminalOpenByThreadRef = useRef<Record<string, boolean>>({});
   const activatedThreadIdRef = useRef<ThreadId | null>(null);
 
@@ -2364,24 +2363,6 @@ export default function ChatView({
   }, [selectedProvider]);
 
   useEffect(() => {
-    setOptimisticUserMessages((existing) => {
-      for (const message of existing) {
-        revokeUserMessagePreviewUrls(message);
-      }
-      return [];
-    });
-    setLocalDispatch(null);
-    setComposerHighlightedItemId(null);
-    setComposerCursor(collapseExpandedComposerCursor(promptRef.current, promptRef.current.length));
-    setComposerTrigger(detectComposerTrigger(promptRef.current, promptRef.current.length));
-    setSelectedComposerSkills([]);
-    setSelectedComposerMentions([]);
-    dragDepthRef.current = 0;
-    setIsDragOverComposer(false);
-    setExpandedImage(null);
-  }, [threadId]);
-
-  useEffect(() => {
     let cancelled = false;
     void (async () => {
       if (composerImages.length === 0) {
@@ -2874,118 +2855,6 @@ export default function ChatView({
     surfaceMode,
     toggleTerminalVisibility,
   ]);
-
-  // --- Composer attachment entry points -------------------------------------
-  const addComposerImages = (files: File[]) => {
-    if (!activeThreadId || files.length === 0) return;
-
-    if (pendingUserInputs.length > 0) {
-      toastManager.add({
-        type: "error",
-        title: "Attach images after answering plan questions.",
-      });
-      return;
-    }
-
-    const nextImages: ComposerImageAttachment[] = [];
-    let nextImageCount = composerImagesRef.current.length;
-    let error: string | null = null;
-    for (const file of files) {
-      if (!file.type.startsWith("image/")) {
-        error = `Unsupported file type for '${file.name}'. Please attach image files only.`;
-        continue;
-      }
-      if (file.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
-        error = `'${file.name}' exceeds the ${IMAGE_SIZE_LIMIT_LABEL} attachment limit.`;
-        continue;
-      }
-      if (nextImageCount >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
-        error = `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} images per message.`;
-        break;
-      }
-
-      const previewUrl = URL.createObjectURL(file);
-      nextImages.push({
-        type: "image",
-        id: randomUUID(),
-        name: file.name || "image",
-        mimeType: file.type,
-        sizeBytes: file.size,
-        previewUrl,
-        file,
-      });
-      nextImageCount += 1;
-    }
-
-    if (nextImages.length === 1 && nextImages[0]) {
-      addComposerImage(nextImages[0]);
-    } else if (nextImages.length > 1) {
-      addComposerImagesToDraft(nextImages);
-    }
-    setThreadError(activeThreadId, error);
-  };
-
-  const removeComposerImage = (imageId: string) => {
-    removeComposerImageFromDraft(imageId);
-  };
-
-  const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
-    const files = Array.from(event.clipboardData.files);
-    if (files.length === 0) {
-      return;
-    }
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    addComposerImages(imageFiles);
-  };
-
-  const onComposerDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    event.preventDefault();
-    dragDepthRef.current += 1;
-    setIsDragOverComposer(true);
-  };
-
-  const onComposerDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setIsDragOverComposer(true);
-  };
-
-  const onComposerDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    event.preventDefault();
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
-      return;
-    }
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-    if (dragDepthRef.current === 0) {
-      setIsDragOverComposer(false);
-    }
-  };
-
-  const onComposerDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    event.preventDefault();
-    dragDepthRef.current = 0;
-    setIsDragOverComposer(false);
-    const files = Array.from(event.dataTransfer.files);
-    addComposerImages(files);
-    focusComposer();
-  };
 
   const onRevertToTurnCount = useCallback(
     async (turnCount: number) => {
@@ -3499,6 +3368,45 @@ export default function ChatView({
       });
     },
   });
+  const {
+    addComposerImages,
+    isDragOverComposer,
+    onComposerDragEnter,
+    onComposerDragLeave,
+    onComposerDragOver,
+    onComposerDrop,
+    onComposerPaste,
+    removeComposerImage,
+    resetComposerAttachmentUi,
+  } = useChatComposerAttachmentBindings({
+    activeThreadId,
+    addComposerImage,
+    addComposerImagesToDraft,
+    composerImagesRef,
+    focusComposer,
+    imageSizeLimitLabel: IMAGE_SIZE_LIMIT_LABEL,
+    pendingUserInputCount: pendingUserInputs.length,
+    removeComposerImageFromDraft,
+    setThreadError,
+  });
+
+  useEffect(() => {
+    setOptimisticUserMessages((existing) => {
+      for (const message of existing) {
+        revokeUserMessagePreviewUrls(message);
+      }
+      return [];
+    });
+    setLocalDispatch(null);
+    setComposerHighlightedItemId(null);
+    setComposerCursor(collapseExpandedComposerCursor(promptRef.current, promptRef.current.length));
+    setComposerTrigger(detectComposerTrigger(promptRef.current, promptRef.current.length));
+    setSelectedComposerSkills([]);
+    setSelectedComposerMentions([]);
+    resetComposerAttachmentUi();
+    setExpandedImage(null);
+  }, [resetComposerAttachmentUi, threadId]);
+
   const isComposerMenuLoading =
     (composerTriggerKind === "mention" &&
       ((mentionTriggerQuery.length > 0 && composerPathQueryDebouncer.state.isPending) ||
