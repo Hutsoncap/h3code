@@ -1,5 +1,7 @@
 import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppSettingsSchema,
@@ -19,6 +21,58 @@ import {
   patchCustomModels,
   resolveAppModelSelection,
 } from "./appSettings";
+
+const ORIGINAL_WINDOW = globalThis.window;
+
+function createLocalStorage(storage: Map<string, string>): Storage {
+  return {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+    removeItem: (key: string) => {
+      storage.delete(key);
+    },
+    clear: () => {
+      storage.clear();
+    },
+    key: (index: number) => [...storage.keys()][index] ?? null,
+    get length() {
+      return storage.size;
+    },
+  };
+}
+
+async function loadUseAppSettingsModule(storageEntries: Iterable<[string, string]>) {
+  vi.resetModules();
+
+  const storage = new Map(storageEntries);
+  const localStorage = createLocalStorage(storage);
+
+  vi.stubGlobal("window", {
+    localStorage,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  });
+
+  return { ...(await import("./appSettings")), storage };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+
+  if (ORIGINAL_WINDOW === undefined) {
+    Reflect.deleteProperty(globalThis, "window");
+  } else {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: ORIGINAL_WINDOW,
+    });
+  }
+
+  vi.restoreAllMocks();
+});
 
 describe("normalizeCustomModelSlugs", () => {
   it("normalizes aliases, removes built-ins, and deduplicates values", () => {
@@ -139,6 +193,29 @@ describe("chat font size defaults", () => {
     expect(normalizeChatFontSizePx(9)).toBe(11);
     expect(normalizeChatFontSizePx(18.4)).toBe(18);
     expect(normalizeChatFontSizePx(Number.NaN)).toBe(DEFAULT_CHAT_FONT_SIZE_PX);
+  });
+
+  it("normalizes quote-wrapped blank code font families when loading persisted settings", async () => {
+    const { useAppSettings } = await loadUseAppSettingsModule([
+      [
+        "h3code:app-settings:v1",
+        JSON.stringify({
+          chatCodeFontFamily: ' "   " ',
+        }),
+      ],
+    ]);
+
+    let normalizedFontFamily: string | null = null;
+
+    function Harness() {
+      const { settings } = useAppSettings();
+      normalizedFontFamily = settings.chatCodeFontFamily;
+      return null;
+    }
+
+    renderToStaticMarkup(createElement(Harness));
+
+    expect(normalizedFontFamily).toBe("");
   });
 });
 

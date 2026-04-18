@@ -157,6 +157,7 @@ export function normalizeChatFontSizePx(value: number | null | undefined): numbe
 function normalizeAppSettings(settings: AppSettings): AppSettings {
   return {
     ...settings,
+    chatCodeFontFamily: trimOrNull(settings.chatCodeFontFamily) ?? "",
     chatFontSizePx: normalizeChatFontSizePx(settings.chatFontSizePx),
     customCodexModels: normalizeCustomModelSlugs(settings.customCodexModels, "codex"),
     customClaudeModels: normalizeCustomModelSlugs(settings.customClaudeModels, "claudeAgent"),
@@ -290,6 +291,7 @@ export function useAppSettings() {
     DEFAULT_APP_SETTINGS,
     AppSettingsSchema,
   );
+  const normalizedSettings = normalizeAppSettings(settings);
 
   const updateSettings = useCallback(
     (patch: Partial<AppSettings>) => {
@@ -303,7 +305,7 @@ export function useAppSettings() {
   }, [setSettings]);
 
   return {
-    settings,
+    settings: normalizedSettings,
     updateSettings,
     resetSettings,
     defaults: DEFAULT_APP_SETTINGS,
