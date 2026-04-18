@@ -32,6 +32,16 @@ describe("resolveTerminalCloseTitle", () => {
     ).toBe("Deploy shell");
   });
 
+  it("treats quote-wrapped blank titles as absent before falling back", () => {
+    expect(
+      resolveTerminalCloseTitle({
+        terminalId: "terminal-1",
+        terminalLabelsById: { "terminal-1": " '   ' " },
+        terminalTitleOverridesById: { "terminal-1": ' "   " ' },
+      }),
+    ).toBe("Terminal");
+  });
+
   it("falls back to the stored label when no override exists", () => {
     expect(
       resolveTerminalCloseTitle({
@@ -69,6 +79,19 @@ describe("buildTerminalCloseConfirmationMessage", () => {
         'Close terminal "Deploy shell"?',
         "This permanently clears the terminal history for this tab.",
       ].join("\n"),
+    );
+  });
+
+  it("treats quote-wrapped blank terminal titles as generic terminals in the confirmation copy", () => {
+    expect(
+      buildTerminalCloseConfirmationMessage({
+        terminalTitle: ' "   " ',
+        willDeleteThread: false,
+      }),
+    ).toBe(
+      ["Close this terminal?", "This permanently clears the terminal history for this tab."].join(
+        "\n",
+      ),
     );
   });
 

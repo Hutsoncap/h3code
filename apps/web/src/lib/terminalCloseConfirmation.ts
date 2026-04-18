@@ -4,10 +4,11 @@
 // Depends on: Native dialog contract from the app shell.
 
 import type { NativeApi } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 function normalizeTerminalCloseTitle(value: string | null | undefined): string | null {
-  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
-  return normalized.length > 0 ? normalized : null;
+  const normalized = trimOrNull(value)?.replace(/\s+/g, " ");
+  return normalized ?? null;
 }
 
 function formatTerminalCloseSubject(terminalTitle: string | null | undefined): string {
