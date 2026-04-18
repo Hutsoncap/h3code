@@ -1,4 +1,5 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export type DesktopUpdateButtonAction = "check" | "download" | "install" | "none";
 
@@ -200,8 +201,7 @@ export function getDesktopUpdateButtonTooltip(
 export function getDesktopUpdateActionError(result: DesktopUpdateActionResult): string | null {
   if (!result.accepted || result.completed) return null;
   if (typeof result.state.message !== "string") return null;
-  const message = result.state.message.trim();
-  return message.length > 0 ? message : null;
+  return trimOrNull(result.state.message);
 }
 
 export function shouldToastDesktopUpdateActionResult(result: DesktopUpdateActionResult): boolean {
