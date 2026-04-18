@@ -38,6 +38,28 @@ describe("resolveTerminalNewAction", () => {
     ).toEqual({ kind: "new-tab", targetTerminalId: "terminal-3" });
   });
 
+  it("trims active terminal ids before resolving the target tab", () => {
+    const activeGroup: ThreadTerminalGroup = {
+      id: "group-terminal-2",
+      activeTerminalId: " terminal-3 ",
+      layout: {
+        type: "terminal",
+        paneId: "pane-terminal-2",
+        terminalIds: ["terminal-2", "terminal-3"],
+        activeTerminalId: "terminal-3",
+      },
+    };
+
+    expect(
+      resolveTerminalNewAction({
+        terminalOpen: true,
+        activeTerminalId: " terminal-2 ",
+        activeTerminalGroupId: activeGroup.id,
+        terminalGroups: [activeGroup],
+      }),
+    ).toEqual({ kind: "new-tab", targetTerminalId: "terminal-3" });
+  });
+
   it("falls back to the active terminal when the active group id is stale", () => {
     expect(
       resolveTerminalNewAction({
