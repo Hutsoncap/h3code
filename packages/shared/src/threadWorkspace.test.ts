@@ -61,6 +61,19 @@ describe("deriveAssociatedWorktreeMetadata", () => {
       associatedWorktreeRef: null,
     });
   });
+
+  it("treats whitespace-only worktree paths as absent", () => {
+    expect(
+      deriveAssociatedWorktreeMetadata({
+        branch: "feature/base",
+        worktreePath: "   ",
+      }),
+    ).toEqual({
+      associatedWorktreePath: null,
+      associatedWorktreeBranch: null,
+      associatedWorktreeRef: null,
+    });
+  });
 });
 
 describe("deriveAssociatedWorktreeMetadataPatch", () => {
@@ -93,5 +106,14 @@ describe("deriveAssociatedWorktreeMetadataPatch", () => {
       associatedWorktreeBranch: null,
       associatedWorktreeRef: null,
     });
+  });
+
+  it("ignores whitespace-only worktree paths when building the patch", () => {
+    expect(
+      deriveAssociatedWorktreeMetadataPatch({
+        branch: "feature/base",
+        worktreePath: "   ",
+      }),
+    ).toEqual({});
   });
 });
