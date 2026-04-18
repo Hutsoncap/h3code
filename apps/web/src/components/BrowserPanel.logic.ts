@@ -57,7 +57,7 @@ export interface BrowserChromeStatus {
 export function browserAddressDisplayValue(
   tab: Pick<BrowserTabState, "url"> | null | undefined,
 ): string {
-  const nextUrl = tab?.url?.trim() ?? "";
+  const nextUrl = trimOrNull(tab?.url) ?? "";
   return nextUrl === ABOUT_BLANK_URL ? "" : nextUrl;
 }
 
@@ -116,7 +116,8 @@ function normalizeQuery(value: string): string {
 }
 
 function displaySuggestionUrl(value: string): string {
-  return value.trim().replace(/^about:blank$/i, "");
+  const normalized = trimOrNull(value) ?? "";
+  return normalized.replace(/^about:blank$/i, "");
 }
 
 function suggestionMatches(query: string, candidate: string): boolean {
