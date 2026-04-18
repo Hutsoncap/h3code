@@ -37,6 +37,11 @@ describe("parseAgentMentionInvocations", () => {
   it("ignores mentions whose task is blank after trimming", () => {
     expect(parseAgentMentionInvocations("Check @spark(   ) and continue", "codex")).toEqual([]);
   });
+
+  it("ignores mentions whose task is quote-wrapped blank after trimming", () => {
+    expect(parseAgentMentionInvocations('Check @spark("   ") and continue', "codex")).toEqual([]);
+    expect(parseAgentMentionInvocations("Check @spark('   ') and continue", "codex")).toEqual([]);
+  });
 });
 
 describe("buildClaudeSubagentPrompt", () => {
