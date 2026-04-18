@@ -4,11 +4,16 @@
 // Exports: cwd resolution, search normalization, and provider skill/plugin display helpers.
 
 import { resolveThreadBranchSourceCwd } from "@t3tools/shared/threadEnvironment";
+import { trimOrNull } from "@t3tools/shared/model";
 import type {
   ProviderNativeCommandDescriptor,
   ProviderPluginDescriptor,
   ProviderSkillDescriptor,
 } from "@t3tools/contracts";
+
+function filterNonBlankText(value: string | undefined): string | null {
+  return trimOrNull(value);
+}
 
 // Prefer the most specific workspace context so discovery reflects the active thread first.
 export function resolveProviderDiscoveryCwd(options: {
@@ -38,7 +43,8 @@ export function buildSkillSearchBlob(
 ): string {
   return normalizeProviderDiscoveryText(
     [skill.name, skill.interface?.displayName, skill.interface?.shortDescription, skill.description]
-      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .map(filterNonBlankText)
+      .filter((value): value is string => value !== null)
       .join("\n"),
   );
 }
@@ -54,7 +60,8 @@ export function buildPluginSearchBlob(
       plugin.interface?.category,
       plugin.interface?.developerName,
     ]
-      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .map(filterNonBlankText)
+      .filter((value): value is string => value !== null)
       .join("\n"),
   );
 }
@@ -63,13 +70,15 @@ export function buildCommandSearchBlob(
   command: Pick<ProviderNativeCommandDescriptor, "name" | "description">,
 ): string {
   return normalizeProviderDiscoveryText(
-    [command.name, command.description].filter(Boolean).join("\n"),
+    [command.name, command.description]
+      .map(filterNonBlankText)
+      .filter((value): value is string => value !== null)
+      .join("\n"),
   );
 }
 
 export function formatSkillScope(scope: string | undefined): string {
-  if (!scope) return "Personal";
-  const normalized = scope.trim();
-  if (normalized.length === 0) return "Personal";
+  const normalized = trimOrNull(scope);
+  if (!normalized) return "Personal";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
