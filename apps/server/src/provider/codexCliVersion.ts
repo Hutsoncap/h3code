@@ -1,4 +1,5 @@
-const CODEX_VERSION_PATTERN = /\bv?(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)\b/;
+const CODEX_VERSION_PATTERN =
+  /(?:^|[^0-9A-Za-z.+-])(v?\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)(?=$|[^0-9A-Za-z.+-])/;
 
 export const MINIMUM_CODEX_CLI_VERSION = "0.37.0";
 
@@ -9,36 +10,25 @@ interface ParsedSemver {
   readonly prerelease: ReadonlyArray<string>;
 }
 
-function normalizeCodexVersion(version: string): string {
-  const [main, prerelease] = version.trim().split("-", 2);
-  const segments = (main ?? "")
-    .split(".")
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0);
-
-  if (segments.length === 2) {
-    segments.push("0");
-  }
-
-  return prerelease ? `${segments.join(".")}-${prerelease}` : segments.join(".");
-}
+const CODEX_SEMVER_PATTERN =
+  /^(?:v)?(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 function parseSemver(version: string): ParsedSemver | null {
-  const normalized = normalizeCodexVersion(version);
-  const [main = "", prerelease] = normalized.split("-", 2);
-  const segments = main.split(".");
-  if (segments.length !== 3) {
+  const match = CODEX_SEMVER_PATTERN.exec(version.trim());
+  if (!match) {
     return null;
   }
 
-  const [majorSegment, minorSegment, patchSegment] = segments;
-  if (majorSegment === undefined || minorSegment === undefined || patchSegment === undefined) {
+  const majorSegment = match[1];
+  const minorSegment = match[2];
+  const patchSegment = match[3];
+  if (!majorSegment || !minorSegment) {
     return null;
   }
 
   const major = Number.parseInt(majorSegment, 10);
   const minor = Number.parseInt(minorSegment, 10);
-  const patch = Number.parseInt(patchSegment, 10);
+  const patch = Number.parseInt(patchSegment ?? "0", 10);
   if (![major, minor, patch].every(Number.isInteger)) {
     return null;
   }
@@ -47,11 +37,7 @@ function parseSemver(version: string): ParsedSemver | null {
     major,
     minor,
     patch,
-    prerelease:
-      prerelease
-        ?.split(".")
-        .map((segment) => segment.trim())
-        .filter((segment) => segment.length > 0) ?? [],
+    prerelease: match[4]?.split(".") ?? [],
   };
 }
 
@@ -68,14 +54,20 @@ function comparePrereleaseIdentifier(left: string, right: string): number {
   if (rightNumeric) {
     return 1;
   }
-  return left.localeCompare(right);
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 export function compareCodexCliVersions(left: string, right: string): number {
   const parsedLeft = parseSemver(left);
   const parsedRight = parseSemver(right);
   if (!parsedLeft || !parsedRight) {
-    return left.localeCompare(right);
+    const trimmedLeft = left.trim();
+    const trimmedRight = right.trim();
+    if (trimmedLeft < trimmedRight) return -1;
+    if (trimmedLeft > trimmedRight) return 1;
+    return 0;
   }
 
   if (parsedLeft.major !== parsedRight.major) {
@@ -128,7 +120,9 @@ export function parseCodexCliVersion(output: string): string | null {
     return null;
   }
 
-  return normalizeCodexVersion(match[1]);
+  return `${parsed.major}.${parsed.minor}.${parsed.patch}${
+    parsed.prerelease.length > 0 ? `-${parsed.prerelease.join(".")}` : ""
+  }`;
 }
 
 export function isCodexCliVersionSupported(version: string): boolean {
