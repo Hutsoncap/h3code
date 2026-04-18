@@ -152,6 +152,7 @@ import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBin
 import { useChatComposerFooterBindings } from "./chat/useChatComposerFooterBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
 import { useChatComposerTerminalContextBindings } from "./chat/useChatComposerTerminalContextBindings";
+import { useChatViewDialogBindings } from "./chat/useChatViewDialogBindings";
 import { useChatTranscriptBindings } from "./chat/useChatTranscriptBindings";
 import { useChatViewPaneBindings } from "./chat/useChatViewPaneBindings";
 import { useChatViewShellBindings } from "./chat/useChatViewShellBindings";
@@ -3652,41 +3653,38 @@ export default function ChatView({
     timestampFormat,
     workspaceRoot: activeProject?.cwd ?? undefined,
   });
+  const { chatExpandedImageDialogProps, chatViewDialogsProps } = useChatViewDialogBindings({
+    activeContextWindow,
+    activeCumulativeCostUsd,
+    activeRateLimitStatus,
+    activeRootBranch,
+    activeThreadBranch: activeThread?.branch,
+    confirmWorktreeHandoff,
+    envMode,
+    envState,
+    expandedImage,
+    fastModeEnabled,
+    handoffBusy,
+    interactionMode,
+    isSlashStatusDialogOpen,
+    navigateExpandedImage,
+    onCloseExpandedImage: closeExpandedImage,
+    selectedModel,
+    selectedPromptEffort,
+    setIsSlashStatusDialogOpen,
+    setWorktreeHandoffDialogOpen,
+    setWorktreeHandoffName,
+    worktreeHandoffDialogOpen,
+    worktreeHandoffName,
+  });
 
   return (
     <>
       <ChatViewShell chatThreadPaneProps={chatThreadPaneProps} />
 
-      <ChatViewDialogs
-        composerSlashStatusDialogProps={{
-          open: isSlashStatusDialogOpen,
-          onOpenChange: setIsSlashStatusDialogOpen,
-          selectedModel,
-          fastModeEnabled,
-          selectedPromptEffort,
-          interactionMode,
-          envMode,
-          envState,
-          branch: activeThread?.branch ?? activeRootBranch,
-          contextWindow: activeContextWindow,
-          cumulativeCostUsd: activeCumulativeCostUsd,
-          rateLimitStatus: activeRateLimitStatus,
-        }}
-        threadWorktreeHandoffDialogProps={{
-          open: worktreeHandoffDialogOpen,
-          worktreeName: worktreeHandoffName,
-          busy: handoffBusy,
-          onWorktreeNameChange: setWorktreeHandoffName,
-          onOpenChange: setWorktreeHandoffDialogOpen,
-          onConfirm: confirmWorktreeHandoff,
-        }}
-      />
+      <ChatViewDialogs {...chatViewDialogsProps} />
 
-      <ChatExpandedImageDialog
-        expandedImage={expandedImage}
-        onClose={closeExpandedImage}
-        onNavigate={navigateExpandedImage}
-      />
+      <ChatExpandedImageDialog {...chatExpandedImageDialogProps} />
     </>
   );
 }
