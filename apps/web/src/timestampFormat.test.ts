@@ -42,4 +42,13 @@ describe("getTimestampFormatOptions", () => {
       formatTimestamp("2026-03-17T19:12:29.000Z", "locale"),
     );
   });
+
+  it("accepts quoted ISO timestamps after trimming", () => {
+    expect(formatShortTimestamp('"2026-03-17T19:12:29.000Z"', "24-hour")).toBe(
+      formatShortTimestamp("2026-03-17T19:12:29.000Z", "24-hour"),
+    );
+    expect(formatTimestamp(" '2026-03-17T19:12:29.000Z' ", "locale")).toBe(
+      formatTimestamp("2026-03-17T19:12:29.000Z", "locale"),
+    );
+  });
 });
