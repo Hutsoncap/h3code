@@ -103,6 +103,47 @@ describe("togglePendingUserInputOptionSelection", () => {
       selectedOptionLabels: ["Desktop"],
     });
   });
+
+  it("normalizes padded option labels before storing them", () => {
+    const question = {
+      id: "targets",
+      header: "Targets",
+      question: "Which outputs should we ship?",
+      multiSelect: true,
+      options: [],
+    } as const;
+
+    expect(
+      togglePendingUserInputOptionSelection(
+        question,
+        { selectedOptionLabels: ["CLI"] },
+        " Desktop ",
+      ),
+    ).toEqual({
+      customAnswer: "",
+      selectedOptionLabels: ["CLI", "Desktop"],
+    });
+  });
+
+  it("ignores whitespace-only option labels", () => {
+    const question = {
+      id: "scope",
+      header: "Scope",
+      question: "What should the plan target first?",
+      options: [],
+    } as const;
+
+    expect(
+      togglePendingUserInputOptionSelection(
+        question,
+        { selectedOptionLabels: ["Orchestration-first"] },
+        "   ",
+      ),
+    ).toEqual({
+      customAnswer: "",
+      selectedOptionLabels: ["Orchestration-first"],
+    });
+  });
 });
 
 describe("buildPendingUserInputAnswers", () => {
