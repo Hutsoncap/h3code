@@ -16,9 +16,19 @@ describe("userMessageTerminalContexts", () => {
     ).toBe("@terminal-1:12-13 @terminal-2:4");
   });
 
+  it("ignores quote-wrapped blank headers when building inline text", () => {
+    expect(
+      buildInlineTerminalContextText([{ header: ' "   " ' }, { header: "Terminal 2 line 4" }]),
+    ).toBe("@terminal-2:4");
+  });
+
   it("formats individual inline terminal labels compactly", () => {
     expect(formatInlineTerminalContextLabel("Terminal 1 lines 12-13")).toBe("@terminal-1:12-13");
     expect(formatInlineTerminalContextLabel("Terminal 2 line 4")).toBe("@terminal-2:4");
+  });
+
+  it("falls back to the generic terminal label for quote-wrapped blank line headers", () => {
+    expect(formatInlineTerminalContextLabel(' "   " lines 12-13')).toBe("@terminal:12-13");
   });
 
   it("detects inline terminal labels embedded in user message text", () => {
@@ -32,5 +42,14 @@ describe("userMessageTerminalContexts", () => {
         { header: "Terminal 1 lines 12-13" },
       ]),
     ).toBe(false);
+  });
+
+  it("ignores quote-wrapped blank headers when checking inline labels", () => {
+    expect(
+      textContainsInlineTerminalContextLabels("yo @terminal-2:4 whats up", [
+        { header: ' "   " ' },
+        { header: "Terminal 2 line 4" },
+      ]),
+    ).toBe(true);
   });
 });
