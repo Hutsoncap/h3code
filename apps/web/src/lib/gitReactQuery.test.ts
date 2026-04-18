@@ -5,6 +5,8 @@ import {
   gitPreparePullRequestThreadMutationOptions,
   gitPullMutationOptions,
   gitRunStackedActionMutationOptions,
+  gitSummarizeDiffQueryOptions,
+  gitQueryKeys,
 } from "./gitReactQuery";
 
 describe("gitMutationKeys", () => {
@@ -44,5 +46,27 @@ describe("git mutation options", () => {
       queryClient,
     });
     expect(options.mutationKey).toEqual(gitMutationKeys.preparePullRequestThread("/repo/a"));
+  });
+});
+
+describe("gitSummarizeDiffQueryOptions", () => {
+  it("treats quote-wrapped blank patches as absent", () => {
+    const options = gitSummarizeDiffQueryOptions({
+      cwd: "/repo/a",
+      patch: ' "   " ',
+    });
+
+    expect(options.queryKey).toEqual(gitQueryKeys.diffSummary("/repo/a", null, null, null));
+    expect(options.enabled).toBe(false);
+  });
+
+  it("preserves non-blank patches for caching and execution", () => {
+    const options = gitSummarizeDiffQueryOptions({
+      cwd: "/repo/a",
+      patch: " diff --git a/file b/file ",
+    });
+
+    expect(options.queryKey[5]).toEqual(expect.any(String));
+    expect(options.enabled).toBe(true);
   });
 });

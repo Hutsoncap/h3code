@@ -1,4 +1,5 @@
 import type { GitStackedAction } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 import { ensureNativeApi } from "../nativeApi";
 import { buildPatchCacheKey } from "./diffRendering";
@@ -120,11 +121,9 @@ export function gitSummarizeDiffQueryOptions(input: {
   enabled?: boolean;
 }) {
   // Cache summaries by patch hash so reopening the same diff does not regenerate it.
-  const normalizedPatch = input.patch?.trim() ?? null;
+  const normalizedPatch = trimOrNull(input.patch);
   const patchKey =
-    normalizedPatch && normalizedPatch.length > 0
-      ? buildPatchCacheKey(normalizedPatch, "git-diff-summary")
-      : null;
+    normalizedPatch !== null ? buildPatchCacheKey(normalizedPatch, "git-diff-summary") : null;
 
   return queryOptions({
     queryKey: gitQueryKeys.diffSummary(
@@ -145,11 +144,7 @@ export function gitSummarizeDiffQueryOptions(input: {
         ...(input.model ? { textGenerationModel: input.model } : {}),
       });
     },
-    enabled:
-      (input.enabled ?? true) &&
-      input.cwd !== null &&
-      normalizedPatch !== null &&
-      normalizedPatch.length > 0,
+    enabled: (input.enabled ?? true) && input.cwd !== null && normalizedPatch !== null,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: GIT_DIFF_SUMMARY_GC_TIME_MS,
     refetchOnMount: false,
