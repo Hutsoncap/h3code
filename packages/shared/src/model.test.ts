@@ -138,6 +138,12 @@ describe("resolveSelectableModel", () => {
       resolveSelectableModel("codex", "   ", [{ slug: "gpt-5.4", name: "GPT-5.4" }]),
     ).toBeNull();
     expect(
+      resolveSelectableModel("codex", ' "   " ', [{ slug: "gpt-5.4", name: "GPT-5.4" }]),
+    ).toBeNull();
+    expect(
+      resolveSelectableModel("codex", " '   ' ", [{ slug: "gpt-5.4", name: "GPT-5.4" }]),
+    ).toBeNull();
+    expect(
       resolveSelectableModel("codex", null, [{ slug: "gpt-5.4", name: "GPT-5.4" }]),
     ).toBeNull();
   });

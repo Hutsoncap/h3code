@@ -85,11 +85,7 @@ export function resolveSelectableModel(
   value: string | null | undefined,
   options: ReadonlyArray<SelectableModelOption>,
 ): ModelSlug | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
+  const trimmed = trimOrNull(value);
   if (!trimmed) {
     return null;
   }
