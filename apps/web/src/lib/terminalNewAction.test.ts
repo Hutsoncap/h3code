@@ -92,4 +92,48 @@ describe("resolveTerminalNewAction", () => {
       }),
     ).toEqual({ kind: "new-tab", targetTerminalId: "terminal-9" });
   });
+
+  it("ignores quote-wrapped blank active ids when resolving the destination group", () => {
+    const activeGroup: ThreadTerminalGroup = {
+      id: "group-terminal-2",
+      activeTerminalId: "terminal-3",
+      layout: {
+        type: "terminal",
+        paneId: "pane-terminal-2",
+        terminalIds: ["terminal-2", "terminal-3"],
+        activeTerminalId: "terminal-3",
+      },
+    };
+
+    expect(
+      resolveTerminalNewAction({
+        terminalOpen: true,
+        activeTerminalId: '"   "',
+        activeTerminalGroupId: '"  "',
+        terminalGroups: [activeGroup],
+      }),
+    ).toEqual({ kind: "new-tab", targetTerminalId: "terminal-3" });
+  });
+
+  it("falls back to a new group when only quote-wrapped blank ids remain", () => {
+    const emptyGroup: ThreadTerminalGroup = {
+      id: "group-empty",
+      activeTerminalId: '"   "',
+      layout: {
+        type: "terminal",
+        paneId: "pane-empty",
+        terminalIds: [],
+        activeTerminalId: '"   "',
+      },
+    };
+
+    expect(
+      resolveTerminalNewAction({
+        terminalOpen: true,
+        activeTerminalId: '"  "',
+        activeTerminalGroupId: '" "',
+        terminalGroups: [emptyGroup],
+      }),
+    ).toEqual({ kind: "new-group" });
+  });
 });
