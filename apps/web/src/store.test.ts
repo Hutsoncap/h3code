@@ -1035,6 +1035,34 @@ describe("store pure functions", () => {
       folderName: "project",
     });
   });
+
+  it("treats quote-wrapped blank local aliases as cleared", () => {
+    const state = makeState(
+      makeThread({
+        projectId: ProjectId.makeUnsafe("project-1"),
+      }),
+    );
+
+    const aliasedState = {
+      ...state,
+      projects: [
+        makeProject({
+          id: ProjectId.makeUnsafe("project-1"),
+          name: "dpcode",
+          localName: "dpcode",
+        }),
+      ],
+    };
+
+    const next = renameProjectLocally(aliasedState, ProjectId.makeUnsafe("project-1"), ' "   " ');
+
+    expect(next.projects[0]).toMatchObject({
+      name: "Project",
+      localName: null,
+      remoteName: "Project",
+      folderName: "project",
+    });
+  });
 });
 
 describe("store read model sync", () => {
@@ -1306,6 +1334,32 @@ describe("store read model sync", () => {
     });
   });
 
+  it("drops quote-wrapped blank local aliases during read model sync", () => {
+    const next = syncServerReadModel(
+      {
+        ...makeState(makeThread()),
+        projects: [
+          makeProject({
+            name: '"   "',
+            localName: ' "   " ',
+          }),
+        ],
+      },
+      makeReadModel(
+        makeReadModelThread({
+          updatedAt: "2026-02-28T00:00:00.000Z",
+        }),
+      ),
+    );
+
+    expect(next.projects[0]).toMatchObject({
+      name: "Project",
+      localName: null,
+      remoteName: "Project",
+      folderName: "project",
+    });
+  });
+
   it("keeps a cleared local project alias from reappearing during syncs", async () => {
     const storage = new Map<string, string>();
     const fakeWindow = {
@@ -1327,7 +1381,7 @@ describe("store read model sync", () => {
       "t3code:renderer-state:v8",
       JSON.stringify({
         projectNamesByCwd: {
-          "/tmp/project": "dpcode",
+          "/tmp/project": ' "   " ',
         },
       }),
     );
