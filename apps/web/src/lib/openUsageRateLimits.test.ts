@@ -139,4 +139,56 @@ describe("openUsageRateLimits", () => {
       },
     ]);
   });
+
+  it("trims padded OpenUsage strings before normalizing", () => {
+    expect(
+      normalizeOpenUsageSnapshot(
+        {
+          providerId: " codex ",
+          fetchedAt: " 2099-04-08T18:00:00.000Z ",
+          lines: [
+            {
+              type: "progress",
+              label: " Session ",
+              used: 20,
+              limit: 100,
+              resetsAt: " 2099-04-08T21:18:00.000Z ",
+              periodDurationMs: 18_000_000,
+            },
+          ],
+        },
+        "claudeAgent",
+      ),
+    ).toEqual({
+      provider: "codex",
+      updatedAt: "2099-04-08T18:00:00.000Z",
+      limits: [
+        {
+          window: "5h",
+          usedPercent: 20,
+          resetsAt: "2099-04-08T21:18:00.000Z",
+          windowDurationMins: 300,
+        },
+      ],
+    });
+
+    expect(
+      normalizeOpenUsageUsageLines({
+        lines: [
+          {
+            type: "text",
+            label: " Today ",
+            value: " $5.17 · 9.2M tokens ",
+            subtitle: " via ccusage ",
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        label: "Today",
+        value: "$5.17 · 9.2M tokens",
+        subtitle: "via ccusage",
+      },
+    ]);
+  });
 });
