@@ -1,6 +1,11 @@
 import { formatInlineTerminalContextLabel as formatInlineTerminalContextSelectionLabel } from "~/lib/terminalContext";
+import { trimOrNull } from "@t3tools/shared/model";
 
 const TERMINAL_CONTEXT_HEADER_PATTERN = /^(.*?)\s+line(?:s)?\s+(\d+)(?:-(\d+))?$/i;
+
+function normalizeInlineTerminalContextHeader(header: string): string | null {
+  return trimOrNull(header);
+}
 
 export function buildInlineTerminalContextText(
   contexts: ReadonlyArray<{
@@ -8,14 +13,18 @@ export function buildInlineTerminalContextText(
   }>,
 ): string {
   return contexts
-    .map((context) => context.header.trim())
-    .filter((header) => header.length > 0)
+    .map((context) => normalizeInlineTerminalContextHeader(context.header))
+    .filter((header): header is string => header !== null)
     .map(formatInlineTerminalContextLabel)
     .join(" ");
 }
 
 export function formatInlineTerminalContextLabel(header: string): string {
-  const trimmedHeader = header.trim();
+  const trimmedHeader = normalizeInlineTerminalContextHeader(header);
+  if (!trimmedHeader) {
+    return "@terminal";
+  }
+
   const match = TERMINAL_CONTEXT_HEADER_PATTERN.exec(trimmedHeader);
   if (!match) {
     return `@${trimmedHeader.toLowerCase().replace(/\s+/g, "-")}`;
@@ -28,7 +37,7 @@ export function formatInlineTerminalContextLabel(header: string): string {
   }
 
   return formatInlineTerminalContextSelectionLabel({
-    terminalLabel: match[1]?.trim() || "terminal",
+    terminalLabel: trimOrNull(match[1]) ?? "terminal",
     lineStart,
     lineEnd,
   });
@@ -43,6 +52,10 @@ export function textContainsInlineTerminalContextLabels(
   let searchStartIndex = 0;
 
   for (const context of contexts) {
+    if (!normalizeInlineTerminalContextHeader(context.header)) {
+      continue;
+    }
+
     const label = formatInlineTerminalContextLabel(context.header);
     const matchIndex = text.indexOf(label, searchStartIndex);
     if (matchIndex === -1) {
