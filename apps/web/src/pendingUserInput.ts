@@ -33,6 +33,11 @@ function normalizeDraftAnswer(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeOptionLabel(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 // Normalize option selections so UI and submit logic can share one canonical list.
 function normalizeSelectedOptionLabels(value: string[] | undefined): string[] {
   if (!Array.isArray(value)) {
@@ -85,11 +90,19 @@ export function togglePendingUserInputOptionSelection(
   draft: PendingUserInputDraftAnswer | undefined,
   optionLabel: string,
 ): PendingUserInputDraftAnswer {
+  const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+  const normalizedOptionLabel = normalizeOptionLabel(optionLabel);
+  if (!normalizedOptionLabel) {
+    return {
+      customAnswer: "",
+      ...(selectedOptionLabels.length > 0 ? { selectedOptionLabels } : {}),
+    };
+  }
+
   if (question.multiSelect) {
-    const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
-    const nextSelectedOptionLabels = selectedOptionLabels.includes(optionLabel)
-      ? selectedOptionLabels.filter((label) => label !== optionLabel)
-      : [...selectedOptionLabels, optionLabel];
+    const nextSelectedOptionLabels = selectedOptionLabels.includes(normalizedOptionLabel)
+      ? selectedOptionLabels.filter((label) => label !== normalizedOptionLabel)
+      : [...selectedOptionLabels, normalizedOptionLabel];
 
     return {
       customAnswer: "",
@@ -101,7 +114,7 @@ export function togglePendingUserInputOptionSelection(
 
   return {
     customAnswer: "",
-    selectedOptionLabels: [optionLabel],
+    selectedOptionLabels: [normalizedOptionLabel],
   };
 }
 
