@@ -217,6 +217,29 @@ describe("chat font size defaults", () => {
 
     expect(normalizedFontFamily).toBe("");
   });
+
+  it("normalizes quote-wrapped blank UI font families when loading persisted settings", async () => {
+    const { useAppSettings } = await loadUseAppSettingsModule([
+      [
+        "h3code:app-settings:v1",
+        JSON.stringify({
+          uiFontFamily: ' "   " ',
+        }),
+      ],
+    ]);
+
+    let normalizedFontFamily: string | null = null;
+
+    function Harness() {
+      const { settings } = useAppSettings();
+      normalizedFontFamily = settings.uiFontFamily;
+      return null;
+    }
+
+    renderToStaticMarkup(createElement(Harness));
+
+    expect(normalizedFontFamily).toBe("");
+  });
 });
 
 describe("sidebar sort defaults", () => {
