@@ -4,6 +4,7 @@ import {
   WORKTREE_BRANCH_PREFIX,
   buildTemporaryWorktreeBranchName,
   isTemporaryWorktreeBranch,
+  resolveAutoFeatureBranchName,
   resolveThreadBranchRegressionGuard,
   stripTemporaryWorktreeBranchPrefix,
 } from "./git";
@@ -75,5 +76,12 @@ describe("resolveThreadBranchRegressionGuard", () => {
         nextBranch: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("resolveAutoFeatureBranchName", () => {
+  it("treats quote-wrapped blank preferred names as absent and falls back to the canonical default", () => {
+    expect(resolveAutoFeatureBranchName([], ' "   " ')).toBe("feature/update");
+    expect(resolveAutoFeatureBranchName(["feature/update"], " '   ' ")).toBe("feature/update-2");
   });
 });
