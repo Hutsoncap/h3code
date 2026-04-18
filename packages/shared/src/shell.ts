@@ -17,7 +17,21 @@ type ExecFileSyncLike = (
 
 function trimNonEmpty(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return undefined;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 function readUserLoginShell(): string | undefined {

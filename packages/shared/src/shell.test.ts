@@ -94,6 +94,18 @@ describe("readPathFromLaunchctl", () => {
 
     expect(readPathFromLaunchctl(execFile)).toBeUndefined();
   });
+
+  it("returns undefined for quote-wrapped blank PATH values", () => {
+    const execFile = vi.fn<
+      (
+        file: string,
+        args: ReadonlyArray<string>,
+        options: { encoding: "utf8"; timeout: number },
+      ) => string
+    >(() => '  "   "  \n');
+
+    expect(readPathFromLaunchctl(execFile)).toBeUndefined();
+  });
 });
 
 describe("readEnvironmentFromLoginShell", () => {
@@ -169,6 +181,10 @@ describe("listLoginShellCandidates", () => {
       "/opt/homebrew/bin/nu",
       "/bin/zsh",
     ]);
+  });
+
+  it("treats quote-wrapped blank shell values as missing", () => {
+    expect(listLoginShellCandidates("darwin", ' "   " ', " '   ' ")).toEqual(["/bin/zsh"]);
   });
 
   it("falls back to the platform default when no shells are available", () => {
