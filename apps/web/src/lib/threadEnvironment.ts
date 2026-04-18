@@ -71,7 +71,21 @@ export interface DiffEnvironmentState {
 
 function normalizeThreadContextValue(value: string | null | undefined): string | null {
   const normalized = value?.trim() ?? "";
-  return normalized.length > 0 ? normalized : null;
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length >= 2) {
+    const quote = normalized[0];
+    if ((quote === '"' || quote === "'") && normalized.at(-1) === quote) {
+      const unquoted = normalized.slice(1, -1).trim();
+      if (!unquoted) {
+        return null;
+      }
+    }
+  }
+
+  return normalized;
 }
 
 // Diff surfaces stay disabled while a worktree-intended chat is still waiting for its path.
