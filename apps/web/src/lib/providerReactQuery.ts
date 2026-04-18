@@ -3,6 +3,7 @@ import {
   OrchestrationGetTurnDiffInput,
   ThreadId,
 } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import { queryOptions } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
 import { ensureNativeApi } from "../nativeApi";
@@ -54,8 +55,8 @@ function asCheckpointErrorMessage(error: unknown): string {
 }
 
 function normalizeCheckpointErrorMessage(error: unknown): string {
-  const message = asCheckpointErrorMessage(error).trim();
-  if (message.length === 0) {
+  const message = trimOrNull(asCheckpointErrorMessage(error));
+  if (!message) {
     return "Failed to load checkpoint diff.";
   }
 
@@ -70,8 +71,8 @@ function normalizeCheckpointErrorMessage(error: unknown): string {
   ) {
     const separatorIndex = message.indexOf(":");
     if (separatorIndex >= 0) {
-      const detail = message.slice(separatorIndex + 1).trim();
-      if (detail.length > 0) {
+      const detail = trimOrNull(message.slice(separatorIndex + 1));
+      if (detail) {
         return detail;
       }
     }
