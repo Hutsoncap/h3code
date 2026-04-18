@@ -197,6 +197,60 @@ describe("collectCompletedThreadCandidates", () => {
     ]);
   });
 
+  it("drops quote-wrapped blank assistant summaries from completed thread notifications", () => {
+    const previous = [
+      makeThread({
+        session: {
+          provider: "codex",
+          status: "running",
+          orchestrationStatus: "running",
+          createdAt: "2026-04-05T10:00:00.000Z",
+          updatedAt: "2026-04-05T10:00:01.000Z",
+        },
+      }),
+    ];
+    const next = [
+      makeThread({
+        session: {
+          provider: "codex",
+          status: "ready",
+          orchestrationStatus: "ready",
+          createdAt: "2026-04-05T10:00:00.000Z",
+          updatedAt: "2026-04-05T10:00:05.000Z",
+        },
+        latestTurn: {
+          turnId: TurnId.makeUnsafe("turn-1"),
+          state: "completed",
+          requestedAt: "2026-04-05T10:00:00.000Z",
+          startedAt: "2026-04-05T10:00:00.000Z",
+          completedAt: "2026-04-05T10:00:05.000Z",
+          assistantMessageId: MessageId.makeUnsafe("msg-1"),
+          sourceProposedPlan: undefined,
+        },
+        messages: [
+          {
+            id: MessageId.makeUnsafe("msg-1"),
+            role: "assistant",
+            text: ' "   " ',
+            createdAt: "2026-04-05T10:00:01.000Z",
+            completedAt: "2026-04-05T10:00:05.000Z",
+            streaming: false,
+          },
+        ],
+      }),
+    ];
+
+    expect(collectCompletedThreadCandidates(previous, next)).toEqual([
+      {
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        projectId: ProjectId.makeUnsafe("project-1"),
+        title: "Polish notifications",
+        completedAt: "2026-04-05T10:00:05.000Z",
+        assistantSummary: null,
+      },
+    ]);
+  });
+
   it("does not notify while the same turn is still running after an assistant block completes", () => {
     const previous = [
       makeThread({
