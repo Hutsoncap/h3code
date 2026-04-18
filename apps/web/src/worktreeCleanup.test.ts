@@ -63,6 +63,21 @@ describe("getOrphanedWorktreePathForThread", () => {
     expect(result).toBeNull();
   });
 
+  it("treats quote-wrapped shared worktree paths as the same worktree", () => {
+    const threads = [
+      makeThread({
+        id: ThreadId.makeUnsafe("thread-1"),
+        worktreePath: ' "/tmp/repo/worktrees/feature-a" ',
+      }),
+      makeThread({
+        id: ThreadId.makeUnsafe("thread-2"),
+        worktreePath: "/tmp/repo/worktrees/feature-a",
+      }),
+    ];
+    const result = getOrphanedWorktreePathForThread(threads, ThreadId.makeUnsafe("thread-1"));
+    expect(result).toBeNull();
+  });
+
   it("ignores threads linked to different worktrees", () => {
     const threads = [
       makeThread({
@@ -108,6 +123,11 @@ describe("formatWorktreePathForDisplay", () => {
 
   it("ignores trailing slashes", () => {
     const result = formatWorktreePathForDisplay("/tmp/custom-worktrees/my-worktree/");
+    expect(result).toBe("my-worktree");
+  });
+
+  it("normalizes quoted paths before extracting the display segment", () => {
+    const result = formatWorktreePathForDisplay(' "/tmp/custom-worktrees/my-worktree/" ');
     expect(result).toBe("my-worktree");
   });
 });
