@@ -208,4 +208,62 @@ describe("splitViewStore", () => {
       [THREAD_A]: "split-1",
     });
   });
+
+  it("treats quote-wrapped blank persisted split ids and pane thread ids as absent", async () => {
+    vi.resetModules();
+    const { useSplitViewStore: freshUseSplitViewStore } = await import("./splitViewStore");
+    const persistApi = freshUseSplitViewStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof freshUseSplitViewStore.getState>,
+        ) => ReturnType<typeof freshUseSplitViewStore.getState>;
+      };
+    };
+
+    const mergedState = persistApi.getOptions().merge(
+      {
+        splitViewsById: {
+          ' "   " ': {
+            id: " split-quoted ",
+            sourceThreadId: ` ${THREAD_A} `,
+            ownerProjectId: ` ${PROJECT_ID} `,
+            leftThreadId: ' "   " ',
+            rightThreadId: " '   ' ",
+            focusedPane: "right",
+            ratio: 0.5,
+            leftPanel: {
+              panel: null,
+              diffTurnId: null,
+              diffFilePath: null,
+              hasOpenedPanel: false,
+              lastOpenPanel: "browser",
+            },
+            rightPanel: {
+              panel: null,
+              diffTurnId: null,
+              diffFilePath: null,
+              hasOpenedPanel: false,
+              lastOpenPanel: "browser",
+            },
+            createdAt: "2026-04-17T09:00:00.000Z",
+            updatedAt: "2026-04-17T09:01:00.000Z",
+          },
+        },
+        splitViewIdBySourceThreadId: {},
+      },
+      freshUseSplitViewStore.getInitialState(),
+    );
+
+    expect(mergedState.splitViewsById["split-quoted"]).toMatchObject({
+      id: "split-quoted",
+      sourceThreadId: THREAD_A,
+      ownerProjectId: PROJECT_ID,
+      leftThreadId: null,
+      rightThreadId: null,
+    });
+    expect(mergedState.splitViewIdBySourceThreadId).toEqual({
+      [THREAD_A]: "split-quoted",
+    });
+  });
 });
