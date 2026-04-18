@@ -54,6 +54,15 @@ it.layer(NetService.layer)("NetService", (it) => {
       }),
     );
 
+    it.effect("reserveLoopbackPort treats whitespace-only hosts as the default loopback host", () =>
+      Effect.gen(function* () {
+        const net = yield* NetService;
+        const port = yield* net.reserveLoopbackPort("   ");
+
+        assert.ok(port > 0);
+      }),
+    );
+
     it.effect("isPortAvailableOnLoopback reports false for an occupied port", () =>
       Effect.acquireUseRelease(
         openServer("127.0.0.1"),
