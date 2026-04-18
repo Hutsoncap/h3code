@@ -1,7 +1,7 @@
 import { ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import { selectThreadBrowserHistory } from "./browserStateStore";
+import { selectThreadBrowserHistory, useBrowserStateStore } from "./browserStateStore";
 
 const THREAD_ID = ThreadId.makeUnsafe("thread-1");
 
@@ -112,5 +112,30 @@ describe("browserStateStore selectors", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("ignores quote-wrapped blank history urls when upserting thread state", () => {
+    const store = useBrowserStateStore;
+    const initialState = store.getInitialState();
+    store.setState(initialState, true);
+
+    store.getState().upsertThreadState({
+      threadId: THREAD_ID,
+      open: true,
+      activeTabId: "tab-1",
+      tabs: [
+        {
+          id: "tab-1",
+          url: ' "   " ',
+          lastCommittedUrl: ' "   " ',
+          title: "Placeholder",
+        },
+      ],
+      lastError: null,
+    } as never);
+
+    expect(selectThreadBrowserHistory(THREAD_ID)(store.getState())).toEqual([]);
+
+    store.setState(initialState, true);
   });
 });

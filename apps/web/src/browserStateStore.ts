@@ -34,7 +34,10 @@ interface BrowserStateStore {
 }
 
 function normalizeHistoryUrl(url: string): string {
-  const trimmed = url.trim();
+  const trimmed = trimOrNull(url);
+  if (!trimmed) {
+    return "";
+  }
   return trimmed === "about:blank" ? "" : trimmed;
 }
 
