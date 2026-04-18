@@ -115,6 +115,31 @@ describe("threadEnvironment", () => {
     });
   });
 
+  it("treats quote-wrapped blank worktree metadata as absent before reusing a worktree fork", () => {
+    expect(
+      resolveForkThreadEnvironment({
+        target: "local",
+        activeRootBranch: "main",
+        sourceThread: {
+          branch: "  feature/worktree-branch  ",
+          envMode: "worktree",
+          worktreePath: "  /repo/.worktrees/feature-worktree-branch  ",
+          associatedWorktreePath: ' "   " ',
+          associatedWorktreeBranch: "  feature/worktree-branch  ",
+          associatedWorktreeRef: " '   ' ",
+        },
+      }),
+    ).toEqual({
+      target: "local",
+      envMode: "worktree",
+      branch: "feature/worktree-branch",
+      worktreePath: "/repo/.worktrees/feature-worktree-branch",
+      associatedWorktreePath: "/repo/.worktrees/feature-worktree-branch",
+      associatedWorktreeBranch: "feature/worktree-branch",
+      associatedWorktreeRef: "feature/worktree-branch",
+    });
+  });
+
   it("marks diff state as pending when a worktree chat has no materialized path yet", () => {
     expect(
       resolveDiffEnvironmentState({
