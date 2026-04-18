@@ -168,7 +168,7 @@ export function parseComposerSlashInvocationForCommands(
   }
   return {
     command: command as ComposerSlashCommand,
-    args: (match[2] ?? "").trim(),
+    args: trimOrNull(match[2] ?? "") ?? "",
   };
 }
 
@@ -333,7 +333,7 @@ export function hasProviderNativeSlashCommand(
 }
 
 export function buildSlashReviewComposerPrompt(args: string): string {
-  const trimmedArgs = args.trim();
+  const trimmedArgs = trimOrNull(args) ?? "";
   const normalizedArgs = trimmedArgs.toLowerCase();
   const reviewTarget =
     normalizedArgs === "base" || normalizedArgs.startsWith("base ") ? "base-branch" : "changes";
@@ -355,7 +355,7 @@ export function parseForkSlashCommandArgs(args: string): {
   target: ForkSlashCommandTarget | null;
   invalid: boolean;
 } {
-  const trimmedArgs = args.trim();
+  const trimmedArgs = trimOrNull(args) ?? "";
   if (!trimmedArgs) {
     return { target: null, invalid: false };
   }
