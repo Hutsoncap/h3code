@@ -22,6 +22,16 @@ describe("resolveTerminalCloseTitle", () => {
     ).toBe("Deploy shell");
   });
 
+  it("normalizes whitespace in override titles before using them", () => {
+    expect(
+      resolveTerminalCloseTitle({
+        terminalId: "terminal-1",
+        terminalLabelsById: { "terminal-1": "Codex 1" },
+        terminalTitleOverridesById: { "terminal-1": "  Deploy\n shell\t" },
+      }),
+    ).toBe("Deploy shell");
+  });
+
   it("falls back to the stored label when no override exists", () => {
     expect(
       resolveTerminalCloseTitle({
@@ -38,6 +48,20 @@ describe("buildTerminalCloseConfirmationMessage", () => {
     expect(
       buildTerminalCloseConfirmationMessage({
         terminalTitle: "Deploy shell",
+        willDeleteThread: false,
+      }),
+    ).toBe(
+      [
+        'Close terminal "Deploy shell"?',
+        "This permanently clears the terminal history for this tab.",
+      ].join("\n"),
+    );
+  });
+
+  it("normalizes multiline terminal titles before composing the confirmation copy", () => {
+    expect(
+      buildTerminalCloseConfirmationMessage({
+        terminalTitle: "  Deploy\n shell\t",
         willDeleteThread: false,
       }),
     ).toBe(

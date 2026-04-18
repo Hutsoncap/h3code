@@ -5,9 +5,14 @@
 
 import type { NativeApi } from "@t3tools/contracts";
 
+function normalizeTerminalCloseTitle(value: string | null | undefined): string | null {
+  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
 function formatTerminalCloseSubject(terminalTitle: string | null | undefined): string {
-  const trimmedTitle = terminalTitle?.trim();
-  return trimmedTitle && trimmedTitle.length > 0 ? `terminal "${trimmedTitle}"` : "this terminal";
+  const normalizedTitle = normalizeTerminalCloseTitle(terminalTitle);
+  return normalizedTitle ? `terminal "${normalizedTitle}"` : "this terminal";
 }
 
 // Prefer title overrides, then persisted labels, so confirmation copy matches visible tab names.
@@ -17,8 +22,8 @@ export function resolveTerminalCloseTitle(options: {
   terminalTitleOverridesById: Record<string, string>;
 }): string {
   return (
-    options.terminalTitleOverridesById[options.terminalId]?.trim() ||
-    options.terminalLabelsById[options.terminalId]?.trim() ||
+    normalizeTerminalCloseTitle(options.terminalTitleOverridesById[options.terminalId]) ||
+    normalizeTerminalCloseTitle(options.terminalLabelsById[options.terminalId]) ||
     "Terminal"
   );
 }
