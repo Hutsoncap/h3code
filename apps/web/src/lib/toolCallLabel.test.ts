@@ -43,6 +43,25 @@ describe("deriveReadableToolTitle", () => {
     ).toBe("Check git status");
   });
 
+  it("humanizes basic shell inspection commands", () => {
+    expect(
+      deriveReadableToolTitle({
+        title: "Ran command",
+        fallbackLabel: "Ran command",
+        itemType: "command_execution",
+        command: "pwd",
+      }),
+    ).toBe("Show working directory");
+    expect(
+      deriveReadableToolTitle({
+        title: "Ran command",
+        fallbackLabel: "Ran command",
+        itemType: "command_execution",
+        command: "/bin/zsh -lc 'command -v bunx'",
+      }),
+    ).toBe("Locate command");
+  });
+
   it("keeps explicit non-generic titles", () => {
     expect(
       deriveReadableToolTitle({

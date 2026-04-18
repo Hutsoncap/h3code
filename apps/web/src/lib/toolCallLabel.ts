@@ -198,6 +198,13 @@ function humanizeCommandToolLabel(rawCommand: string): string {
     case "find":
     case "fd":
       return "Find files";
+    case "pwd":
+      return "Show working directory";
+    case "command":
+      if (args.trimStart().startsWith("-v ")) {
+        return "Locate command";
+      }
+      return "Run command";
     case "git":
       return humanizeGitCommand(args);
     default:
