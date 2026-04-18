@@ -1,6 +1,8 @@
+import { trimOrNull } from "@t3tools/shared/model";
+
 export function proposedPlanTitle(planMarkdown: string): string | null {
-  const heading = planMarkdown.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1]?.trim();
-  return heading && heading.length > 0 ? heading : null;
+  const heading = planMarkdown.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1];
+  return trimOrNull(heading) ?? null;
 }
 
 export function stripDisplayedPlanMarkdown(planMarkdown: string): string {

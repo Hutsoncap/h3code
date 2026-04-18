@@ -15,6 +15,10 @@ describe("proposedPlanTitle", () => {
     expect(proposedPlanTitle("# Integrate RPC\n\nBody")).toBe("Integrate RPC");
   });
 
+  it("treats quote-wrapped blank headings as absent", () => {
+    expect(proposedPlanTitle('# "   "\n\nBody')).toBeNull();
+  });
+
   it("returns null when the plan has no heading", () => {
     expect(proposedPlanTitle("- step 1")).toBeNull();
   });
@@ -46,6 +50,10 @@ describe("buildCollapsedProposedPlanPreviewMarkdown", () => {
         maxLines: 2,
       }),
     ).toBe("- step 1\n- step 2\n\n...");
+  });
+
+  it("falls back to the canonical preview copy when the heading is quote-wrapped blank", () => {
+    expect(buildCollapsedProposedPlanPreviewMarkdown('# "   "')).toBe("Plan preview unavailable.");
   });
 });
 
@@ -99,6 +107,10 @@ describe("buildPlanImplementationThreadTitle", () => {
   it("falls back when the plan has no markdown heading", () => {
     expect(buildPlanImplementationThreadTitle("- step 1")).toBe("Implement plan");
   });
+
+  it("falls back when the plan heading is quote-wrapped blank", () => {
+    expect(buildPlanImplementationThreadTitle('# "   "\n\nBody')).toBe("Implement plan");
+  });
 });
 
 describe("buildProposedPlanMarkdownFilename", () => {
@@ -110,5 +122,9 @@ describe("buildProposedPlanMarkdownFilename", () => {
 
   it("falls back to a generic filename when the plan has no heading", () => {
     expect(buildProposedPlanMarkdownFilename("- step 1")).toBe("plan.md");
+  });
+
+  it("falls back to a generic filename when the heading is quote-wrapped blank", () => {
+    expect(buildProposedPlanMarkdownFilename('# "   "\n\nBody')).toBe("plan.md");
   });
 });
