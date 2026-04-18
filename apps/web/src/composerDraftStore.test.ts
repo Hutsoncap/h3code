@@ -426,6 +426,18 @@ describe("composerDraftStore terminal contexts", () => {
     expect(draft?.terminalContexts.map((context) => context.id)).toEqual(["ctx-1"]);
   });
 
+  it("ignores quote-wrapped blank terminal context ids and labels when adding contexts", () => {
+    useComposerDraftStore.getState().addTerminalContexts(threadId, [
+      makeTerminalContext({
+        id: "ctx-quoted-blank",
+        terminalId: '"   "',
+        terminalLabel: '" "',
+      }),
+    ]);
+
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toBeUndefined();
+  });
+
   it("clears terminal contexts when clearing composer content", () => {
     useComposerDraftStore
       .getState()
@@ -544,6 +556,43 @@ describe("composerDraftStore terminal contexts", () => {
         text: "",
       },
     ]);
+  });
+
+  it("drops quote-wrapped blank persisted terminal contexts during merge", () => {
+    const persistApi = useComposerDraftStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useComposerDraftStore.getState>,
+        ) => ReturnType<typeof useComposerDraftStore.getState>;
+      };
+    };
+    const mergedState = persistApi.getOptions().merge(
+      {
+        draftsByThreadId: {
+          [threadId]: {
+            prompt: INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
+            attachments: [],
+            terminalContexts: [
+              {
+                id: "ctx-quoted-blank",
+                threadId,
+                createdAt: "2026-03-13T12:00:00.000Z",
+                terminalId: '"   "',
+                terminalLabel: '" "',
+                lineStart: 4,
+                lineEnd: 5,
+              },
+            ],
+          },
+        },
+        draftThreadsByThreadId: {},
+        projectDraftThreadIdByProjectId: {},
+      },
+      useComposerDraftStore.getInitialState(),
+    );
+
+    expect(mergedState.draftsByThreadId[threadId]?.terminalContexts).toEqual([]);
   });
 
   it("sanitizes malformed persisted drafts during merge", () => {

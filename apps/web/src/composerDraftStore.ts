@@ -21,6 +21,7 @@ import {
   getDefaultModel,
   normalizeModelSlug,
   resolveModelSlugForProvider,
+  trimOrNull,
 } from "@t3tools/shared/model";
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
@@ -502,8 +503,8 @@ function normalizeTerminalContextForThread(
   threadId: ThreadId,
   context: TerminalContextDraft,
 ): TerminalContextDraft | null {
-  const terminalId = context.terminalId.trim();
-  const terminalLabel = context.terminalLabel.trim();
+  const terminalId = trimOrNull(context.terminalId) ?? "";
+  const terminalLabel = trimOrNull(context.terminalLabel) ?? "";
   if (terminalId.length === 0 || terminalLabel.length === 0) {
     return null;
   }
@@ -939,9 +940,10 @@ function normalizePersistedTerminalContextDraft(
   ) {
     return null;
   }
-  const terminalId = typeof candidate.terminalId === "string" ? candidate.terminalId.trim() : "";
+  const terminalId =
+    typeof candidate.terminalId === "string" ? (trimOrNull(candidate.terminalId) ?? "") : "";
   const terminalLabel =
-    typeof candidate.terminalLabel === "string" ? candidate.terminalLabel.trim() : "";
+    typeof candidate.terminalLabel === "string" ? (trimOrNull(candidate.terminalLabel) ?? "") : "";
   if (terminalId.length === 0 || terminalLabel.length === 0) {
     return null;
   }
