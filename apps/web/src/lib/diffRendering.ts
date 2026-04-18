@@ -1,3 +1,5 @@
+import { trimOrNull } from "@t3tools/shared/model";
+
 export const DIFF_THEME_NAMES = {
   // Keep diff syntax highlighting on the bundled GitHub themes for better parity with git tooling.
   light: "github-light",
@@ -30,8 +32,7 @@ export function fnv1a32(
 
 export function buildPatchCacheKey(patch: string, scope = "diff-panel"): string {
   const normalizedPatch = patch.trim();
-  const normalizedScope = scope.trim();
-  const cacheScope = normalizedScope.length > 0 ? normalizedScope : "diff-panel";
+  const cacheScope = trimOrNull(scope) ?? "diff-panel";
   const primary = fnv1a32(normalizedPatch, FNV_OFFSET_BASIS_32, FNV_PRIME_32).toString(36);
   const secondary = fnv1a32(
     normalizedPatch,
