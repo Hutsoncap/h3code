@@ -287,6 +287,16 @@ describe("getProviderStartOptions", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("ignores quote-wrapped blank provider overrides", () => {
+    expect(
+      getProviderStartOptions({
+        claudeBinaryPath: ' "   " ',
+        codexBinaryPath: " '   ' ",
+        codexHomePath: ' "" ',
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("provider-indexed custom model settings", () => {
