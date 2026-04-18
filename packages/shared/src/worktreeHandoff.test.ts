@@ -13,6 +13,16 @@ describe("hasAssociatedWorktree", () => {
     ).toBe(false);
   });
 
+  it("treats quote-wrapped blank associated fields as absent", () => {
+    expect(
+      hasAssociatedWorktree({
+        associatedWorktreePath: ' "   " ',
+        associatedWorktreeBranch: " '   ' ",
+        associatedWorktreeRef: ' "" ',
+      }),
+    ).toBe(false);
+  });
+
   it("returns true when any associated field contains non-whitespace text", () => {
     expect(
       hasAssociatedWorktree({
@@ -70,6 +80,19 @@ describe("resolveWorktreeHandoffIntent", () => {
       worktreeName: "feature/handoff",
       baseBranch: "feature/current",
     });
+  });
+
+  it("treats quote-wrapped blank inputs as absent when resolving handoff intent", () => {
+    expect(
+      resolveWorktreeHandoffIntent({
+        preferredNewWorktreeName: ' "   " ',
+        associatedWorktreePath: " '   ' ",
+        associatedWorktreeBranch: ' "" ',
+        associatedWorktreeRef: " '  ' ",
+        preferredWorktreeBaseBranch: ' "" ',
+        currentBranch: ' "main" ',
+      }),
+    ).toBeNull();
   });
 
   it("returns null when both the new name and associated metadata trim to empty", () => {

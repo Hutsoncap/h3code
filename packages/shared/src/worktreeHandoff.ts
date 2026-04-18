@@ -14,7 +14,21 @@ export type WorktreeHandoffIntent =
 
 function normalizeOptionalString(value?: string | null): string | null {
   const normalized = value?.trim() ?? "";
-  return normalized.length > 0 ? normalized : null;
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  if (normalized.length >= 2) {
+    const quote = normalized[0];
+    if ((quote === '"' || quote === "'") && normalized.at(-1) === quote) {
+      const unquoted = normalized.slice(1, -1).trim();
+      if (unquoted.length === 0) {
+        return null;
+      }
+    }
+  }
+
+  return normalized;
 }
 
 export function hasAssociatedWorktree(input: {
