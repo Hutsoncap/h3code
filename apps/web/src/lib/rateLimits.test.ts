@@ -7,6 +7,10 @@ describe("normalizeRateLimitLabel", () => {
     expect(normalizeRateLimitLabel("   ")).toBe("Current");
   });
 
+  it("falls back to Current for quote-wrapped blank custom labels", () => {
+    expect(normalizeRateLimitLabel(' "   " ')).toBe("Current");
+  });
+
   it("trims unknown labels while preserving their custom text", () => {
     expect(normalizeRateLimitLabel("  Burst Window  ")).toBe("Burst Window");
   });
