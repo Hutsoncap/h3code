@@ -89,12 +89,10 @@ export function normalizeRateLimitLabel(
 ): string {
   const durationLabel = windowLabelFromDuration(windowDurationMins);
   if (durationLabel) return durationLabel;
-  if (!label) return "Current";
+  const trimmedLabel = label?.trim();
+  if (!trimmedLabel) return "Current";
 
-  const normalized = label
-    .trim()
-    .toLowerCase()
-    .replace(/[_\s-]+/g, "_");
+  const normalized = trimmedLabel.toLowerCase().replace(/[_\s-]+/g, "_");
   if (normalized === "session" || normalized === "five_hour" || normalized === "5h") {
     return "5h";
   }
@@ -108,7 +106,7 @@ export function normalizeRateLimitLabel(
   ) {
     return "Sonnet";
   }
-  return label;
+  return trimmedLabel;
 }
 
 function compareWindowLabels(a: string, b: string): number {
