@@ -75,6 +75,11 @@ describe("resolvePathLinkTarget", () => {
   it("leaves relative paths unchanged when cwd is blank", () => {
     expect(resolvePathLinkTarget("src/main.ts:12:4", "   ")).toBe("src/main.ts:12:4");
   });
+
+  it("treats quote-wrapped blank cwd values as absent", () => {
+    expect(resolvePathLinkTarget("src/main.ts:12:4", ' "   " ')).toBe("src/main.ts:12:4");
+    expect(resolvePathLinkTarget("src/main.ts:12:4", " '' ")).toBe("src/main.ts:12:4");
+  });
 });
 
 describe("collectWrappedTerminalLinkLine", () => {
