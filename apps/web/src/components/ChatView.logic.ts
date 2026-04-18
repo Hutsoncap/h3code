@@ -5,6 +5,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { sanitizeBranchFragment } from "@t3tools/shared/git";
+import { trimOrNull } from "@t3tools/shared/model";
 import { isGenericTerminalThreadTitle } from "@t3tools/shared/terminalThreads";
 import {
   type ChatMessage,
@@ -101,8 +102,8 @@ export function appendVoiceTranscriptToPrompt(
 }
 
 export function sanitizeVoiceErrorMessage(message: string): string {
-  const normalized = message.trim();
-  if (normalized.length === 0) {
+  const normalized = trimOrNull(message);
+  if (!normalized) {
     return "The voice note could not be transcribed.";
   }
 
@@ -129,7 +130,7 @@ export function describeVoiceRecordingStartError(error: unknown): string {
     return "The microphone could not be opened.";
   }
 
-  const normalizedMessage = error.message.trim();
+  const normalizedMessage = trimOrNull(error.message);
   const errorName = typeof error.name === "string" ? error.name : "";
 
   if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
@@ -144,7 +145,7 @@ export function describeVoiceRecordingStartError(error: unknown): string {
   if (errorName === "SecurityError") {
     return "Microphone access is blocked in this environment.";
   }
-  if (normalizedMessage.length > 0) {
+  if (normalizedMessage) {
     return sanitizeVoiceErrorMessage(normalizedMessage);
   }
 
