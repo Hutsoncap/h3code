@@ -1,4 +1,5 @@
 import type { ToolLifecycleItemType } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 
 export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed|done|finished|success|succeeded)\s*$/i, "").trim();
@@ -115,7 +116,7 @@ function extractToolDescriptorFromPayload(
   const candidates: string[] = [];
   collectDescriptorCandidates(payload, descriptorKeys, candidates, 0);
   for (const candidate of candidates) {
-    const normalized = candidate.trim();
+    const normalized = trimOrNull(candidate);
     if (!normalized) {
       continue;
     }
@@ -137,7 +138,7 @@ function collectDescriptorCandidates(
     return;
   }
   if (typeof value === "string") {
-    const trimmed = value.trim();
+    const trimmed = trimOrNull(value);
     if (trimmed) {
       target.push(trimmed);
     }
@@ -159,7 +160,7 @@ function collectDescriptorCandidates(
   const record = value as Record<string, unknown>;
   for (const key of keys) {
     if (typeof record[key] === "string") {
-      const trimmed = (record[key] as string).trim();
+      const trimmed = trimOrNull(record[key] as string);
       if (trimmed) {
         target.push(trimmed);
       }
