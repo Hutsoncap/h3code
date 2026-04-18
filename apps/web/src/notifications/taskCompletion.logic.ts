@@ -72,8 +72,8 @@ function summarizeLatestAssistantMessage(thread: Thread): string | null {
     if (!message || message.role !== "assistant") {
       continue;
     }
-    const trimmed = message.text.trim().replace(/\s+/g, " ");
-    if (trimmed.length === 0) {
+    const trimmed = trimOrNull(message.text)?.replace(/\s+/g, " ");
+    if (!trimmed) {
       continue;
     }
     return trimmed.length <= 140 ? trimmed : `${trimmed.slice(0, 137)}...`;
