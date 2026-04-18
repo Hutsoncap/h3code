@@ -183,6 +183,84 @@ describe("deriveThreadSummaryMetadata", () => {
     });
   });
 
+  it("drops stale pending requests when provider details are quoted or padded", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      {
+        id: EventId.makeUnsafe("activity-1"),
+        tone: "approval",
+        kind: "approval.requested",
+        summary: "Approval requested",
+        payload: {
+          requestId: "approval-1",
+          requestType: "exec_command_approval",
+        },
+        sequence: 1,
+        turnId: TurnId.makeUnsafe("turn-1"),
+        createdAt: "2026-02-27T00:01:00.000Z",
+      },
+      {
+        id: EventId.makeUnsafe("activity-2"),
+        tone: "error",
+        kind: "provider.approval.respond.failed",
+        summary: "Approval response failed",
+        payload: {
+          requestId: "approval-1",
+          detail: '  "stale pending approval request"  ',
+        },
+        sequence: 2,
+        turnId: TurnId.makeUnsafe("turn-1"),
+        createdAt: "2026-02-27T00:02:00.000Z",
+      },
+      {
+        id: EventId.makeUnsafe("activity-3"),
+        tone: "info",
+        kind: "user-input.requested",
+        summary: "Questions requested",
+        payload: {
+          requestId: "input-1",
+          questions: [
+            {
+              id: "question-1",
+              header: "Confirm",
+              question: "Continue?",
+              options: [{ label: "Yes", description: "Continue." }],
+            },
+          ],
+        },
+        sequence: 3,
+        turnId: TurnId.makeUnsafe("turn-1"),
+        createdAt: "2026-02-27T00:03:00.000Z",
+      },
+      {
+        id: EventId.makeUnsafe("activity-4"),
+        tone: "error",
+        kind: "provider.user-input.respond.failed",
+        summary: "User input response failed",
+        payload: {
+          requestId: "input-1",
+          detail: " 'unknown pending user input request' ",
+        },
+        sequence: 4,
+        turnId: TurnId.makeUnsafe("turn-1"),
+        createdAt: "2026-02-27T00:04:00.000Z",
+      },
+    ];
+
+    expect(
+      deriveThreadSummaryMetadata({
+        messages: [],
+        activities,
+        proposedPlans: [],
+        latestTurn: null,
+      }),
+    ).toEqual({
+      latestUserMessageAt: null,
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      hasActionableProposedPlan: false,
+    });
+  });
+
   it("ignores malformed user-input questions that the UI could not render", () => {
     const activities: OrchestrationThreadActivity[] = [
       {

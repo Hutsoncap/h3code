@@ -57,7 +57,10 @@ function isStalePendingRequestFailureDetail(detail: string | undefined): boolean
   if (!detail) {
     return false;
   }
-  const normalized = detail.toLowerCase();
+  const normalized = detail
+    .trim()
+    .replace(/^['"`]+|['"`]+$/g, "")
+    .toLowerCase();
   return (
     normalized.includes("stale pending approval request") ||
     normalized.includes("unknown pending approval request") ||
