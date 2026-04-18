@@ -1,9 +1,18 @@
+import fs from "node:fs";
+import crypto from "node:crypto";
+import os from "node:os";
+import path from "node:path";
+
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert } from "@effect/vitest";
-import { Effect, FileSystem, Layer, Path, Sink, Stream } from "effect";
+import { Deferred, Effect, FileSystem, Layer, ManagedRuntime, Path, Sink, Stream } from "effect";
 import * as PlatformError from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
+import { ServerConfig } from "../../config";
+import { ProviderHealth } from "../Services/ProviderHealth";
 import {
   checkClaudeProviderStatus,
   checkCodexProviderStatus,
@@ -11,11 +20,33 @@ import {
   parseAuthStatusFromOutput,
   parseClaudeAuthStatusFromOutput,
   readCodexConfigModelProvider,
+  ProviderHealthLive,
 } from "./ProviderHealth";
+import {
+  readProviderStatusCache,
+  resolveProviderStatusCachePath,
+  writeProviderStatusCache,
+} from "../providerStatusCache";
 
 // ── Test helpers ────────────────────────────────────────────────────
 
 const encoder = new TextEncoder();
+
+const readyCodexStatus = {
+  provider: "codex" as const,
+  status: "ready" as const,
+  available: true,
+  authStatus: "authenticated" as const,
+  checkedAt: "2026-04-15T10:00:00.000Z",
+};
+
+const readyClaudeStatus = {
+  provider: "claudeAgent" as const,
+  status: "ready" as const,
+  available: true,
+  authStatus: "authenticated" as const,
+  checkedAt: "2026-04-15T10:00:00.000Z",
+};
 
 function mockHandle(result: { stdout: string; stderr: string; code: number }) {
   return ChildProcessSpawner.makeHandle({
@@ -32,6 +63,39 @@ function mockHandle(result: { stdout: string; stderr: string; code: number }) {
   });
 }
 
+function makeProviderHealthRuntime(
+  baseDir: string,
+  spawnerLayer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>,
+) {
+  const serverConfigLayer = ServerConfig.layerTest(process.cwd(), baseDir);
+  const layer = ProviderHealthLive.pipe(
+    Layer.provide(serverConfigLayer),
+    Layer.provide(NodeFileSystem.layer),
+    Layer.provide(NodePath.layer),
+    Layer.provide(spawnerLayer),
+  );
+
+  return ManagedRuntime.make(layer);
+}
+
+function makeProviderStatusCachePath(baseDir: string, provider: "codex" | "claudeAgent") {
+  return resolveProviderStatusCachePath({
+    stateDir: path.join(baseDir, "userdata"),
+    provider,
+  });
+}
+
+function writeSeedProviderStatusCache(baseDir: string, provider: "codex" | "claudeAgent") {
+  const status = provider === "codex" ? readyCodexStatus : readyClaudeStatus;
+  return Effect.gen(function* () {
+    const cachePath = makeProviderStatusCachePath(baseDir, provider);
+    yield* writeProviderStatusCache({
+      filePath: cachePath,
+      provider: status,
+    });
+  }).pipe(Effect.provide(NodeServices.layer));
+}
+
 function mockSpawnerLayer(
   handler: (args: ReadonlyArray<string>) => { stdout: string; stderr: string; code: number },
 ) {
@@ -42,6 +106,95 @@ function mockSpawnerLayer(
       return Effect.succeed(mockHandle(handler(cmd.args)));
     }),
   );
+}
+
+async function createProviderHealthLiveHarness(failOnSecondLoginStatus = false) {
+  const baseDir = path.join(os.tmpdir(), `t3-provider-health-${crypto.randomUUID()}`);
+  const codexHomeDir = path.join(os.tmpdir(), `t3-provider-health-codex-${crypto.randomUUID()}`);
+  const originalCodexHome = process.env.CODEX_HOME;
+  let codexVersionCalls = 0;
+  let codexLoginStatusCalls = 0;
+  const releaseLoginStatus = await Effect.runPromise(Deferred.make<void>());
+  const loginStatusStarted = await Effect.runPromise(Deferred.make<void>());
+
+  const spawnerLayer = Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make((command) => {
+      const cmd = command as unknown as { command: string; args: ReadonlyArray<string> };
+      const joined = cmd.args.join(" ");
+
+      if (cmd.command === "codex" && joined === "--version") {
+        codexVersionCalls += 1;
+        return Effect.succeed(mockHandle({ stdout: "codex 1.0.0\n", stderr: "", code: 0 }));
+      }
+
+      if (cmd.command === "claude" && joined === "--version") {
+        return Effect.succeed(mockHandle({ stdout: "claude 1.0.0\n", stderr: "", code: 0 }));
+      }
+
+      if (cmd.command === "codex" && joined === "login status") {
+        codexLoginStatusCalls += 1;
+        if (codexLoginStatusCalls === 1) {
+          return Effect.gen(function* () {
+            yield* Deferred.succeed(loginStatusStarted, undefined).pipe(Effect.orDie);
+            yield* Deferred.await(releaseLoginStatus);
+            return mockHandle({ stdout: "Logged in\n", stderr: "", code: 0 });
+          });
+        }
+        if (failOnSecondLoginStatus) {
+          return Effect.succeed(mockHandle({ stdout: "", stderr: "Not logged in\n", code: 1 }));
+        }
+        return Effect.succeed(mockHandle({ stdout: "Logged in\n", stderr: "", code: 0 }));
+      }
+
+      if (cmd.command === "claude" && joined === "auth status") {
+        return Effect.succeed(
+          mockHandle({
+            stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
+            stderr: "",
+            code: 0,
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected args: ${joined}`);
+    }),
+  );
+
+  await Effect.runPromise(
+    Effect.all([
+      writeSeedProviderStatusCache(baseDir, "codex"),
+      writeSeedProviderStatusCache(baseDir, "claudeAgent"),
+    ]).pipe(Effect.scoped),
+  );
+
+  fs.mkdirSync(codexHomeDir, { recursive: true });
+  process.env.CODEX_HOME = codexHomeDir;
+
+  const runtime = makeProviderHealthRuntime(baseDir, spawnerLayer);
+  const providerHealth = await runtime.runPromise(Effect.service(ProviderHealth));
+
+  const cleanup = async () => {
+    await runtime.dispose();
+    if (originalCodexHome !== undefined) {
+      process.env.CODEX_HOME = originalCodexHome;
+    } else {
+      delete process.env.CODEX_HOME;
+    }
+    fs.rmSync(baseDir, { recursive: true, force: true });
+    fs.rmSync(codexHomeDir, { recursive: true, force: true });
+  };
+
+  return {
+    baseDir,
+    providerHealth,
+    runtime,
+    cleanup,
+    getCodexVersionCalls: () => codexVersionCalls,
+    getCodexLoginStatusCalls: () => codexLoginStatusCalls,
+    loginStatusStarted,
+    releaseLoginStatus,
+  } as const;
 }
 
 function failingSpawnerLayer(description: string) {
@@ -636,5 +789,92 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
       assert.strictEqual(parsed.status, "warning");
       assert.strictEqual(parsed.authStatus, "unknown");
     });
+  });
+});
+
+describe("ProviderHealthLive", () => {
+  it("shares a single in-flight refresh and preserves cached bootstrap state while pending", async () => {
+    const {
+      baseDir,
+      providerHealth,
+      runtime,
+      cleanup,
+      getCodexVersionCalls,
+      loginStatusStarted,
+      releaseLoginStatus,
+    } = await createProviderHealthLiveHarness();
+    try {
+      const cachedBeforeRefresh = await runtime.runPromise(providerHealth.getStatuses);
+      assert.deepStrictEqual(cachedBeforeRefresh, [readyCodexStatus, readyClaudeStatus]);
+
+      const firstRefresh = Effect.runPromise(providerHealth.refresh);
+      const secondRefresh = Effect.runPromise(providerHealth.refresh);
+
+      await Effect.runPromise(Deferred.await(loginStatusStarted));
+      assert.strictEqual(getCodexVersionCalls(), 1);
+      const stillCachedDuringRefresh = await runtime.runPromise(providerHealth.getStatuses);
+      assert.deepStrictEqual(stillCachedDuringRefresh, [readyCodexStatus, readyClaudeStatus]);
+
+      await Effect.runPromise(Deferred.succeed(releaseLoginStatus, undefined).pipe(Effect.orDie));
+      const [firstResult, secondResult] = await Promise.all([firstRefresh, secondRefresh]);
+      assert.deepStrictEqual(firstResult, secondResult);
+      assert.deepStrictEqual(firstResult, await runtime.runPromise(providerHealth.getStatuses));
+      assert.strictEqual(getCodexVersionCalls(), 1);
+
+      const persistedCodex = await Effect.runPromise(
+        readProviderStatusCache(makeProviderStatusCachePath(baseDir, "codex")).pipe(
+          Effect.scoped,
+          Effect.provide(NodeServices.layer),
+        ),
+      );
+      if (persistedCodex === undefined) {
+        throw new Error("Expected codex cache to persist refreshed provider status.");
+      }
+      assert.deepStrictEqual(persistedCodex, firstResult[0]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("preserves the cached snapshot when a foreground refresh returns an error snapshot", async () => {
+    const {
+      baseDir,
+      providerHealth,
+      runtime,
+      cleanup,
+      getCodexVersionCalls,
+      loginStatusStarted,
+      releaseLoginStatus,
+    } = await createProviderHealthLiveHarness(true);
+    try {
+      const cachedBeforeRefresh = await runtime.runPromise(providerHealth.getStatuses);
+      assert.deepStrictEqual(cachedBeforeRefresh, [readyCodexStatus, readyClaudeStatus]);
+
+      const firstRefresh = Effect.runPromise(providerHealth.refresh);
+
+      await Effect.runPromise(Deferred.await(loginStatusStarted));
+      await Effect.runPromise(Deferred.succeed(releaseLoginStatus, undefined).pipe(Effect.orDie));
+      const refreshed = await firstRefresh;
+      assert.strictEqual(getCodexVersionCalls(), 1);
+      assert.deepStrictEqual(refreshed, await runtime.runPromise(providerHealth.getStatuses));
+
+      const failedRefresh = await Effect.runPromise(providerHealth.refresh);
+      assert.strictEqual(getCodexVersionCalls(), 2);
+      assert.deepStrictEqual(failedRefresh, refreshed);
+      assert.deepStrictEqual(await runtime.runPromise(providerHealth.getStatuses), refreshed);
+
+      const persistedCodex = await Effect.runPromise(
+        readProviderStatusCache(makeProviderStatusCachePath(baseDir, "codex")).pipe(
+          Effect.scoped,
+          Effect.provide(NodeServices.layer),
+        ),
+      );
+      if (persistedCodex === undefined) {
+        throw new Error("Expected codex cache to persist the last successful provider status.");
+      }
+      assert.deepStrictEqual(persistedCodex, refreshed[0]);
+    } finally {
+      await cleanup();
+    }
   });
 });
