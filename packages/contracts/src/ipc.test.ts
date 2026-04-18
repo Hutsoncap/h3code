@@ -9,6 +9,8 @@ import {
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
   ContextMenuPositionSchema,
+  DesktopShellOpenExternalInputSchema,
+  DesktopShellShowInFolderInputSchema,
   DesktopUpdateActionResultSchema,
   DesktopUpdateStateSchema,
   DesktopNotificationInputSchema,
@@ -26,6 +28,12 @@ const decodeBrowserThreadInput = Schema.decodeUnknownSync(BrowserThreadInputSche
 const decodeBrowserTabInput = Schema.decodeUnknownSync(BrowserTabInputSchema);
 const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
   DesktopServerTranscribeVoiceInputSchema,
+);
+const decodeDesktopShellOpenExternalInput = Schema.decodeUnknownSync(
+  DesktopShellOpenExternalInputSchema,
+);
+const decodeDesktopShellShowInFolderInput = Schema.decodeUnknownSync(
+  DesktopShellShowInFolderInputSchema,
 );
 const decodeDesktopUpdateState = Schema.decodeUnknownSync(DesktopUpdateStateSchema);
 const decodeDesktopUpdateActionResult = Schema.decodeUnknownSync(DesktopUpdateActionResultSchema);
@@ -177,6 +185,20 @@ describe("DesktopNotificationInputSchema", () => {
         threadId: 42,
       }),
     ).toThrow();
+  });
+});
+
+describe("Desktop shell input schemas", () => {
+  it("trims open-external and show-in-folder inputs", () => {
+    expect(decodeDesktopShellOpenExternalInput(" https://example.com/path ")).toBe(
+      "https://example.com/path",
+    );
+    expect(decodeDesktopShellShowInFolderInput(" /tmp/project ")).toBe("/tmp/project");
+  });
+
+  it("rejects blank open-external and show-in-folder inputs", () => {
+    expect(() => decodeDesktopShellOpenExternalInput("   ")).toThrow();
+    expect(() => decodeDesktopShellShowInFolderInput("   ")).toThrow();
   });
 });
 

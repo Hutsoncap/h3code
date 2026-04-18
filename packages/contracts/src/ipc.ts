@@ -64,7 +64,7 @@ import type {
   OrchestrationReadModel,
 } from "./orchestration";
 import { EditorId } from "./editor";
-import { ThreadId } from "./baseSchemas";
+import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
 import type {
   ProviderComposerCapabilities,
   ProviderGetComposerCapabilitiesInput,
@@ -314,10 +314,10 @@ export const DesktopServerTranscribeVoiceResultSchema = ServerVoiceTranscription
 export type DesktopServerTranscribeVoiceResult =
   typeof DesktopServerTranscribeVoiceResultSchema.Type;
 
-export const DesktopShellOpenExternalInputSchema = Schema.String;
+export const DesktopShellOpenExternalInputSchema = TrimmedNonEmptyString;
 export type DesktopShellOpenExternalInput = typeof DesktopShellOpenExternalInputSchema.Type;
 
-export const DesktopShellShowInFolderInputSchema = Schema.String;
+export const DesktopShellShowInFolderInputSchema = TrimmedNonEmptyString;
 export type DesktopShellShowInFolderInput = typeof DesktopShellShowInFolderInputSchema.Type;
 
 export interface DesktopBridge {

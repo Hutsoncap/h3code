@@ -419,12 +419,14 @@ describe("wsNativeApi", () => {
     const { createWsNativeApi } = await import("./wsNativeApi");
     const api = createWsNativeApi();
 
-    await api.shell.openExternal("https://example.com");
-    await api.shell.showInFolder("/tmp/project");
+    await api.shell.openExternal(" https://example.com/path ");
+    await api.shell.showInFolder(" /tmp/project ");
 
-    expect(openExternal).toHaveBeenCalledWith("https://example.com");
+    expect(openExternal).toHaveBeenCalledWith("https://example.com/path");
     expect(showInFolder).toHaveBeenCalledWith("/tmp/project");
 
+    await expect(api.shell.openExternal("   " as never)).rejects.toThrow();
+    await expect(api.shell.showInFolder("   " as never)).rejects.toThrow();
     await expect(api.shell.openExternal(123 as never)).rejects.toThrow();
     await expect(api.shell.showInFolder(123 as never)).rejects.toThrow();
 

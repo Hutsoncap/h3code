@@ -31,8 +31,6 @@ import {
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
   DesktopThemeSchema,
-  DesktopShellOpenExternalInputSchema,
-  DesktopShellShowInFolderInputSchema,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
 
@@ -42,6 +40,7 @@ import { isBackendReadinessAborted, waitForHttpReady } from "./backendReadiness"
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { registerDesktopNotificationShowHandler } from "./desktopNotifications";
 import { registerValidatedIpcHandler } from "./ipcHelpers";
+import { getSafeExternalUrl, registerDesktopShellIpcHandlers } from "./shellIpc";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
 import { registerDesktopVoiceTranscriptionHandler } from "./voiceTranscription";
@@ -67,8 +66,6 @@ const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
-const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
-const SHOW_IN_FOLDER_CHANNEL = "desktop:show-in-folder";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const NOTIFICATIONS_IS_SUPPORTED_CHANNEL = "desktop:notifications-is-supported";
@@ -204,25 +201,6 @@ function formatErrorMessage(error: unknown): string {
     return error.message;
   }
   return String(error);
-}
-
-function getSafeExternalUrl(rawUrl: unknown): string | null {
-  if (typeof rawUrl !== "string" || rawUrl.length === 0) {
-    return null;
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    return null;
-  }
-
-  if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
-    return null;
-  }
-
-  return parsedUrl.toString();
 }
 
 // Wait for the desktop backend to accept HTTP connections before packaged startup continues.
@@ -1358,53 +1336,10 @@ function registerIpcHandlers(): void {
     },
   );
 
-  registerValidatedIpcHandler(
-    ipcMain,
-    OPEN_EXTERNAL_CHANNEL,
-    DesktopShellOpenExternalInputSchema,
-    async (rawUrl) => {
-      const externalUrl = getSafeExternalUrl(rawUrl);
-      if (!externalUrl) {
-        return false;
-      }
-
-      try {
-        await shell.openExternal(externalUrl);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  );
-
-  registerValidatedIpcHandler(
-    ipcMain,
-    SHOW_IN_FOLDER_CHANNEL,
-    DesktopShellShowInFolderInputSchema,
-    async (rawPath) => {
-      if (typeof rawPath !== "string" || rawPath.trim().length === 0) {
-        throw new Error("Missing folder path.");
-      }
-      const resolvedPath = Path.resolve(rawPath);
-
-      let stats: FS.Stats;
-      try {
-        stats = await FS.promises.stat(resolvedPath);
-      } catch {
-        throw new Error(`Folder not found: ${resolvedPath}`);
-      }
-
-      if (stats.isDirectory()) {
-        const errorMessage = await shell.openPath(resolvedPath);
-        if (errorMessage.trim().length > 0) {
-          throw new Error(errorMessage);
-        }
-        return;
-      }
-
-      shell.showItemInFolder(resolvedPath);
-    },
-  );
+  registerDesktopShellIpcHandlers({
+    ipc: ipcMain,
+    shell,
+  });
 
   registerDesktopUpdateIpcHandlers({
     ipc: ipcMain,
