@@ -60,7 +60,6 @@ import {
   collapseExpandedComposerCursor,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
-  replaceTextRange,
   stripComposerTriggerText,
 } from "../composer-logic";
 import { createProjectSelector, createThreadSelector } from "../storeSelectors";
@@ -124,8 +123,8 @@ import {
   type QueuedComposerTurn,
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
-import { type TerminalContextDraft } from "../lib/terminalContext";
 import { deriveLatestContextWindowSnapshot, deriveCumulativeCostUsd } from "../lib/contextWindow";
+import { type TerminalContextDraft } from "../lib/terminalContext";
 import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
 import {
   resolveSplitViewFocusedThreadId,
@@ -142,6 +141,7 @@ import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerAttachmentBindings } from "./chat/useChatComposerAttachmentBindings";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useChatComposerCommandBindings } from "./chat/useChatComposerCommandBindings";
+import { useChatComposerInputBindings } from "./chat/useChatComposerInputBindings";
 import { useChatComposerFooterBindings } from "./chat/useChatComposerFooterBindings";
 import { useChatMediaBindings } from "./chat/useChatMediaBindings";
 import { useChatComposerModelBindings } from "./chat/useChatComposerModelBindings";
@@ -168,7 +168,6 @@ import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
   ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
-  appendVoiceTranscriptToPrompt,
   shouldStartActiveTurnLayoutGrace,
   buildLocalDraftThread,
   hasServerAcknowledgedLocalDispatch,
@@ -1621,29 +1620,49 @@ export default function ChatView({
     [setStoreThreadError],
   );
 
-  const focusComposer = useCallback(() => {
-    composerEditorRef.current?.focusAtEnd();
-  }, []);
-  const scheduleComposerFocus = useCallback(() => {
-    window.requestAnimationFrame(() => {
-      focusComposer();
-    });
-  }, [focusComposer]);
-  const appendVoiceTranscriptToComposer = useCallback(
-    (transcript: string) => {
-      const nextPrompt = appendVoiceTranscriptToPrompt(promptRef.current, transcript);
-      if (!nextPrompt) {
-        return;
-      }
-
-      promptRef.current = nextPrompt;
-      setPrompt(nextPrompt);
-      setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
-      setComposerTrigger(detectComposerTrigger(nextPrompt, nextPrompt.length));
-      scheduleComposerFocus();
-    },
-    [scheduleComposerFocus, setPrompt],
-  );
+  const {
+    onAdvanceActivePendingUserInput,
+    onChangeActivePendingUserInputCustomAnswer,
+    onPreviousActivePendingUserInputQuestion,
+    onRespondToApproval,
+    onToggleActivePendingUserInputOption,
+    setActivePendingUserInputCustomAnswerValue,
+  } = useChatPendingInteractionBindings({
+    activePendingProgress,
+    activePendingResolvedAnswers,
+    activePendingUserInput,
+    activeThreadId,
+    promptRef,
+    setComposerCursor,
+    setComposerTrigger,
+    setPendingUserInputAnswersByRequestId,
+    setPendingUserInputQuestionIndexByRequestId,
+    setRespondingRequestIds,
+    setRespondingUserInputRequestIds,
+    setStoreThreadError,
+  });
+  const {
+    appendVoiceTranscriptToComposer,
+    applyPromptReplacement,
+    clearComposerInput,
+    focusComposer,
+    restoreFailedComposerSendDraft,
+    scheduleComposerFocus,
+  } = useChatComposerInputBindings({
+    activePendingQuestionId: activePendingProgress?.activeQuestion?.id ?? null,
+    addComposerImagesToDraft,
+    addComposerTerminalContextsToDraft,
+    clearComposerDraftContent,
+    composerEditorRef,
+    promptRef,
+    setActivePendingUserInputCustomAnswerValue,
+    setComposerCursor,
+    setComposerHighlightedItemId,
+    setComposerTrigger,
+    setPrompt,
+    setSelectedComposerMentions,
+    setSelectedComposerSkills,
+  });
   const {
     handleRuntimeModeChange,
     handleInteractionModeChange,
@@ -1780,27 +1799,6 @@ export default function ChatView({
       setTerminalOpen,
       setThreadError,
     });
-  const {
-    onAdvanceActivePendingUserInput,
-    onChangeActivePendingUserInputCustomAnswer,
-    onPreviousActivePendingUserInputQuestion,
-    onRespondToApproval,
-    onToggleActivePendingUserInputOption,
-    setActivePendingUserInputCustomAnswerValue,
-  } = useChatPendingInteractionBindings({
-    activePendingProgress,
-    activePendingResolvedAnswers,
-    activePendingUserInput,
-    activeThreadId,
-    promptRef,
-    setComposerCursor,
-    setComposerTrigger,
-    setPendingUserInputAnswersByRequestId,
-    setPendingUserInputQuestionIndexByRequestId,
-    setRespondingRequestIds,
-    setRespondingUserInputRequestIds,
-    setStoreThreadError,
-  });
   const stopActiveThreadSession = useCallback(async () => {
     const api = readNativeApi();
     if (
@@ -2017,55 +2015,6 @@ export default function ChatView({
       window.clearInterval(timer);
     };
   }, [isWorking]);
-
-  const clearComposerInput = useCallback(
-    (threadId: ThreadId) => {
-      promptRef.current = "";
-      clearComposerDraftContent(threadId);
-      setSelectedComposerSkills([]);
-      setSelectedComposerMentions([]);
-      setComposerHighlightedItemId(null);
-      setComposerCursor(0);
-      setComposerTrigger(null);
-    },
-    [clearComposerDraftContent],
-  );
-
-  const restoreFailedComposerSendDraft = useCallback(
-    ({
-      prompt,
-      images,
-      terminalContexts,
-      skills,
-      mentions,
-    }: {
-      prompt: string;
-      images: ComposerImageAttachment[];
-      terminalContexts: TerminalContextDraft[];
-      skills: ProviderSkillReference[];
-      mentions: ProviderMentionReference[];
-    }) => {
-      promptRef.current = prompt;
-      setPrompt(prompt);
-      setComposerCursor(collapseExpandedComposerCursor(prompt, prompt.length));
-      if (images.length > 0) {
-        addComposerImagesToDraft(images);
-      }
-      if (terminalContexts.length > 0) {
-        addComposerTerminalContextsToDraft(terminalContexts);
-      }
-      setSelectedComposerSkills(skills);
-      setSelectedComposerMentions(mentions);
-      setComposerTrigger(detectComposerTrigger(prompt, prompt.length));
-    },
-    [
-      addComposerImagesToDraft,
-      addComposerTerminalContextsToDraft,
-      setPrompt,
-      setSelectedComposerMentions,
-      setSelectedComposerSkills,
-    ],
-  );
 
   const { beginLocalDispatch, dispatchChatTurn, onInterrupt, resetLocalDispatch } =
     useChatTurnDispatchBindings({
@@ -2381,51 +2330,6 @@ export default function ChatView({
       setStickyComposerModelSelection,
       threadId,
     });
-  const applyPromptReplacement = useCallback(
-    (
-      rangeStart: number,
-      rangeEnd: number,
-      replacement: string,
-      options?: { expectedText?: string; cursorOffset?: number },
-    ): number | false => {
-      const currentText = promptRef.current;
-      const safeStart = Math.max(0, Math.min(currentText.length, rangeStart));
-      const safeEnd = Math.max(safeStart, Math.min(currentText.length, rangeEnd));
-      if (
-        options?.expectedText !== undefined &&
-        currentText.slice(safeStart, safeEnd) !== options.expectedText
-      ) {
-        return false;
-      }
-      const next = replaceTextRange(promptRef.current, rangeStart, rangeEnd, replacement);
-      let nextCursor = collapseExpandedComposerCursor(next.text, next.cursor);
-      // Apply cursor offset if specified (e.g., -1 to position inside parentheses)
-      if (options?.cursorOffset !== undefined) {
-        nextCursor = Math.max(0, nextCursor + options.cursorOffset);
-      }
-      promptRef.current = next.text;
-      const activePendingQuestion = activePendingProgress?.activeQuestion;
-      if (activePendingQuestion && activePendingUserInput) {
-        setActivePendingUserInputCustomAnswerValue(activePendingQuestion.id, next.text);
-      } else {
-        setPrompt(next.text);
-      }
-      setComposerCursor(nextCursor);
-      setComposerTrigger(
-        detectComposerTrigger(next.text, expandCollapsedComposerCursor(next.text, nextCursor)),
-      );
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAt(nextCursor);
-      });
-      return nextCursor;
-    },
-    [
-      activePendingProgress?.activeQuestion,
-      activePendingUserInput,
-      setActivePendingUserInputCustomAnswerValue,
-      setPrompt,
-    ],
-  );
 
   const {
     handleStandaloneSlashCommand,
