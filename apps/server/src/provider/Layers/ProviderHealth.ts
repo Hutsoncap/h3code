@@ -17,9 +17,9 @@ import type {
 import { parseCodexConfigModelProvider } from "@t3tools/shared/codexConfig";
 import {
   Array,
+  Deferred,
   Effect,
   Exit,
-  Fiber,
   FileSystem,
   Layer,
   Option,
@@ -663,6 +663,7 @@ function providerStatusesEqual(left: ProviderStatuses, right: ProviderStatuses):
       status.status === next.status &&
       status.available === next.available &&
       status.authStatus === next.authStatus &&
+      status.checkedAt === next.checkedAt &&
       status.voiceTranscriptionAvailable === next.voiceTranscriptionAvailable &&
       (status.message ?? null) === (next.message ?? null)
     );
@@ -714,7 +715,7 @@ export const ProviderHealthLive = Layer.effect(
     );
 
     const statusesRef = yield* Ref.make<ProviderStatuses>(cachedStatuses);
-    const refreshFiberRef = yield* Ref.make<Fiber.Fiber<ProviderStatuses, never> | null>(null);
+    const refreshGateRef = yield* Ref.make<Deferred.Deferred<ProviderStatuses> | null>(null);
 
     const loadProviderStatuses = Effect.all([checkCodexProviderStatus, checkClaudeProviderStatus], {
       concurrency: "unbounded",
@@ -744,42 +745,52 @@ export const ProviderHealthLive = Layer.effect(
     const refreshNow = Effect.gen(function* () {
       const nextStatuses = yield* loadProviderStatuses;
       const previousStatuses = yield* Ref.get(statusesRef);
-      if (providerStatusesEqual(previousStatuses, nextStatuses)) {
-        yield* Ref.set(statusesRef, nextStatuses);
-        return nextStatuses;
+      if (previousStatuses.length > 0 && nextStatuses.some((status) => status.status === "error")) {
+        return previousStatuses;
       }
       yield* Ref.set(statusesRef, nextStatuses);
-      yield* persistStatuses(nextStatuses);
-      yield* PubSub.publish(changesPubSub, nextStatuses);
+      if (!providerStatusesEqual(previousStatuses, nextStatuses)) {
+        yield* persistStatuses(nextStatuses);
+        yield* PubSub.publish(changesPubSub, nextStatuses);
+      }
       return nextStatuses;
     });
 
     // Keep a single refresh in flight so repeated config reads do not spawn
     // overlapping CLI probes while the cache already gives us a usable answer.
-    const ensureRefreshFiber: Effect.Effect<Fiber.Fiber<ProviderStatuses, never>> = Effect.gen(
+    const ensureRefreshGate: Effect.Effect<Deferred.Deferred<ProviderStatuses>> = Effect.gen(
       function* () {
-        const inFlight = yield* Ref.get(refreshFiberRef);
+        const inFlight = yield* Ref.get(refreshGateRef);
         if (inFlight) {
           return inFlight;
         }
-        const refreshFiber = yield* Effect.gen(function* () {
-          const refreshExit = yield* Effect.exit(refreshNow);
-          if (Exit.isSuccess(refreshExit)) {
-            return refreshExit.value;
-          }
-          // Keep the current in-memory snapshot as the source of truth if a
-          // foreground refresh fails after startup.
-          return yield* Ref.get(statusesRef);
-        }).pipe(Effect.ensuring(Ref.set(refreshFiberRef, null)), Effect.forkIn(refreshScope));
-        yield* Ref.set(refreshFiberRef, refreshFiber);
-        return refreshFiber;
+        const refreshGate = yield* Deferred.make<ProviderStatuses>();
+        const acquiredGate = yield* Ref.modify(refreshGateRef, (current) =>
+          current === null ? [refreshGate, refreshGate] : [current, current],
+        );
+        if (acquiredGate !== refreshGate) {
+          return acquiredGate;
+        }
+        yield* Effect.forkIn(refreshScope)(
+          Effect.gen(function* () {
+            const refreshExit = yield* Effect.exit(refreshNow);
+            if (Exit.isSuccess(refreshExit)) {
+              yield* Deferred.succeed(refreshGate, refreshExit.value).pipe(Effect.orDie);
+              return;
+            }
+            // Keep the current in-memory snapshot as the source of truth if a
+            // foreground refresh fails after startup.
+            yield* Deferred.succeed(refreshGate, yield* Ref.get(statusesRef)).pipe(Effect.orDie);
+          }).pipe(Effect.ensuring(Ref.set(refreshGateRef, null))),
+        );
+        return refreshGate;
       },
     );
 
-    yield* ensureRefreshFiber;
+    yield* ensureRefreshGate;
 
-    const refresh: Effect.Effect<ProviderStatuses> = ensureRefreshFiber.pipe(
-      Effect.flatMap(Fiber.join),
+    const refresh: Effect.Effect<ProviderStatuses> = ensureRefreshGate.pipe(
+      Effect.flatMap(Deferred.await),
     );
 
     return {
