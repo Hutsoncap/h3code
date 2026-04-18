@@ -120,12 +120,16 @@ export function formatInlineTerminalContextLabel(selection: {
   lineStart: number;
   lineEnd: number;
 }): string {
-  const terminalLabel = selection.terminalLabel.trim().toLowerCase().replace(/\s+/g, "-");
+  const terminalLabel = selection.terminalLabel
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   const range =
     selection.lineStart === selection.lineEnd
       ? `${selection.lineStart}`
       : `${selection.lineStart}-${selection.lineEnd}`;
-  return `@${terminalLabel}:${range}`;
+  return `@${terminalLabel || "terminal"}:${range}`;
 }
 
 export function buildTerminalContextPreviewTitle(

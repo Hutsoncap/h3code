@@ -223,4 +223,23 @@ describe("terminalContext", () => {
       ),
     ).toBe("Investigate @terminal-1:12-13 carefully");
   });
+
+  it("normalizes punctuation-heavy inline terminal labels and falls back when blank", () => {
+    expect(
+      formatInlineTerminalContextLabel(
+        makeContext({
+          terminalLabel: "  Build / Output (Claude)  ",
+        }),
+      ),
+    ).toBe("@build-output-claude:12-13");
+    expect(
+      materializeInlineTerminalContextPrompt(`Inspect ${INLINE_TERMINAL_CONTEXT_PLACEHOLDER}`, [
+        {
+          terminalLabel: "   ",
+          lineStart: 12,
+          lineEnd: 13,
+        },
+      ]),
+    ).toBe("Inspect @terminal:12-13");
+  });
 });
