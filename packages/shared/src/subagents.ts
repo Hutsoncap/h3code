@@ -51,7 +51,26 @@ function asArray(value: unknown): unknown[] | null {
 }
 
 function asTrimmedString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return undefined;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 function firstStringValue(

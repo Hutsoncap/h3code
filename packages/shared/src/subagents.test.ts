@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSubagentIdentityDirectory,
   collectSubagentProviderThreadIds,
+  decodeSubagentReceiverThreadIds,
   decodeSubagentReceiverAgents,
   extractSubagentIdentityHints,
   resolveSubagentIdentityHint,
@@ -35,6 +36,16 @@ describe("collectSubagentProviderThreadIds", () => {
   });
 });
 
+describe("decodeSubagentReceiverThreadIds", () => {
+  it("ignores quote-wrapped blank thread ids", () => {
+    expect(
+      decodeSubagentReceiverThreadIds({
+        receiverThreadIds: [' "   " ', "child-provider-1", " '   ' "],
+      }),
+    ).toEqual(["child-provider-1"]);
+  });
+});
+
 describe("decodeSubagentReceiverAgents", () => {
   it("marks top-level requested model values as hints for child rows", () => {
     expect(
@@ -58,6 +69,28 @@ describe("decodeSubagentReceiverAgents", () => {
         model: "gpt-5.4-mini",
         modelIsRequestedHint: true,
         prompt: "Inspect the sidebar tree",
+      },
+    ]);
+  });
+
+  it("drops quote-wrapped blank receiver metadata fields", () => {
+    expect(
+      decodeSubagentReceiverAgents(
+        {
+          receiverAgents: [
+            {
+              threadId: "child-provider-1",
+              agentId: ' "   " ',
+              agentNickname: " '   ' ",
+              agentRole: ' "" ',
+            },
+          ],
+        },
+        ["child-provider-1"],
+      ),
+    ).toEqual([
+      {
+        providerThreadId: "child-provider-1",
       },
     ]);
   });
