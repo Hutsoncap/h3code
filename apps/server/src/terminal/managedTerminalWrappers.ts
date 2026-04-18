@@ -24,7 +24,12 @@ export interface ManagedTerminalWrapperState {
 }
 
 function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+  if (value.includes("\0") || value.includes("\r") || value.includes("\n")) {
+    throw new Error(
+      "Managed terminal wrapper literals must not contain NUL, carriage return, or newline characters.",
+    );
+  }
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 function envPathKeyFor(env: NodeJS.ProcessEnv): "PATH" | "Path" | "path" {
