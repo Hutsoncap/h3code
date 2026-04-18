@@ -71,6 +71,10 @@ describe("resolvePathLinkTarget", () => {
       resolvePathLinkTarget("/Users/julius/project/src/main.ts:12", "/Users/julius/project"),
     ).toBe("/Users/julius/project/src/main.ts:12");
   });
+
+  it("leaves relative paths unchanged when cwd is blank", () => {
+    expect(resolvePathLinkTarget("src/main.ts:12:4", "   ")).toBe("src/main.ts:12:4");
+  });
 });
 
 describe("collectWrappedTerminalLinkLine", () => {
