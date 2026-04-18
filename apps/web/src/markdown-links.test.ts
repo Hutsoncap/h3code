@@ -14,6 +14,10 @@ describe("rewriteMarkdownFileUriHref", () => {
       "/Users/julius/project/file%2520name.md",
     );
   });
+
+  it("rejects hosted file URLs so remote paths are not misread as local files", () => {
+    expect(rewriteMarkdownFileUriHref("file://fileserver/share/path.txt")).toBeNull();
+  });
 });
 
 describe("resolveMarkdownFileLinkTarget", () => {
@@ -59,5 +63,9 @@ describe("resolveMarkdownFileLinkTarget", () => {
 
   it("does not treat app routes as file links", () => {
     expect(resolveMarkdownFileLinkTarget("/chat/settings")).toBeNull();
+  });
+
+  it("rejects hosted file URLs so they do not resolve to local file paths", () => {
+    expect(resolveMarkdownFileLinkTarget("file://fileserver/share/path.txt")).toBeNull();
   });
 });
