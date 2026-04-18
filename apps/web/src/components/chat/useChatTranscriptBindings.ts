@@ -14,11 +14,11 @@ interface UseChatTranscriptBindingsOptions {
   diffEnvironmentPending: boolean;
   forceStickToBottom: (behavior?: ScrollBehavior) => void;
   navigate: ReturnType<typeof useNavigate>;
+  onExpandTimelineImage: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiffPanel?: ((turnId: TurnId, filePath?: string) => void) | undefined;
   onRevertToTurnCount: (turnCount: number) => void | Promise<void>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
   runProjectScript: (script: ProjectScript) => void | Promise<void>;
-  setExpandedImage: Dispatch<SetStateAction<ExpandedImagePreview | null>>;
   setExpandedWorkGroups: Dispatch<SetStateAction<Record<string, boolean>>>;
   threadId: ThreadId;
 }
@@ -40,11 +40,11 @@ export function useChatTranscriptBindings(
     diffEnvironmentPending,
     forceStickToBottom,
     navigate,
+    onExpandTimelineImage,
     onOpenTurnDiffPanel,
     onRevertToTurnCount,
     revertTurnCountByUserMessageId,
     runProjectScript,
-    setExpandedImage,
     setExpandedWorkGroups,
     threadId,
   } = options;
@@ -57,13 +57,6 @@ export function useChatTranscriptBindings(
       }));
     },
     [setExpandedWorkGroups],
-  );
-
-  const onExpandTimelineImage = useCallback(
-    (preview: ExpandedImagePreview) => {
-      setExpandedImage(preview);
-    },
-    [setExpandedImage],
   );
 
   const onScrollToBottom = useCallback(() => {
