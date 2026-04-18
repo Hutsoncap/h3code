@@ -33,6 +33,7 @@ import { TaskCompletionNotifications } from "../notifications/taskCompletion";
 import { useWorkspaceStore, workspaceThreadId } from "../workspaceStore";
 import { useAppTypography } from "../hooks/useAppTypography";
 import { invalidateGitQueries } from "../lib/gitReactQuery";
+import { rootErrorDetails, rootErrorMessage } from "./-rootErrorPresentation";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -72,8 +73,8 @@ function RootRouteView() {
 }
 
 function RootRouteErrorView({ error, reset }: ErrorComponentProps) {
-  const message = errorMessage(error);
-  const details = errorDetails(error);
+  const message = rootErrorMessage(error);
+  const details = rootErrorDetails(error);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10 text-foreground sm:px-6">
@@ -112,34 +113,6 @@ function RootRouteErrorView({ error, reset }: ErrorComponentProps) {
       </section>
     </div>
   );
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
-  }
-
-  return "An unexpected router error occurred.";
-}
-
-function errorDetails(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error, null, 2);
-  } catch {
-    return "No additional error details are available.";
-  }
 }
 
 const SNAPSHOT_CATCH_UP_MAX_ATTEMPTS = 5;
