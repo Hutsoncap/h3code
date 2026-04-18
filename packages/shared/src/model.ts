@@ -68,11 +68,7 @@ export function normalizeModelSlug(
   model: string | null | undefined,
   provider: ProviderKind = "codex",
 ): ModelSlug | null {
-  if (typeof model !== "string") {
-    return null;
-  }
-
-  const trimmed = model.trim();
+  const trimmed = trimOrNull(model);
   if (!trimmed) {
     return null;
   }
@@ -142,7 +138,21 @@ export function resolveModelSlugForProvider(
 export function trimOrNull<T extends string>(value: T | null | undefined): T | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim() as T;
-  return trimmed || null;
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      const unquoted = trimmed.slice(1, -1).trim();
+      if (!unquoted) {
+        return null;
+      }
+    }
+  }
+
+  return trimmed;
 }
 
 export function normalizeCodexModelOptions(
