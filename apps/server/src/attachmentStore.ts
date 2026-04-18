@@ -15,8 +15,32 @@ const ATTACHMENT_ID_THREAD_SEGMENT_PATTERN = "[a-z0-9_]+(?:-[a-z0-9_]+)*";
 const ATTACHMENT_ID_UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ATTACHMENT_ID_PATTERN = new RegExp(
   `^(${ATTACHMENT_ID_THREAD_SEGMENT_PATTERN})-(${ATTACHMENT_ID_UUID_PATTERN})$`,
-  "i",
 );
+
+function normalizeExactAttachmentId(rawAttachmentId: string): string | null {
+  const normalizedId = normalizeAttachmentRelativePath(rawAttachmentId);
+  if (
+    !normalizedId ||
+    normalizedId !== rawAttachmentId ||
+    normalizedId.includes("/") ||
+    normalizedId.includes(".")
+  ) {
+    return null;
+  }
+  return normalizedId;
+}
+
+function matchCanonicalAttachmentId(rawAttachmentId: string): RegExpMatchArray | null {
+  const normalizedId = normalizeExactAttachmentId(rawAttachmentId);
+  if (!normalizedId) {
+    return null;
+  }
+  return normalizedId.match(ATTACHMENT_ID_PATTERN);
+}
+
+function hasSupportedAttachmentExtension(extension: string): boolean {
+  return ATTACHMENT_FILENAME_EXTENSIONS.includes(extension.toLowerCase());
+}
 
 export function toSafeThreadAttachmentSegment(threadId: string): string | null {
   const segment = threadId
@@ -42,15 +66,11 @@ export function createAttachmentId(threadId: string): string | null {
 }
 
 export function parseThreadSegmentFromAttachmentId(attachmentId: string): string | null {
-  const normalizedId = normalizeAttachmentRelativePath(attachmentId);
-  if (!normalizedId || normalizedId.includes("/") || normalizedId.includes(".")) {
-    return null;
-  }
-  const match = normalizedId.match(ATTACHMENT_ID_PATTERN);
+  const match = matchCanonicalAttachmentId(attachmentId);
   if (!match) {
     return null;
   }
-  return match[1]?.toLowerCase() ?? null;
+  return match[1] ?? null;
 }
 
 export function attachmentRelativePath(attachment: ChatAttachment): string {
@@ -79,10 +99,11 @@ export function resolveAttachmentPathById(input: {
   readonly attachmentsDir: string;
   readonly attachmentId: string;
 }): string | null {
-  const normalizedId = normalizeAttachmentRelativePath(input.attachmentId);
-  if (!normalizedId || normalizedId.includes("/") || normalizedId.includes(".")) {
+  const match = matchCanonicalAttachmentId(input.attachmentId);
+  if (!match) {
     return null;
   }
+  const normalizedId = match[0];
   for (const extension of ATTACHMENT_FILENAME_EXTENSIONS) {
     const maybePath = resolveAttachmentRelativePath({
       attachmentsDir: input.attachmentsDir,
@@ -97,7 +118,7 @@ export function resolveAttachmentPathById(input: {
 
 export function parseAttachmentIdFromRelativePath(relativePath: string): string | null {
   const normalized = normalizeAttachmentRelativePath(relativePath);
-  if (!normalized || normalized.includes("/")) {
+  if (!normalized || normalized !== relativePath || normalized.includes("/")) {
     return null;
   }
   const extensionIndex = normalized.lastIndexOf(".");
@@ -105,5 +126,9 @@ export function parseAttachmentIdFromRelativePath(relativePath: string): string 
     return null;
   }
   const id = normalized.slice(0, extensionIndex);
-  return id.length > 0 && !id.includes(".") ? id : null;
+  const extension = normalized.slice(extensionIndex);
+  if (!hasSupportedAttachmentExtension(extension)) {
+    return null;
+  }
+  return matchCanonicalAttachmentId(id)?.[0] ?? null;
 }
