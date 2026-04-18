@@ -30,11 +30,13 @@ export function fnv1a32(
 
 export function buildPatchCacheKey(patch: string, scope = "diff-panel"): string {
   const normalizedPatch = patch.trim();
+  const normalizedScope = scope.trim();
+  const cacheScope = normalizedScope.length > 0 ? normalizedScope : "diff-panel";
   const primary = fnv1a32(normalizedPatch, FNV_OFFSET_BASIS_32, FNV_PRIME_32).toString(36);
   const secondary = fnv1a32(
     normalizedPatch,
     SECONDARY_HASH_SEED,
     SECONDARY_HASH_MULTIPLIER,
   ).toString(36);
-  return `${scope}:${normalizedPatch.length}:${primary}:${secondary}`;
+  return `${cacheScope}:${normalizedPatch.length}:${primary}:${secondary}`;
 }
