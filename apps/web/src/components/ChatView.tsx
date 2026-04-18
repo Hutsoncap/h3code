@@ -28,11 +28,6 @@ import {
   getModelCapabilities,
   normalizeModelSlug,
 } from "@t3tools/shared/model";
-import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
-import {
-  buildPromptThreadTitleFallback,
-  GENERIC_CHAT_THREAD_TITLE,
-} from "@t3tools/shared/chatThreads";
 import {
   resolveThreadWorkspaceState,
   resolveThreadBranchSourceCwd,
@@ -126,12 +121,8 @@ import { Separator } from "./ui/separator";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
-import {
-  projectScriptRuntimeEnv,
-  projectScriptIdFromCommand,
-  setupProjectScript,
-} from "~/projectScripts";
-import { newCommandId, newMessageId } from "~/lib/utils";
+import { projectScriptRuntimeEnv, projectScriptIdFromCommand } from "~/projectScripts";
+import { newCommandId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
   getCustomModelOptionsByProvider,
@@ -150,8 +141,6 @@ import {
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
 import {
-  appendTerminalContextsToPrompt,
-  IMAGE_ONLY_BOOTSTRAP_PROMPT,
   formatTerminalContextLabel,
   insertInlineTerminalContextPlaceholder,
   removeInlineTerminalContextPlaceholder,
@@ -195,6 +184,7 @@ import { useChatAutoScrollController } from "./chat/useChatAutoScrollController"
 import { useChatPendingInteractionBindings } from "./chat/useChatPendingInteractionBindings";
 import { useChatQueuedTurnBindings } from "./chat/useChatQueuedTurnBindings";
 import { useChatProjectScriptBindings } from "./chat/useChatProjectScriptBindings";
+import { useChatTurnDispatchBindings } from "./chat/useChatTurnDispatchBindings";
 import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
@@ -205,7 +195,6 @@ import {
   buildLocalDraftThread,
   cloneComposerImageForRetry,
   collectUserMessageBlobPreviewUrls,
-  createLocalDispatchSnapshot,
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
@@ -2585,31 +2574,87 @@ export default function ChatView({
     };
   }, [isWorking]);
 
-  const beginLocalDispatch = useCallback(
-    (options?: { preparingWorktree?: boolean }) => {
-      const preparingWorktree = Boolean(options?.preparingWorktree);
-      setLocalDispatch((current) => {
-        if (current) {
-          return current.preparingWorktree === preparingWorktree
-            ? current
-            : { ...current, preparingWorktree };
-        }
-        return createLocalDispatchSnapshot(activeThread, options);
-      });
+  const clearComposerInput = useCallback(
+    (threadId: ThreadId) => {
+      promptRef.current = "";
+      clearComposerDraftContent(threadId);
+      setSelectedComposerSkills([]);
+      setSelectedComposerMentions([]);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
     },
-    [activeThread],
+    [clearComposerDraftContent],
   );
 
-  const resetLocalDispatch = useCallback(() => {
-    setLocalDispatch(null);
-  }, []);
+  const restoreFailedComposerSendDraft = useCallback(
+    ({
+      prompt,
+      images,
+      terminalContexts,
+      skills,
+      mentions,
+    }: {
+      prompt: string;
+      images: ComposerImageAttachment[];
+      terminalContexts: TerminalContextDraft[];
+      skills: ProviderSkillReference[];
+      mentions: ProviderMentionReference[];
+    }) => {
+      promptRef.current = prompt;
+      setPrompt(prompt);
+      setComposerCursor(collapseExpandedComposerCursor(prompt, prompt.length));
+      if (images.length > 0) {
+        addComposerImagesToDraft(images);
+      }
+      if (terminalContexts.length > 0) {
+        addComposerTerminalContextsToDraft(terminalContexts);
+      }
+      setSelectedComposerSkills(skills);
+      setSelectedComposerMentions(mentions);
+      setComposerTrigger(detectComposerTrigger(prompt, prompt.length));
+    },
+    [
+      addComposerImagesToDraft,
+      addComposerTerminalContextsToDraft,
+      setPrompt,
+      setSelectedComposerMentions,
+      setSelectedComposerSkills,
+    ],
+  );
 
-  useEffect(() => {
-    if (!serverAcknowledgedLocalDispatch) {
-      return;
-    }
-    resetLocalDispatch();
-  }, [resetLocalDispatch, serverAcknowledgedLocalDispatch]);
+  const { beginLocalDispatch, dispatchChatTurn, onInterrupt, resetLocalDispatch } =
+    useChatTurnDispatchBindings({
+      activeThread,
+      clearComposerInput,
+      composerImagesRef,
+      composerTerminalContextsRef,
+      createWorktree: createWorktreeMutation.mutateAsync,
+      forceStickToBottom,
+      formatOutgoingPrompt,
+      isConnecting,
+      isLocalDraftThread,
+      isSendBusy,
+      isServerThread,
+      persistThreadSettingsForNextTurn,
+      promptIncludesSkillMention,
+      promptRef,
+      resolvePromptPluginMentions: ({ prompt, existingMentions }) =>
+        resolvePromptPluginMentions({
+          prompt,
+          existingMentions,
+          providerPlugins,
+        }),
+      restoreFailedComposerSendDraft,
+      runProjectScript,
+      sendInFlightRef,
+      serverAcknowledgedLocalDispatch,
+      setLocalDispatch,
+      setOptimisticUserMessages,
+      setStoreThreadWorkspace,
+      setThreadError,
+      settingsEnableAssistantStreaming: settings.enableAssistantStreaming,
+    });
 
   useEffect(() => {
     if (!activeThreadId) return;
@@ -2670,17 +2715,6 @@ export default function ChatView({
     terminalState.workspaceActiveTab,
     terminalWorkspaceOpen,
   ]);
-
-  const onInterrupt = useCallback(async () => {
-    const api = readNativeApi();
-    if (!api || !activeThread) return;
-    await api.orchestration.dispatchCommand({
-      type: "thread.turn.interrupt",
-      commandId: newCommandId(),
-      threadId: activeThread.id,
-      createdAt: new Date().toISOString(),
-    });
-  }, [activeThread]);
 
   useEffect(() => {
     if (surfaceMode === "split" && !isFocusedPane) {
@@ -3048,19 +3082,6 @@ export default function ChatView({
     }
   }, [activeThread, createThreadHandoff, handoffDisabled]);
 
-  const clearComposerInput = useCallback(
-    (threadId: ThreadId) => {
-      promptRef.current = "";
-      clearComposerDraftContent(threadId);
-      setSelectedComposerSkills([]);
-      setSelectedComposerMentions([]);
-      setComposerHighlightedItemId(null);
-      setComposerCursor(0);
-      setComposerTrigger(null);
-    },
-    [clearComposerDraftContent],
-  );
-
   const restoreQueuedTurnToComposer = useCallback(
     (queuedTurn: QueuedComposerTurn) => {
       if (!activeThread) {
@@ -3262,7 +3283,6 @@ export default function ChatView({
       });
       return true;
     }
-    const threadIdForSend = activeThread.id;
     const isFirstMessage = !isServerThread || !hasNativeUserMessages;
     const baseBranchForWorktree =
       isFirstMessage && envModeForSend === "worktree" && !activeThread.worktreePath
@@ -3275,284 +3295,33 @@ export default function ChatView({
       isFirstMessage && envModeForSend === "worktree" && !activeThread.worktreePath;
     if (shouldCreateWorktree && !activeThread.branch) {
       setStoreThreadError(
-        threadIdForSend,
+        activeThread.id,
         "Select a base branch before sending in New worktree mode.",
       );
       return false;
     }
 
-    sendInFlightRef.current = true;
-    beginLocalDispatch({ preparingWorktree: Boolean(baseBranchForWorktree) });
-
-    const composerImagesSnapshot = [...composerImagesForSend];
-    const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
-    const composerSkillsSnapshot = [...selectedComposerSkillsForSend];
-    const composerMentionsSnapshot = [...selectedComposerMentionsForSend];
-    const messageTextForSend = appendTerminalContextsToPrompt(
+    return dispatchChatTurn({
+      activeProject,
+      baseBranchForWorktree,
+      composerImagesForSend,
+      composerMentionsForSend: selectedComposerMentionsForSend,
+      composerSkillsForSend: selectedComposerSkillsForSend,
+      composerTerminalContextsForSend: sendableComposerTerminalContexts,
+      dispatchMode,
+      envModeForSend,
+      expiredTerminalContextCount,
+      interactionModeForSend,
       promptForSend,
-      composerTerminalContextsSnapshot,
-    );
-    const messageIdForSend = newMessageId();
-    const messageCreatedAt = new Date().toISOString();
-    const outgoingMessageText = formatOutgoingPrompt({
-      provider: selectedProviderForSend,
-      model: selectedModelForSend,
-      effort: selectedPromptEffortForSend,
-      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      queuedChatTurn,
+      runtimeModeForSend,
+      selectedModelForSend,
+      selectedModelSelectionForSend,
+      selectedPromptEffortForSend,
+      selectedProviderForSend,
+      providerOptionsForDispatchForSend,
+      trimmedPrompt: trimmed,
     });
-    const mentionedSkillsForSend = selectedComposerSkillsForSend.filter((skill) =>
-      promptIncludesSkillMention(outgoingMessageText, skill.name, selectedProviderForSend),
-    );
-    const mentionedPluginMentionsForSend = resolvePromptPluginMentions({
-      prompt: outgoingMessageText,
-      existingMentions: selectedComposerMentionsForSend,
-      providerPlugins,
-    });
-    const turnAttachmentsPromise = Promise.all(
-      composerImagesSnapshot.map(async (image) => ({
-        type: "image" as const,
-        name: image.name,
-        mimeType: image.mimeType,
-        sizeBytes: image.sizeBytes,
-        dataUrl: await readFileAsDataUrl(image.file),
-      })),
-    );
-    const optimisticAttachments = composerImagesSnapshot.map((image) => ({
-      type: "image" as const,
-      id: image.id,
-      name: image.name,
-      mimeType: image.mimeType,
-      sizeBytes: image.sizeBytes,
-      previewUrl: image.previewUrl,
-    }));
-    setOptimisticUserMessages((existing) => [
-      ...existing,
-      {
-        id: messageIdForSend,
-        role: "user",
-        text: outgoingMessageText,
-        ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
-        createdAt: messageCreatedAt,
-        streaming: false,
-        source: "native",
-      },
-    ]);
-    // Sending a message should always bring the latest user turn into view.
-    forceStickToBottom();
-
-    setThreadError(threadIdForSend, null);
-    if (expiredTerminalContextCount > 0) {
-      const toastCopy = buildExpiredTerminalContextToastCopy(
-        expiredTerminalContextCount,
-        "omitted",
-      );
-      toastManager.add({
-        type: "warning",
-        title: toastCopy.title,
-        description: toastCopy.description,
-      });
-    }
-    promptRef.current = "";
-    clearComposerDraftContent(threadIdForSend);
-    setComposerHighlightedItemId(null);
-    setComposerCursor(0);
-    setComposerTrigger(null);
-
-    let createdServerThreadForLocalDraft = false;
-    let turnStartSucceeded = false;
-    let nextThreadBranch = activeThread.branch;
-    let nextThreadWorktreePath = activeThread.worktreePath;
-    await (async () => {
-      // On first message: lock in branch + create worktree if needed.
-      if (baseBranchForWorktree) {
-        beginLocalDispatch({ preparingWorktree: true });
-        const result = await createWorktreeMutation.mutateAsync({
-          cwd: activeProject.cwd,
-          branch: baseBranchForWorktree,
-          newBranch: buildTemporaryWorktreeBranchName(),
-        });
-        nextThreadBranch = result.worktree.branch;
-        nextThreadWorktreePath = result.worktree.path;
-        const nextAssociatedWorktree = deriveAssociatedWorktreeMetadata({
-          branch: result.worktree.branch,
-          worktreePath: result.worktree.path,
-        });
-        if (isServerThread) {
-          await api.orchestration.dispatchCommand({
-            type: "thread.meta.update",
-            commandId: newCommandId(),
-            threadId: threadIdForSend,
-            envMode: "worktree",
-            branch: result.worktree.branch,
-            worktreePath: result.worktree.path,
-            associatedWorktreePath: nextAssociatedWorktree.associatedWorktreePath,
-            associatedWorktreeBranch: nextAssociatedWorktree.associatedWorktreeBranch,
-            associatedWorktreeRef: nextAssociatedWorktree.associatedWorktreeRef,
-          });
-          // Keep local thread state in sync immediately so terminal drawer opens
-          // with the worktree cwd/env instead of briefly using the project root.
-          setStoreThreadWorkspace(threadIdForSend, {
-            branch: result.worktree.branch,
-            worktreePath: result.worktree.path,
-            ...nextAssociatedWorktree,
-          });
-        }
-      }
-
-      let firstComposerImageName: string | null = null;
-      if (composerImagesSnapshot.length > 0) {
-        const firstComposerImage = composerImagesSnapshot[0];
-        if (firstComposerImage) {
-          firstComposerImageName = firstComposerImage.name;
-        }
-      }
-      let titleSeed = trimmed;
-      if (!titleSeed) {
-        if (firstComposerImageName) {
-          titleSeed = `Image: ${firstComposerImageName}`;
-        } else if (composerTerminalContextsSnapshot.length > 0) {
-          titleSeed = formatTerminalContextLabel(composerTerminalContextsSnapshot[0]!);
-        } else {
-          titleSeed = GENERIC_CHAT_THREAD_TITLE;
-        }
-      }
-      // Keep the optimistic label short while the server asks Codex for a better summary.
-      const title = buildPromptThreadTitleFallback(titleSeed);
-      const threadCreateModelSelection: ModelSelection = {
-        provider: selectedProviderForSend,
-        model:
-          selectedModelForSend ||
-          activeProject.defaultModelSelection?.model ||
-          DEFAULT_MODEL_BY_PROVIDER.codex,
-        ...(selectedModelSelectionForSend.options
-          ? { options: selectedModelSelectionForSend.options }
-          : {}),
-      };
-
-      if (isLocalDraftThread) {
-        await api.orchestration.dispatchCommand({
-          type: "thread.create",
-          commandId: newCommandId(),
-          threadId: threadIdForSend,
-          projectId: activeProject.id,
-          title,
-          modelSelection: threadCreateModelSelection,
-          runtimeMode: runtimeModeForSend,
-          interactionMode: interactionModeForSend,
-          envMode: envModeForSend,
-          branch: nextThreadBranch,
-          worktreePath: nextThreadWorktreePath,
-          createdAt: activeThread.createdAt,
-        });
-        createdServerThreadForLocalDraft = true;
-      }
-
-      let setupScript: ProjectScript | null = null;
-      if (baseBranchForWorktree) {
-        setupScript = setupProjectScript(activeProject.scripts);
-      }
-      if (setupScript) {
-        let shouldRunSetupScript = false;
-        if (isServerThread) {
-          shouldRunSetupScript = true;
-        } else {
-          if (createdServerThreadForLocalDraft) {
-            shouldRunSetupScript = true;
-          }
-        }
-        if (shouldRunSetupScript) {
-          const setupScriptOptions: Parameters<typeof runProjectScript>[1] = {
-            worktreePath: nextThreadWorktreePath,
-            rememberAsLastInvoked: false,
-          };
-          if (nextThreadWorktreePath) {
-            setupScriptOptions.cwd = nextThreadWorktreePath;
-          }
-          await runProjectScript(setupScript, setupScriptOptions);
-        }
-      }
-
-      if (isServerThread) {
-        await persistThreadSettingsForNextTurn({
-          threadId: threadIdForSend,
-          createdAt: messageCreatedAt,
-          ...(selectedModelForSend ? { modelSelection: selectedModelSelectionForSend } : {}),
-          runtimeMode: runtimeModeForSend,
-          interactionMode: interactionModeForSend,
-        });
-      }
-
-      beginLocalDispatch();
-      const turnAttachments = await turnAttachmentsPromise;
-      await api.orchestration.dispatchCommand({
-        type: "thread.turn.start",
-        commandId: newCommandId(),
-        threadId: threadIdForSend,
-        message: {
-          messageId: messageIdForSend,
-          role: "user",
-          text: outgoingMessageText,
-          attachments: turnAttachments,
-          ...(mentionedSkillsForSend.length > 0 ? { skills: mentionedSkillsForSend } : {}),
-          ...(mentionedPluginMentionsForSend.length > 0
-            ? { mentions: mentionedPluginMentionsForSend }
-            : {}),
-        },
-        modelSelection: selectedModelSelectionForSend,
-        ...(providerOptionsForDispatchForSend
-          ? { providerOptions: providerOptionsForDispatchForSend }
-          : {}),
-        assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
-        dispatchMode,
-        runtimeMode: runtimeModeForSend,
-        interactionMode: interactionModeForSend,
-        createdAt: messageCreatedAt,
-      });
-      turnStartSucceeded = true;
-    })().catch(async (err: unknown) => {
-      if (createdServerThreadForLocalDraft && !turnStartSucceeded) {
-        await api.orchestration
-          .dispatchCommand({
-            type: "thread.delete",
-            commandId: newCommandId(),
-            threadId: threadIdForSend,
-          })
-          .catch(() => undefined);
-      }
-      if (
-        queuedChatTurn === null &&
-        !turnStartSucceeded &&
-        promptRef.current.length === 0 &&
-        composerImagesRef.current.length === 0 &&
-        composerTerminalContextsRef.current.length === 0
-      ) {
-        setOptimisticUserMessages((existing) => {
-          const removed = existing.filter((message) => message.id === messageIdForSend);
-          for (const message of removed) {
-            revokeUserMessagePreviewUrls(message);
-          }
-          const next = existing.filter((message) => message.id !== messageIdForSend);
-          return next.length === existing.length ? existing : next;
-        });
-        promptRef.current = promptForSend;
-        setPrompt(promptForSend);
-        setComposerCursor(collapseExpandedComposerCursor(promptForSend, promptForSend.length));
-        addComposerImagesToDraft(composerImagesSnapshot.map(cloneComposerImageForRetry));
-        addComposerTerminalContextsToDraft(composerTerminalContextsSnapshot);
-        setSelectedComposerSkills(composerSkillsSnapshot);
-        setSelectedComposerMentions(composerMentionsSnapshot);
-        setComposerTrigger(detectComposerTrigger(promptForSend, promptForSend.length));
-      }
-      setThreadError(
-        threadIdForSend,
-        err instanceof Error ? err.message : "Failed to send message.",
-      );
-    });
-    sendInFlightRef.current = false;
-    if (!turnStartSucceeded) {
-      resetLocalDispatch();
-    }
-    return turnStartSucceeded;
   };
 
   const onSendRef = useRef(onSend);
