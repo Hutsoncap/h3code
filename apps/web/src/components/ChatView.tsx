@@ -26,8 +26,6 @@ import {
   type EditorId,
   type KeybindingCommand,
   OrchestrationThreadActivity,
-  ProviderInteractionMode,
-  RuntimeMode,
 } from "@t3tools/contracts";
 import {
   applyClaudePromptEffortPrefix,
@@ -212,6 +210,7 @@ import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
+import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
 import { useChatAutoScrollController } from "./chat/useChatAutoScrollController";
 import {
@@ -1957,6 +1956,23 @@ export default function ChatView({
     [scheduleComposerFocus, setPrompt],
   );
   const {
+    handleRuntimeModeChange,
+    handleInteractionModeChange,
+    toggleInteractionMode,
+    setPlanMode,
+    persistThreadSettingsForNextTurn,
+  } = useChatThreadSettingsBindings({
+    threadId,
+    runtimeMode,
+    interactionMode,
+    isLocalDraftThread,
+    serverThread: serverThread ?? null,
+    scheduleComposerFocus,
+    setComposerDraftRuntimeMode,
+    setComposerDraftInteractionMode,
+    setDraftThreadContext,
+  });
+  const {
     isVoiceRecording,
     isVoiceTranscribing,
     voiceWaveformLevels,
@@ -2510,106 +2526,6 @@ export default function ChatView({
       }
     },
     [activeProject, persistProjectScripts],
-  );
-
-  const handleRuntimeModeChange = useCallback(
-    (mode: RuntimeMode) => {
-      if (mode === runtimeMode) return;
-      setComposerDraftRuntimeMode(threadId, mode);
-      if (isLocalDraftThread) {
-        setDraftThreadContext(threadId, { runtimeMode: mode });
-      }
-      scheduleComposerFocus();
-    },
-    [
-      isLocalDraftThread,
-      runtimeMode,
-      scheduleComposerFocus,
-      setComposerDraftRuntimeMode,
-      setDraftThreadContext,
-      threadId,
-    ],
-  );
-
-  const handleInteractionModeChange = useCallback(
-    (mode: ProviderInteractionMode) => {
-      if (mode === interactionMode) return;
-      setComposerDraftInteractionMode(threadId, mode);
-      if (isLocalDraftThread) {
-        setDraftThreadContext(threadId, { interactionMode: mode });
-      }
-      scheduleComposerFocus();
-    },
-    [
-      interactionMode,
-      isLocalDraftThread,
-      scheduleComposerFocus,
-      setComposerDraftInteractionMode,
-      setDraftThreadContext,
-      threadId,
-    ],
-  );
-  const toggleInteractionMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode]);
-  const setPlanMode = useCallback(
-    (enabled: boolean) => {
-      handleInteractionModeChange(enabled ? "plan" : "default");
-    },
-    [handleInteractionModeChange],
-  );
-  const persistThreadSettingsForNextTurn = useCallback(
-    async (input: {
-      threadId: ThreadId;
-      createdAt: string;
-      modelSelection?: ModelSelection;
-      runtimeMode: RuntimeMode;
-      interactionMode: ProviderInteractionMode;
-    }) => {
-      if (!serverThread) {
-        return;
-      }
-      const api = readNativeApi();
-      if (!api) {
-        return;
-      }
-
-      if (
-        input.modelSelection !== undefined &&
-        (input.modelSelection.model !== serverThread.modelSelection.model ||
-          input.modelSelection.provider !== serverThread.modelSelection.provider ||
-          JSON.stringify(input.modelSelection.options ?? null) !==
-            JSON.stringify(serverThread.modelSelection.options ?? null))
-      ) {
-        await api.orchestration.dispatchCommand({
-          type: "thread.meta.update",
-          commandId: newCommandId(),
-          threadId: input.threadId,
-          modelSelection: input.modelSelection,
-        });
-      }
-
-      if (input.runtimeMode !== serverThread.runtimeMode) {
-        await api.orchestration.dispatchCommand({
-          type: "thread.runtime-mode.set",
-          commandId: newCommandId(),
-          threadId: input.threadId,
-          runtimeMode: input.runtimeMode,
-          createdAt: input.createdAt,
-        });
-      }
-
-      if (input.interactionMode !== serverThread.interactionMode) {
-        await api.orchestration.dispatchCommand({
-          type: "thread.interaction-mode.set",
-          commandId: newCommandId(),
-          threadId: input.threadId,
-          interactionMode: input.interactionMode,
-          createdAt: input.createdAt,
-        });
-      }
-    },
-    [serverThread],
   );
 
   // Scroll behavior is isolated in a dedicated controller so the renderer tree only wires events.
