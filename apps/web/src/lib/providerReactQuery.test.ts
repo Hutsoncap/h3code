@@ -158,4 +158,23 @@ describe("checkpointDiffQueryOptions", () => {
     expect(typeof genericDelay).toBe("number");
     expect((checkpointDelay ?? 0) > (genericDelay ?? 0)).toBe(true);
   });
+
+  it("falls back to the canonical message when the provider returns a quote-wrapped blank error", async () => {
+    const getTurnDiff = vi.fn().mockRejectedValue(new Error(' "   " '));
+    const getFullThreadDiff = vi.fn().mockResolvedValue({ diff: "patch" });
+    mockNativeApi({ getTurnDiff, getFullThreadDiff });
+
+    const options = checkpointDiffQueryOptions({
+      threadId,
+      fromTurnCount: 1,
+      toTurnCount: 2,
+      cacheScope: "turn:quoted-blank",
+    });
+
+    const queryClient = new QueryClient();
+
+    await expect(queryClient.fetchQuery(options)).rejects.toThrow(
+      "Failed to load checkpoint diff.",
+    );
+  });
 });
