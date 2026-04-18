@@ -41,7 +41,13 @@ function getTimestampFormatter(
 }
 
 function parseTimestampInput(isoDate: string): Date | null {
-  const normalizedIsoDate = isoDate.trim();
+  let normalizedIsoDate = isoDate.trim();
+  if (
+    (normalizedIsoDate.startsWith('"') && normalizedIsoDate.endsWith('"')) ||
+    (normalizedIsoDate.startsWith("'") && normalizedIsoDate.endsWith("'"))
+  ) {
+    normalizedIsoDate = normalizedIsoDate.slice(1, -1).trim();
+  }
   if (normalizedIsoDate.length === 0) {
     return null;
   }
