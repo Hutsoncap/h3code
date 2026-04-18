@@ -10,6 +10,7 @@ function normalizePullRequestNumber(value: string): string | null {
 
 function normalizePullRequestReferenceInput(input: string): string {
   let normalized = input.trim();
+  normalized = normalized.replace(TRAILING_REFERENCE_PUNCTUATION_PATTERN, "");
 
   if (normalized.startsWith("<") && normalized.endsWith(">")) {
     normalized = normalized.slice(1, -1).trim();
