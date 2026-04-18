@@ -11,7 +11,7 @@ import {
   type OrchestrationSessionStatus,
 } from "@t3tools/contracts";
 import { resolveThreadBranchRegressionGuard } from "@t3tools/shared/git";
-import { resolveModelSlugForProvider } from "@t3tools/shared/model";
+import { resolveModelSlugForProvider, trimOrNull } from "@t3tools/shared/model";
 import { normalizeWorkspaceRootForComparison } from "@t3tools/shared/threadWorkspace";
 import { create } from "zustand";
 import {
@@ -95,8 +95,8 @@ function rememberProjectLocalNames(
 ): void {
   for (const project of projects) {
     const cwdKey = projectCwdKey(project.cwd);
-    const localName = project.localName?.trim() ?? "";
-    if (localName.length > 0) {
+    const localName = trimOrNull(project.localName);
+    if (localName) {
       persistedProjectNamesByCwd.set(cwdKey, localName);
     } else {
       persistedProjectNamesByCwd.delete(cwdKey);
@@ -131,9 +131,8 @@ function readPersistedState(): AppState {
     }
     for (const [cwd, name] of Object.entries(parsed.projectNamesByCwd ?? {})) {
       if (typeof cwd !== "string" || cwd.length === 0) continue;
-      if (typeof name !== "string") continue;
-      const trimmedName = name.trim();
-      if (trimmedName.length === 0) continue;
+      const trimmedName = trimOrNull(name);
+      if (!trimmedName) continue;
       persistedProjectNamesByCwd.set(projectCwdKey(cwd), trimmedName);
     }
     return { ...initialState };
@@ -281,7 +280,8 @@ function normalizeProjectFromReadModel(
 ): Project {
   const workspaceRootKey = projectCwdKey(incoming.workspaceRoot);
   const folderName = basenameOfPath(incoming.workspaceRoot) ?? incoming.title;
-  const localName = previous?.localName ?? persistedProjectNamesByCwd.get(workspaceRootKey) ?? null;
+  const localName =
+    trimOrNull(previous?.localName) ?? trimOrNull(persistedProjectNamesByCwd.get(workspaceRootKey));
   const defaultModelSelection =
     incoming.defaultModelSelection === null
       ? null
@@ -1929,13 +1929,13 @@ export function renameProjectLocally(
   projectId: Project["id"],
   name: string | null,
 ): AppState {
-  const normalizedName = name?.trim() ?? null;
+  const normalizedName = trimOrNull(name);
   let changed = false;
   const projects = state.projects.map((project) => {
     if (project.id !== projectId) {
       return project;
     }
-    const nextLocalName = normalizedName && normalizedName.length > 0 ? normalizedName : null;
+    const nextLocalName = normalizedName ?? null;
     const nextName = nextLocalName ?? project.remoteName;
     if (project.localName === nextLocalName && project.name === nextName) {
       return project;
