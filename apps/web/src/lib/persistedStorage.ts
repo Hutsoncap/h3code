@@ -1,3 +1,5 @@
+import { trimOrNull } from "@t3tools/shared/model";
+
 export interface SyncStorageLike {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
@@ -7,8 +9,7 @@ export interface SyncStorageLike {
 const STORAGE_KEY_PREFIX_MIGRATIONS = [{ canonical: "h3code:", legacy: "t3code:" }] as const;
 
 function normalizeLegacyStorageKey(key: string): string | null {
-  const trimmed = key.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  return trimOrNull(key);
 }
 
 export function resolveLegacyStorageKeys(

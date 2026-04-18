@@ -65,6 +65,30 @@ describe("persistedStorage", () => {
     expect(storage.has("legacy:theme")).toBe(false);
   });
 
+  it("ignores quote-wrapped blank extra legacy aliases", () => {
+    const storage = new Map<string, string>([['"   "', "placeholder"]]);
+    const localStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+    };
+
+    expect(getPersistedStorageItem(localStorage, "h3code:theme", [' "   " '])).toBeNull();
+    expect(storage.has('"   "')).toBe(true);
+
+    setPersistedStorageItem(localStorage, "h3code:theme", "light", [' "   " ']);
+    expect(storage.get("h3code:theme")).toBe("light");
+    expect(storage.has('"   "')).toBe(true);
+
+    removePersistedStorageItem(localStorage, "h3code:theme", [' "   " ']);
+    expect(storage.has("h3code:theme")).toBe(false);
+    expect(storage.has('"   "')).toBe(true);
+  });
+
   it("wraps zustand storage with the same alias migration behavior", () => {
     const storage = createAliasedStateStorage(createMemoryStorage());
 
