@@ -5,7 +5,19 @@ export type ResolvedThreadWorkspaceState = "local" | "worktree-pending" | "workt
 function hasMaterializedWorktreePath(
   worktreePath: string | null | undefined,
 ): worktreePath is string {
-  return typeof worktreePath === "string" && worktreePath.trim().length > 0;
+  const trimmed = worktreePath?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+      return trimmed.slice(1, -1).trim().length > 0;
+    }
+  }
+
+  return true;
 }
 
 export function resolveThreadEnvironmentMode(input: {
