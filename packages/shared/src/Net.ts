@@ -26,6 +26,11 @@ const closeServer = (server: Net.Server) => {
   }
 };
 
+function normalizeLoopbackHost(host: string | undefined): string {
+  const trimmed = host?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "127.0.0.1";
+}
+
 const tryReservePort = (port: number): Effect.Effect<number, NetError> =>
   Effect.callback<number, NetError>((resume) => {
     const server = Net.createServer();
@@ -136,6 +141,7 @@ export class NetService extends ServiceMap.Service<NetService, NetServiceShape>(
       Effect.callback<number, NetError>((resume) => {
         const probe = Net.createServer();
         let settled = false;
+        const listenHost = normalizeLoopbackHost(host);
 
         const settle = (effect: Effect.Effect<number, NetError>) => {
           if (settled) return;
@@ -147,7 +153,7 @@ export class NetService extends ServiceMap.Service<NetService, NetServiceShape>(
           settle(Effect.fail(new NetError({ message: "Failed to reserve loopback port", cause })));
         });
 
-        probe.listen(0, host, () => {
+        probe.listen(0, listenHost, () => {
           const address = probe.address();
           const port = typeof address === "object" && address !== null ? address.port : 0;
           probe.close(() => {
