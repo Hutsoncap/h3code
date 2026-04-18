@@ -43,6 +43,10 @@ describe("voice helpers", () => {
     ).toBe("The transcription response did not include any text.");
   });
 
+  it("falls back to the canonical voice error when the message is quote-wrapped blank", () => {
+    expect(sanitizeVoiceErrorMessage(' "   " ')).toBe("The voice note could not be transcribed.");
+  });
+
   it("detects auth-expired copy in sanitized voice errors", () => {
     expect(isVoiceAuthExpiredMessage("Sign in again to ChatGPT")).toBe(true);
     expect(isVoiceAuthExpiredMessage("The microphone could not be opened.")).toBe(false);
@@ -53,6 +57,12 @@ describe("voice helpers", () => {
     error.name = "NotAllowedError";
 
     expect(describeVoiceRecordingStartError(error)).toContain("Microphone access was denied");
+  });
+
+  it("falls back to the canonical microphone error when the message is quote-wrapped blank", () => {
+    const error = new Error(' "   " ');
+
+    expect(describeVoiceRecordingStartError(error)).toBe("The microphone could not be opened.");
   });
 
   it("derives voice-note availability from provider auth and runtime state", () => {
