@@ -4,7 +4,10 @@ import { Schema } from "effect";
 import {
   BrowserOpenInputSchema,
   BrowserNavigateInputSchema,
+  BrowserNewTabInputSchema,
+  BrowserPanelBoundsSchema,
   BrowserSetPanelBoundsInputSchema,
+  BrowserTabStateSchema,
   BrowserTabInputSchema,
   BrowserThreadInputSchema,
   ContextMenuRequestSchema,
@@ -23,7 +26,10 @@ const decodeBrowserOpenInput = Schema.decodeUnknownSync(BrowserOpenInputSchema);
 const decodeContextMenuRequest = Schema.decodeUnknownSync(ContextMenuRequestSchema);
 const decodeContextMenuPosition = Schema.decodeUnknownSync(ContextMenuPositionSchema);
 const decodeBrowserNavigateInput = Schema.decodeUnknownSync(BrowserNavigateInputSchema);
+const decodeBrowserNewTabInput = Schema.decodeUnknownSync(BrowserNewTabInputSchema);
+const decodeBrowserPanelBounds = Schema.decodeUnknownSync(BrowserPanelBoundsSchema);
 const decodeBrowserSetPanelBoundsInput = Schema.decodeUnknownSync(BrowserSetPanelBoundsInputSchema);
+const decodeBrowserTabState = Schema.decodeUnknownSync(BrowserTabStateSchema);
 const decodeBrowserThreadInput = Schema.decodeUnknownSync(BrowserThreadInputSchema);
 const decodeBrowserTabInput = Schema.decodeUnknownSync(BrowserTabInputSchema);
 const decodeDesktopServerTranscribeVoiceInput = Schema.decodeUnknownSync(
@@ -123,6 +129,29 @@ describe("BrowserSetPanelBoundsInputSchema", () => {
   });
 });
 
+describe("BrowserNewTabInputSchema", () => {
+  it("parses new-tab payloads with optional url and activation state", () => {
+    const parsed = decodeBrowserNewTabInput({
+      threadId: " thread-1 ",
+      url: "https://example.com/docs",
+      activate: false,
+    });
+
+    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.url).toBe("https://example.com/docs");
+    expect(parsed.activate).toBe(false);
+  });
+
+  it("rejects malformed activation flags", () => {
+    expect(() =>
+      decodeBrowserNewTabInput({
+        threadId: "thread-1",
+        activate: "yes",
+      }),
+    ).toThrow();
+  });
+});
+
 describe("BrowserOpenInputSchema", () => {
   it("parses browser open payloads with optional initial urls", () => {
     const parsed = decodeBrowserOpenInput({
@@ -163,6 +192,35 @@ describe("BrowserTabInputSchema", () => {
 
     expect(parsed.threadId).toBe("thread-1");
     expect(parsed.tabId).toBe(" tab-1 ");
+  });
+});
+
+describe("BrowserPanelBoundsSchema", () => {
+  it("parses browser panel bounds", () => {
+    const parsed = decodeBrowserPanelBounds({
+      x: 24,
+      y: 48,
+      width: 1280,
+      height: 720,
+    });
+
+    expect(parsed).toEqual({
+      x: 24,
+      y: 48,
+      width: 1280,
+      height: 720,
+    });
+  });
+
+  it("rejects non-numeric bounds", () => {
+    expect(() =>
+      decodeBrowserPanelBounds({
+        x: 24,
+        y: 48,
+        width: "1280",
+        height: 720,
+      }),
+    ).toThrow();
   });
 });
 
@@ -353,5 +411,43 @@ describe("ThreadBrowserStateSchema", () => {
 
     expect(parsed.threadId).toBe("thread-1");
     expect(parsed.tabs[0]?.status).toBe("live");
+  });
+});
+
+describe("BrowserTabStateSchema", () => {
+  it("parses individual browser tab snapshots", () => {
+    const parsed = decodeBrowserTabState({
+      id: "tab-1",
+      url: "https://example.com",
+      title: "Example",
+      status: "suspended",
+      isLoading: false,
+      canGoBack: true,
+      canGoForward: false,
+      faviconUrl: "https://example.com/favicon.ico",
+      lastCommittedUrl: "https://example.com",
+      lastError: null,
+    });
+
+    expect(parsed.id).toBe("tab-1");
+    expect(parsed.status).toBe("suspended");
+    expect(parsed.faviconUrl).toBe("https://example.com/favicon.ico");
+  });
+
+  it("rejects invalid tab status values", () => {
+    expect(() =>
+      decodeBrowserTabState({
+        id: "tab-1",
+        url: "https://example.com",
+        title: "Example",
+        status: "closed",
+        isLoading: false,
+        canGoBack: false,
+        canGoForward: false,
+        faviconUrl: null,
+        lastCommittedUrl: null,
+        lastError: null,
+      }),
+    ).toThrow();
   });
 });
