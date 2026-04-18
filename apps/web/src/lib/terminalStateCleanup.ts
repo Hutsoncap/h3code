@@ -33,6 +33,13 @@ export function collectActiveTerminalThreadIds(
     activeThreadIds.add(draftThreadId);
   }
   for (const retainedThreadId of input.retainedThreadIds ?? []) {
+    const snapshotThread = snapshotThreadById.get(retainedThreadId);
+    if (
+      snapshotThread &&
+      (snapshotThread.deletedAt !== null || snapshotThread.archivedAt !== null)
+    ) {
+      continue;
+    }
     activeThreadIds.add(retainedThreadId);
   }
   return activeThreadIds;

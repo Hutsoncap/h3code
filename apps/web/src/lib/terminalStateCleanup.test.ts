@@ -76,4 +76,29 @@ describe("collectActiveTerminalThreadIds", () => {
 
     expect(activeThreadIds).toEqual(new Set([threadId("local-draft")]));
   });
+
+  it("does not let retained ids revive archived or deleted server threads", () => {
+    const activeThreadIds = collectActiveTerminalThreadIds({
+      snapshotThreads: [
+        {
+          id: threadId("server-archived"),
+          deletedAt: null,
+          archivedAt: "2026-03-05T09:00:00.000Z",
+        },
+        {
+          id: threadId("server-deleted"),
+          deletedAt: "2026-03-05T10:00:00.000Z",
+          archivedAt: null,
+        },
+      ],
+      draftThreadIds: [],
+      retainedThreadIds: [
+        threadId("server-archived"),
+        threadId("server-deleted"),
+        threadId("workspace:alpha"),
+      ],
+    });
+
+    expect(activeThreadIds).toEqual(new Set([threadId("workspace:alpha")]));
+  });
 });
