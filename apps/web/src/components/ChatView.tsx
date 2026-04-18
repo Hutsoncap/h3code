@@ -10,7 +10,6 @@ import {
   type ResolvedKeybindingsConfig,
   type ServerProviderStatus,
   ThreadId,
-  type ThreadId as ThreadIdType,
   type TurnId,
   type EditorId,
   OrchestrationThreadActivity,
@@ -20,8 +19,7 @@ import {
   resolveThreadBranchSourceCwd,
   resolveThreadWorkspaceCwd as resolveSharedThreadWorkspaceCwd,
 } from "@t3tools/shared/threadEnvironment";
-import { deriveAssociatedWorktreeMetadata } from "@t3tools/shared/threadWorkspace";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
@@ -33,35 +31,13 @@ import {
   type ComposerTrigger,
   collapseExpandedComposerCursor,
   detectComposerTrigger,
-  expandCollapsedComposerCursor,
 } from "../composer-logic";
 import { createProjectSelector, createThreadSelector } from "../storeSelectors";
-import {
-  derivePendingApprovals,
-  derivePendingUserInputs,
-  derivePhase,
-  deriveActiveWorkStartedAt,
-  deriveActivePlanState,
-  deriveActiveBackgroundTasksState,
-  findSidebarProposedPlan,
-  findLatestProposedPlan,
-  hasActionableProposedPlan,
-  hasLiveTurnTailWork,
-  isLatestTurnSettled,
-} from "../session-logic";
-import {
-  buildPendingUserInputAnswers,
-  derivePendingUserInputProgress,
-  type PendingUserInputDraftAnswer,
-} from "../pendingUserInput";
+import { hasLiveTurnTailWork, isLatestTurnSettled } from "../session-logic";
+import { type PendingUserInputDraftAnswer } from "../pendingUserInput";
 import { useStore } from "../store";
 import { proposedPlanTitle } from "../proposedPlan";
-import {
-  DEFAULT_INTERACTION_MODE,
-  DEFAULT_RUNTIME_MODE,
-  type ChatMessage,
-  type Thread,
-} from "../types";
+import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatMessage } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useThreadHandoff } from "../hooks/useThreadHandoff";
 import { toastManager } from "./ui/toast";
@@ -115,12 +91,10 @@ import { useChatProjectScriptBindings } from "./chat/useChatProjectScriptBinding
 import { useChatTerminalDrawerBindings } from "./chat/useChatTerminalDrawerBindings";
 import { useChatTurnDispatchBindings } from "./chat/useChatTurnDispatchBindings";
 import { useChatViewRuntimeBindings } from "./chat/useChatViewRuntimeBindings";
+import { useChatViewSessionState } from "./chat/useChatViewSessionState";
 import { deriveLatestRateLimitStatus } from "./chat/RateLimitBanner";
 import {
-  ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS,
-  shouldStartActiveTurnLayoutGrace,
   buildLocalDraftThread,
-  hasServerAcknowledgedLocalDispatch,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -128,7 +102,6 @@ import {
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { resolveDiffEnvironmentState } from "../lib/threadEnvironment";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
@@ -136,8 +109,6 @@ const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const EMPTY_AVAILABLE_EDITORS: EditorId[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
-const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
-
 type ComposerPluginSuggestion = {
   plugin: ProviderPluginDescriptor;
   mention: ProviderMentionReference;
@@ -251,42 +222,6 @@ function resolvePromptPluginMentions(params: {
   }
 
   return resolvedMentions;
-}
-
-interface ThreadBreadcrumb {
-  threadId: ThreadIdType;
-  title: string;
-}
-
-function buildThreadBreadcrumbs(
-  threads: ReadonlyArray<Thread>,
-  thread: Pick<Thread, "id" | "parentThreadId"> | null | undefined,
-): ThreadBreadcrumb[] {
-  if (!thread?.parentThreadId) {
-    return [];
-  }
-
-  const threadById = new Map(threads.map((entry) => [entry.id, entry] as const));
-  const breadcrumbs: ThreadBreadcrumb[] = [];
-  const visited = new Set<ThreadIdType>();
-  let currentParentId: ThreadIdType | null = thread.parentThreadId ?? null;
-
-  while (currentParentId && !visited.has(currentParentId)) {
-    visited.add(currentParentId);
-    const parentThread = threadById.get(currentParentId);
-    if (!parentThread) {
-      break;
-    }
-    breadcrumbs.unshift({
-      threadId: parentThread.id,
-      title: parentThread.parentThreadId
-        ? resolveSubagentPresentationForThread({ thread: parentThread, threads }).fullLabel
-        : parentThread.title,
-    });
-    currentParentId = parentThread.parentThreadId ?? null;
-  }
-
-  return breadcrumbs;
 }
 
 interface ChatViewProps {
@@ -526,40 +461,61 @@ export default function ChatView({
     activeThreadId,
     activeProjectExists: activeProject !== undefined,
   });
-  const threadBreadcrumbs = useMemo(
-    () => buildThreadBreadcrumbs(allThreads, activeThread),
-    [activeThread, allThreads],
-  );
-  const resolvedThreadEnvMode = isServerThread
-    ? (activeThread?.envMode ?? null)
-    : (draftThread?.envMode ?? null);
-  const resolvedThreadWorktreePath = isServerThread
-    ? (activeThread?.worktreePath ?? null)
-    : (draftThread?.worktreePath ?? null);
-  const diffEnvironmentState = resolveDiffEnvironmentState({
-    projectCwd: activeProject?.cwd ?? null,
-    envMode: resolvedThreadEnvMode,
-    worktreePath: resolvedThreadWorktreePath,
+  const {
+    activeBackgroundTasks,
+    activePendingApproval,
+    activePendingDraftAnswers,
+    activePendingIsResponding,
+    activePendingProgress,
+    activePendingQuestionIndex,
+    activePendingResolvedAnswers,
+    activePendingUserInput,
+    activePlan,
+    activeProposedPlan,
+    activeThreadAssociatedWorktree,
+    activeTurnInProgress,
+    activeWorkStartedAt,
+    composerFooterHasWideActions,
+    diffDisabledReason,
+    diffEnvironmentPending,
+    hasLiveTurn,
+    isComposerApprovalState,
+    isPreparingWorktree,
+    isSendBusy,
+    isWorking,
+    pendingApprovals,
+    pendingUserInputs,
+    phase,
+    resolvedThreadEnvMode,
+    resolvedThreadWorktreePath,
+    serverAcknowledgedLocalDispatch,
+    showPlanFollowUpPrompt,
+    sidebarProposedPlan,
+    threadBreadcrumbs,
+  } = useChatViewSessionState({
+    activeLatestTurn,
+    activeProjectCwd: activeProject?.cwd ?? null,
+    activeThread,
+    allThreads,
+    draftThreadEnvMode: draftThread?.envMode ?? null,
+    draftThreadWorktreePath: draftThread?.worktreePath ?? null,
+    hasLiveTurnTail,
+    interactionMode,
+    isConnecting,
+    isRevertingCheckpoint,
+    isServerThread,
+    latestTurnSettled,
+    localDispatch,
+    markThreadVisited,
+    pendingUserInputAnswersByRequestId,
+    pendingUserInputQuestionIndexByRequestId,
+    promptRef,
+    respondingUserInputRequestIds,
+    setComposerCursor,
+    setComposerHighlightedItemId,
+    setComposerTrigger,
+    threadActivities,
   });
-  const diffEnvironmentPending = diffEnvironmentState.pending;
-  const diffDisabledReason = diffEnvironmentState.disabledReason;
-  const activeThreadAssociatedWorktree = useMemo(
-    () =>
-      deriveAssociatedWorktreeMetadata({
-        branch: activeThread?.branch ?? null,
-        worktreePath: activeThread?.worktreePath ?? null,
-        associatedWorktreePath: activeThread?.associatedWorktreePath ?? null,
-        associatedWorktreeBranch: activeThread?.associatedWorktreeBranch ?? null,
-        associatedWorktreeRef: activeThread?.associatedWorktreeRef ?? null,
-      }),
-    [
-      activeThread?.associatedWorktreeBranch,
-      activeThread?.associatedWorktreePath,
-      activeThread?.associatedWorktreeRef,
-      activeThread?.branch,
-      activeThread?.worktreePath,
-    ],
-  );
 
   const {
     pullRequestDialogState,
@@ -579,24 +535,6 @@ export default function ChatView({
     clearComposerHighlightedItemId: () => setComposerHighlightedItemId(null),
     isServerThread,
   });
-
-  useEffect(() => {
-    if (!activeThread?.id) return;
-    if (!latestTurnSettled) return;
-    if (!activeLatestTurn?.completedAt) return;
-    const turnCompletedAt = Date.parse(activeLatestTurn.completedAt);
-    if (Number.isNaN(turnCompletedAt)) return;
-    const lastVisitedAt = activeThread.lastVisitedAt ? Date.parse(activeThread.lastVisitedAt) : NaN;
-    if (!Number.isNaN(lastVisitedAt) && lastVisitedAt >= turnCompletedAt) return;
-
-    markThreadVisited(activeThread.id);
-  }, [
-    activeThread?.id,
-    activeThread?.lastVisitedAt,
-    activeLatestTurn?.completedAt,
-    latestTurnSettled,
-    markThreadVisited,
-  ]);
 
   const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
   const {
@@ -620,147 +558,6 @@ export default function ChatView({
     settings,
     threadId,
   });
-  const phase = derivePhase(activeThread?.session ?? null);
-  const pendingApprovals = useMemo(
-    () => derivePendingApprovals(threadActivities),
-    [threadActivities],
-  );
-  const pendingUserInputs = useMemo(
-    () => derivePendingUserInputs(threadActivities),
-    [threadActivities],
-  );
-  const activePendingUserInput = pendingUserInputs[0] ?? null;
-  const activePendingDraftAnswers = useMemo(
-    () =>
-      activePendingUserInput
-        ? (pendingUserInputAnswersByRequestId[activePendingUserInput.requestId] ??
-          EMPTY_PENDING_USER_INPUT_ANSWERS)
-        : EMPTY_PENDING_USER_INPUT_ANSWERS,
-    [activePendingUserInput, pendingUserInputAnswersByRequestId],
-  );
-  const activePendingQuestionIndex = activePendingUserInput
-    ? (pendingUserInputQuestionIndexByRequestId[activePendingUserInput.requestId] ?? 0)
-    : 0;
-  const activePendingProgress = useMemo(
-    () =>
-      activePendingUserInput
-        ? derivePendingUserInputProgress(
-            activePendingUserInput.questions,
-            activePendingDraftAnswers,
-            activePendingQuestionIndex,
-          )
-        : null,
-    [activePendingDraftAnswers, activePendingQuestionIndex, activePendingUserInput],
-  );
-  const activePendingResolvedAnswers = useMemo(
-    () =>
-      activePendingUserInput
-        ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingDraftAnswers)
-        : null,
-    [activePendingDraftAnswers, activePendingUserInput],
-  );
-  const activePendingIsResponding = activePendingUserInput
-    ? respondingUserInputRequestIds.includes(activePendingUserInput.requestId)
-    : false;
-  const activeProposedPlan = useMemo(() => {
-    if (!latestTurnSettled) {
-      return null;
-    }
-    return findLatestProposedPlan(
-      activeThread?.proposedPlans ?? [],
-      activeLatestTurn?.turnId ?? null,
-    );
-  }, [activeLatestTurn?.turnId, activeThread?.proposedPlans, latestTurnSettled]);
-  const sidebarPlanSourceThreadId = !latestTurnSettled
-    ? (activeLatestTurn?.sourceProposedPlan?.threadId ?? null)
-    : null;
-  const sidebarPlanSourceThread = useStore(
-    useMemo(() => createThreadSelector(sidebarPlanSourceThreadId), [sidebarPlanSourceThreadId]),
-  );
-  const activeThreadPlanThreadId = activeThread?.id ?? null;
-  const activeThreadPlanProposedPlans = activeThread?.proposedPlans;
-  const sidebarPlanSourceThreadPlanId = sidebarPlanSourceThread?.id ?? null;
-  const sidebarPlanSourceThreadProposedPlans = sidebarPlanSourceThread?.proposedPlans;
-  const sidebarProposedPlan = useMemo(
-    () =>
-      findSidebarProposedPlan({
-        threads: [
-          ...(activeThreadPlanThreadId
-            ? [
-                {
-                  id: activeThreadPlanThreadId,
-                  proposedPlans: activeThreadPlanProposedPlans ?? [],
-                },
-              ]
-            : []),
-          ...(sidebarPlanSourceThreadPlanId &&
-          sidebarPlanSourceThreadPlanId !== activeThreadPlanThreadId
-            ? [
-                {
-                  id: sidebarPlanSourceThreadPlanId,
-                  proposedPlans: sidebarPlanSourceThreadProposedPlans ?? [],
-                },
-              ]
-            : []),
-        ],
-        latestTurn: activeLatestTurn,
-        latestTurnSettled,
-        threadId: activeThreadPlanThreadId,
-      }),
-    [
-      activeLatestTurn,
-      activeThreadPlanProposedPlans,
-      activeThreadPlanThreadId,
-      latestTurnSettled,
-      sidebarPlanSourceThreadPlanId,
-      sidebarPlanSourceThreadProposedPlans,
-    ],
-  );
-  const activePlan = useMemo(
-    () =>
-      latestTurnSettled
-        ? null
-        : deriveActivePlanState(threadActivities, activeLatestTurn?.turnId ?? undefined),
-    [activeLatestTurn?.turnId, latestTurnSettled, threadActivities],
-  );
-  const activeBackgroundTasks = useMemo(
-    () =>
-      latestTurnSettled
-        ? null
-        : deriveActiveBackgroundTasksState(threadActivities, activeLatestTurn?.turnId ?? undefined),
-    [activeLatestTurn?.turnId, latestTurnSettled, threadActivities],
-  );
-  const showPlanFollowUpPrompt =
-    pendingUserInputs.length === 0 &&
-    interactionMode === "plan" &&
-    latestTurnSettled &&
-    hasActionableProposedPlan(activeProposedPlan);
-  const activePendingApproval = pendingApprovals[0] ?? null;
-  const serverAcknowledgedLocalDispatch = useMemo(
-    () =>
-      hasServerAcknowledgedLocalDispatch({
-        localDispatch,
-        phase,
-        latestTurn: activeLatestTurn,
-        session: activeThread?.session ?? null,
-        hasPendingApproval: activePendingApproval !== null,
-        hasPendingUserInput: activePendingUserInput !== null,
-        threadError: activeThread?.error,
-      }),
-    [
-      activeLatestTurn,
-      activePendingApproval,
-      activePendingUserInput,
-      activeThread?.error,
-      activeThread?.session,
-      localDispatch,
-      phase,
-    ],
-  );
-  const isSendBusy = localDispatch !== null && !serverAcknowledgedLocalDispatch;
-  const isPreparingWorktree = localDispatch?.preparingWorktree ?? false;
-  const hasLiveTurn = phase === "running";
-  const isWorking = hasLiveTurn || isSendBusy || isConnecting || isRevertingCheckpoint;
   const {
     closePlanSidebar,
     handleImplementationThreadOpened,
@@ -786,96 +583,6 @@ export default function ChatView({
     navigate,
     sidebarProposedPlanTurnId: sidebarProposedPlan?.turnId ?? null,
   });
-  const activeTurnLayoutLive = isWorking || !latestTurnSettled;
-  const [keepSettledActiveTurnLayout, setKeepSettledActiveTurnLayout] = useState(false);
-  const previousActiveTurnLayoutLiveRef = useRef(activeTurnLayoutLive);
-  const previousActiveTurnLayoutKeyRef = useRef<string | null>(null);
-  const activeWorkStartedAt = hasLiveTurnTail
-    ? (activeLatestTurn?.startedAt ?? localDispatch?.startedAt ?? null)
-    : deriveActiveWorkStartedAt(
-        activeLatestTurn,
-        activeThread?.session ?? null,
-        localDispatch?.startedAt ?? null,
-      );
-  const activeTurnLayoutKey =
-    activeThreadId === null ? null : `${activeThreadId}:${activeLatestTurn?.turnId ?? "idle"}`;
-  const activeTurnInProgress = activeTurnLayoutLive || keepSettledActiveTurnLayout;
-  const isComposerApprovalState = activePendingApproval !== null;
-  const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
-  const lastSyncedPendingInputRef = useRef<{
-    requestId: string | null;
-    questionId: string | null;
-  } | null>(null);
-  useLayoutEffect(() => {
-    if (previousActiveTurnLayoutKeyRef.current !== activeTurnLayoutKey) {
-      previousActiveTurnLayoutKeyRef.current = activeTurnLayoutKey;
-      previousActiveTurnLayoutLiveRef.current = activeTurnLayoutLive;
-      setKeepSettledActiveTurnLayout(false);
-      return;
-    }
-
-    const shouldStartGrace = shouldStartActiveTurnLayoutGrace({
-      previousTurnLayoutLive: previousActiveTurnLayoutLiveRef.current,
-      currentTurnLayoutLive: activeTurnLayoutLive,
-      latestTurnStartedAt: activeLatestTurn?.startedAt ?? null,
-    });
-    previousActiveTurnLayoutLiveRef.current = activeTurnLayoutLive;
-
-    if (activeTurnLayoutLive) {
-      setKeepSettledActiveTurnLayout(false);
-      return;
-    }
-
-    if (!shouldStartGrace) {
-      return;
-    }
-
-    setKeepSettledActiveTurnLayout(true);
-    const timeoutId = window.setTimeout(() => {
-      setKeepSettledActiveTurnLayout(false);
-    }, ACTIVE_TURN_LAYOUT_SETTLE_DELAY_MS);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [activeLatestTurn?.startedAt, activeTurnLayoutKey, activeTurnLayoutLive]);
-
-  useEffect(() => {
-    const nextCustomAnswer = activePendingProgress?.customAnswer;
-    if (typeof nextCustomAnswer !== "string") {
-      lastSyncedPendingInputRef.current = null;
-      return;
-    }
-    const nextRequestId = activePendingUserInput?.requestId ?? null;
-    const nextQuestionId = activePendingProgress?.activeQuestion?.id ?? null;
-    const questionChanged =
-      lastSyncedPendingInputRef.current?.requestId !== nextRequestId ||
-      lastSyncedPendingInputRef.current?.questionId !== nextQuestionId;
-    const textChangedExternally = promptRef.current !== nextCustomAnswer;
-
-    lastSyncedPendingInputRef.current = {
-      requestId: nextRequestId,
-      questionId: nextQuestionId,
-    };
-
-    if (!questionChanged && !textChangedExternally) {
-      return;
-    }
-
-    promptRef.current = nextCustomAnswer;
-    const nextCursor = collapseExpandedComposerCursor(nextCustomAnswer, nextCustomAnswer.length);
-    setComposerCursor(nextCursor);
-    setComposerTrigger(
-      detectComposerTrigger(
-        nextCustomAnswer,
-        expandCollapsedComposerCursor(nextCustomAnswer, nextCursor),
-      ),
-    );
-    setComposerHighlightedItemId(null);
-  }, [
-    activePendingProgress?.customAnswer,
-    activePendingUserInput?.requestId,
-    activePendingProgress?.activeQuestion?.id,
-  ]);
   const {
     closeExpandedImage,
     expandedImage,
