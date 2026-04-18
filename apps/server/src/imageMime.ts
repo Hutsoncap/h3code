@@ -55,17 +55,18 @@ export function parseBase64DataUrl(
 }
 
 export function inferImageExtension(input: { mimeType: string; fileName?: string }): string {
-  const key = input.mimeType.toLowerCase();
-  const fromMime = Object.hasOwn(IMAGE_EXTENSION_BY_MIME_TYPE, key)
-    ? IMAGE_EXTENSION_BY_MIME_TYPE[key]
+  const normalizedMimeType = input.mimeType.trim().toLowerCase();
+  const fromMime = Object.hasOwn(IMAGE_EXTENSION_BY_MIME_TYPE, normalizedMimeType)
+    ? IMAGE_EXTENSION_BY_MIME_TYPE[normalizedMimeType]
     : undefined;
   if (fromMime) {
     return fromMime;
   }
 
-  const fromMimeExtension = Mime.getExtension(input.mimeType);
-  if (fromMimeExtension && SAFE_IMAGE_FILE_EXTENSIONS.has(fromMimeExtension)) {
-    return fromMimeExtension;
+  const fromMimeExtension = Mime.getExtension(normalizedMimeType);
+  const normalizedMimeExtension = fromMimeExtension?.toLowerCase();
+  if (normalizedMimeExtension && SAFE_IMAGE_FILE_EXTENSIONS.has(normalizedMimeExtension)) {
+    return normalizedMimeExtension;
   }
 
   const fileName = input.fileName?.trim() ?? "";
