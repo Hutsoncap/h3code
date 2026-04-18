@@ -6,6 +6,7 @@ import {
   getModelOptions,
   normalizeModelSlug,
   resolveSelectableModel,
+  trimOrNull,
 } from "@t3tools/shared/model";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { EnvMode } from "./components/BranchToolbar.logic";
@@ -205,7 +206,7 @@ export function getAppModelOptions(
     isCustom: false,
   }));
   const seen = new Set(options.map((option) => option.slug));
-  const trimmedSelectedModel = selectedModel?.trim().toLowerCase();
+  const trimmedSelectedModel = trimOrNull(selectedModel)?.toLowerCase();
 
   for (const slug of normalizeCustomModelSlugs(customModels, provider)) {
     if (seen.has(slug)) {
