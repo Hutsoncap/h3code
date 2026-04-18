@@ -15,10 +15,11 @@ export type TerminalNewAction =
 function resolveActiveTerminalGroup(
   input: ResolveTerminalNewActionInput,
 ): ThreadTerminalGroup | null {
+  const normalizedActiveTerminalId = input.activeTerminalId.trim();
   return (
     input.terminalGroups.find((group) => group.id === input.activeTerminalGroupId) ??
     input.terminalGroups.find((group) =>
-      collectTerminalIdsFromLayout(group.layout).includes(input.activeTerminalId),
+      collectTerminalIdsFromLayout(group.layout).includes(normalizedActiveTerminalId),
     ) ??
     input.terminalGroups[0] ??
     null
@@ -35,11 +36,15 @@ export function resolveTerminalNewAction(input: ResolveTerminalNewActionInput): 
     ? collectTerminalIdsFromLayout(activeGroup.layout)
     : [];
   const normalizedActiveTerminalId = input.activeTerminalId.trim();
+  const normalizedGroupActiveTerminalId = activeGroup?.activeTerminalId.trim() ?? "";
 
-  if (activeGroup && activeGroupTerminalIds.includes(activeGroup.activeTerminalId)) {
+  if (
+    normalizedGroupActiveTerminalId &&
+    activeGroupTerminalIds.includes(normalizedGroupActiveTerminalId)
+  ) {
     return {
       kind: "new-tab",
-      targetTerminalId: activeGroup.activeTerminalId,
+      targetTerminalId: normalizedGroupActiveTerminalId,
     };
   }
 
