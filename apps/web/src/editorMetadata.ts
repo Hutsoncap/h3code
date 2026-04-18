@@ -4,6 +4,7 @@
 // Exports: editor option builders used by the chat header and open-in picker.
 
 import { EDITORS, type EditorId } from "@t3tools/contracts";
+import { trimOrNull } from "@t3tools/shared/model";
 import type { Icon } from "./components/Icons";
 import {
   AntigravityIcon,
@@ -46,7 +47,7 @@ function humanizeEditorId(editorId: string): string {
 // Build labels from the shared catalog so newly supported editors appear without
 // duplicating the editor list across multiple UI components.
 export function resolveEditorLabel(editorId: EditorId, platform: string): string {
-  const normalizedPlatform = platform.trim();
+  const normalizedPlatform = trimOrNull(platform) ?? "";
   if (editorId === "file-manager") {
     return isMacPlatform(normalizedPlatform)
       ? "Finder"
