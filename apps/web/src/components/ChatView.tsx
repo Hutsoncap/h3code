@@ -209,6 +209,7 @@ import { ChatViewDialogs } from "./chat/ChatViewDialogs";
 import { ChatViewShell } from "./chat/ChatViewShell";
 import { useChatComposerDraftBindings } from "./chat/useChatComposerDraftBindings";
 import { useComposerVoiceController } from "./chat/useComposerVoiceController";
+import { useChatEnvModeBindings } from "./chat/useChatEnvModeBindings";
 import { useChatTerminalBindings } from "./chat/useChatTerminalBindings";
 import { useChatThreadSettingsBindings } from "./chat/useChatThreadSettingsBindings";
 import { useChatPullRequestController } from "./chat/useChatPullRequestController";
@@ -1970,6 +1971,17 @@ export default function ChatView({
     scheduleComposerFocus,
     setComposerDraftRuntimeMode,
     setComposerDraftInteractionMode,
+    setDraftThreadContext,
+  });
+  const { onEnvModeChange } = useChatEnvModeBindings({
+    threadId,
+    activeThread,
+    draftThreadBranch: draftThread?.branch ?? null,
+    activeRootBranch,
+    hasNativeUserMessages,
+    isLocalDraftThread,
+    isServerThread,
+    scheduleComposerFocus,
     setDraftThreadContext,
   });
   const {
@@ -4414,46 +4426,6 @@ export default function ChatView({
     setComposerDraftProviderModelOptions,
     threadId,
   ]);
-  const onEnvModeChange = useCallback(
-    (mode: DraftThreadEnvMode) => {
-      const nextBranch =
-        mode === "worktree"
-          ? (activeThread?.branch ?? draftThread?.branch ?? activeRootBranch ?? null)
-          : (activeThread?.branch ?? draftThread?.branch ?? null);
-      if (isLocalDraftThread) {
-        setDraftThreadContext(threadId, {
-          envMode: mode,
-          ...(nextBranch ? { branch: nextBranch } : {}),
-        });
-      }
-      if (isServerThread && activeThread && !hasNativeUserMessages && !activeThread.session) {
-        const api = readNativeApi();
-        if (api) {
-          void api.orchestration.dispatchCommand({
-            type: "thread.meta.update",
-            commandId: newCommandId(),
-            threadId,
-            envMode: mode,
-            ...(nextBranch ? { branch: nextBranch } : {}),
-            ...(mode === "local" ? { worktreePath: null } : {}),
-          });
-        }
-      }
-      scheduleComposerFocus();
-    },
-    [
-      activeThread,
-      activeRootBranch,
-      draftThread?.branch,
-      hasNativeUserMessages,
-      isLocalDraftThread,
-      isServerThread,
-      scheduleComposerFocus,
-      setDraftThreadContext,
-      threadId,
-    ],
-  );
-
   const applyPromptReplacement = useCallback(
     (
       rangeStart: number,
