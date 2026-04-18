@@ -6,6 +6,7 @@
 import { type ProjectId, type ThreadId, type TurnId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { trimOrNull } from "@t3tools/shared/model";
 import { createAliasedStateStorage } from "./lib/storage";
 import { randomUUID } from "./lib/utils";
 import { type ChatRightPanel } from "./diffRouteSearch";
@@ -134,11 +135,11 @@ function normalizePersistedSplitViewStoreState(persistedState: unknown): SplitVi
   const splitViewsById = Object.fromEntries(
     Object.entries(decoded.splitViewsById)
       .map(([splitViewId, splitView]) => {
-        const normalizedId = splitViewId.trim() || splitView.id.trim();
-        const normalizedSourceThreadId = splitView.sourceThreadId.trim();
-        const normalizedOwnerProjectId = splitView.ownerProjectId.trim();
-        const normalizedLeftThreadId = splitView.leftThreadId?.trim() ?? "";
-        const normalizedRightThreadId = splitView.rightThreadId?.trim() ?? "";
+        const normalizedId = trimOrNull(splitViewId) ?? trimOrNull(splitView.id) ?? "";
+        const normalizedSourceThreadId = trimOrNull(splitView.sourceThreadId) ?? "";
+        const normalizedOwnerProjectId = trimOrNull(splitView.ownerProjectId) ?? "";
+        const normalizedLeftThreadId = trimOrNull(splitView.leftThreadId) ?? "";
+        const normalizedRightThreadId = trimOrNull(splitView.rightThreadId) ?? "";
         if (
           normalizedId.length === 0 ||
           normalizedSourceThreadId.length === 0 ||
