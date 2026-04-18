@@ -359,6 +359,21 @@ describe("buildTaskCompletionCopy", () => {
       body: "Finished the task and everything looks good.",
     });
   });
+
+  it("falls back to the generic thread title for quote-wrapped blank placeholders", () => {
+    expect(
+      buildTaskCompletionCopy({
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        projectId: ProjectId.makeUnsafe("project-1"),
+        title: ' "   " ',
+        completedAt: "2026-04-05T10:00:05.000Z",
+        assistantSummary: null,
+      }),
+    ).toEqual({
+      title: "Untitled thread",
+      body: "Finished working.",
+    });
+  });
 });
 
 describe("collectCompletedTerminalCandidates", () => {
@@ -551,6 +566,22 @@ describe("buildInputNeededCopy", () => {
     ).toEqual({
       title: "Input needed",
       body: "Polish notifications: User input requested.",
+    });
+  });
+
+  it("falls back to the generic thread title for quote-wrapped blank placeholders", () => {
+    expect(
+      buildInputNeededCopy({
+        kind: "user-input",
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        projectId: ProjectId.makeUnsafe("project-1"),
+        title: " '' ",
+        createdAt: "2026-04-05T10:00:06.000Z",
+        requestId: ApprovalRequestId.makeUnsafe("user-input-request-1"),
+      }),
+    ).toEqual({
+      title: "Input needed",
+      body: "Untitled thread: User input requested.",
     });
   });
 });
