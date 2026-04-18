@@ -4,6 +4,7 @@ import {
   type ProviderKind,
   type ResolvedAgentAlias,
 } from "@t3tools/contracts";
+import { trimOrNull } from "./model";
 
 export interface ParsedAgentMentionInvocation {
   readonly alias: string;
@@ -82,8 +83,8 @@ export function parseAgentMentionInvocations(
       continue;
     }
 
-    const task = taskMatch.task.trim();
-    if (task.length === 0) {
+    const task = trimOrNull(taskMatch.task);
+    if (!task) {
       index = taskMatch.end - 1;
       continue;
     }
