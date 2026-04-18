@@ -276,7 +276,12 @@ export function normalizeSubagentStatusKind(
     return "running";
   }
 
-  const normalized = status?.trim().toLowerCase().replaceAll("_", " ").replaceAll("-", " ");
+  const normalized = status
+    ?.trim()
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .replace(/\s+/g, " ");
   if (!normalized || normalized === "unknown") {
     return null;
   }
