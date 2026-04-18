@@ -111,7 +111,7 @@ function normalizeWorkspacePages(workspacePages: readonly WorkspacePage[]): Work
   const nextPages: WorkspacePage[] = [];
 
   for (const workspace of workspacePages) {
-    const id = workspace.id.trim();
+    const id = trimOrNull(workspace.id) ?? "";
     if (id.length === 0 || seenIds.has(id)) {
       continue;
     }
@@ -168,7 +168,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
         }),
       ensureWorkspacePage: (workspaceId) =>
         set((state) => {
-          const normalizedWorkspaceId = workspaceId.trim();
+          const normalizedWorkspaceId = trimOrNull(workspaceId) ?? "";
           if (normalizedWorkspaceId.length === 0) {
             return state;
           }
