@@ -13,6 +13,11 @@ describe("resolveEditorLabel", () => {
     expect(resolveEditorLabel("file-manager", "  MacIntel  ")).toBe("Finder");
   });
 
+  it("treats quote-wrapped blank platform strings as absent for file manager labels", () => {
+    expect(resolveEditorLabel("file-manager", ' "   " ')).toBe("Files");
+    expect(resolveEditorLabel("file-manager", " '   ' ")).toBe("Files");
+  });
+
   it("falls back to a readable label for stale editor ids", () => {
     expect(resolveEditorLabel("legacy-editor" as never, "Linux x86_64")).toBe("Legacy Editor");
   });
