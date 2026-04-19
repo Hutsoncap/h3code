@@ -75,7 +75,7 @@ export interface TerminalRuntimeEntry {
   deferredWriteLength: number;
   webglLoadFrame: number | null;
   themeRefreshFrame: number;
-  themeObserver: MutationObserver | null;
+  themeSubscriptionDispose: (() => void) | null;
   visibilityCleanup: (() => void) | null;
   terminalDisposables: IDisposable[];
   attachDisposables: Array<() => void>;
