@@ -9,6 +9,20 @@ export function createThreadBrowserSurfaceId(threadId: ThreadId): BrowserSurface
   };
 }
 
+export function createStandaloneBrowserSurfaceId(id: string): BrowserSurfaceId {
+  return {
+    kind: "standalone",
+    id,
+  };
+}
+
+export function createWebAppBrowserSurfaceId(webAppId: string): BrowserSurfaceId {
+  return {
+    kind: "webapp",
+    webAppId,
+  };
+}
+
 export function resolveBrowserSurfaceId(input: {
   surfaceId?: BrowserSurfaceId | null | undefined;
   threadId?: ThreadId | null | undefined;
@@ -33,6 +47,10 @@ export function browserSurfaceKey(surfaceId: BrowserSurfaceId): BrowserSurfaceKe
     case "webapp":
       return `webapp:${surfaceId.webAppId}`;
   }
+
+  throw new Error(
+    `Unsupported browser surface kind: ${String((surfaceId as { kind?: unknown }).kind)}`,
+  );
 }
 
 export function sameBrowserSurfaceId(
