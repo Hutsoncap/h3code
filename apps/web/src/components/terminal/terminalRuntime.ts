@@ -34,6 +34,7 @@ import {
   terminalThemeFromApp,
   writeSystemMessage,
 } from "./terminalRuntimeAppearance";
+import { subscribeTerminalPalette } from "../../themes/themeState";
 import { terminalEventDispatcher } from "./terminalEventDispatcher";
 import type {
   TerminalRuntimeConfig,
@@ -581,7 +582,7 @@ export function createRuntimeEntry(config: TerminalRuntimeConfig): TerminalRunti
     deferredWriteLength: 0,
     webglLoadFrame: null,
     themeRefreshFrame: 0,
-    themeObserver: null,
+    themeSubscriptionDispose: null,
     visibilityCleanup: null,
     terminalDisposables: [],
     attachDisposables: [],
@@ -739,16 +740,12 @@ export function createRuntimeEntry(config: TerminalRuntimeConfig): TerminalRunti
     }),
   );
 
-  entry.themeObserver = new MutationObserver(() => {
+  entry.themeSubscriptionDispose = subscribeTerminalPalette(() => {
     if (entry.themeRefreshFrame !== 0) return;
     entry.themeRefreshFrame = window.requestAnimationFrame(() => {
       entry.themeRefreshFrame = 0;
       syncTheme(entry);
     });
-  });
-  entry.themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["class", "style"],
   });
 
   entry.unsubscribeTerminalEvents = terminalEventDispatcher.subscribe(
@@ -952,8 +949,8 @@ export function disposeRuntimeEntry(entry: TerminalRuntimeEntry): void {
     window.cancelAnimationFrame(entry.themeRefreshFrame);
     entry.themeRefreshFrame = 0;
   }
-  entry.themeObserver?.disconnect();
-  entry.themeObserver = null;
+  entry.themeSubscriptionDispose?.();
+  entry.themeSubscriptionDispose = null;
   for (const disposable of entry.terminalDisposables) {
     disposable.dispose();
   }

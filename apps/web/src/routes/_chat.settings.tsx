@@ -67,26 +67,23 @@ import {
 import { parseDesktopNotificationInput } from "../notifications/desktopNotificationInput";
 import { normalizeSettingsSection, SETTINGS_NAV_ITEMS } from "../settingsNavigation";
 import { useStore } from "../store";
+import { DARK_THEMES, LIGHT_THEMES, THEME_CATALOG } from "../themes/catalog";
+import type { AppTheme } from "../themes/types";
 import { formatRelativeTime } from "../components/Sidebar";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 
 // ── Settings taxonomy ──────────────────────────────────────────────────────
 
-const THEME_OPTIONS = [
+const THEME_MODE_OPTIONS = [
   {
     value: "system",
     label: "System",
-    description: "Match your OS appearance setting.",
+    description: "Pair separate light and dark themes with your OS appearance.",
   },
   {
-    value: "light",
-    label: "Light",
-    description: "Always use the light theme.",
-  },
-  {
-    value: "dark",
-    label: "Dark",
-    description: "Always use the dark theme.",
+    value: "manual",
+    label: "Manual",
+    description: "Always use one theme, regardless of your OS appearance.",
   },
 ] as const;
 
@@ -239,6 +236,99 @@ function SettingResetButton({ label, onClick }: { label: string; onClick: () => 
   );
 }
 
+function ThemePreviewSwatches({ theme }: { theme: AppTheme }) {
+  const swatches = [
+    { id: "background", color: theme.tokens.background },
+    { id: "card", color: theme.tokens.card },
+    { id: "accent", color: theme.tokens.accent },
+    { id: "primary", color: theme.tokens.primary },
+    { id: "info", color: theme.tokens.info },
+  ];
+
+  return (
+    <div className="flex items-center gap-1">
+      {swatches.map((swatch) => (
+        <span
+          key={`${theme.id}:${swatch.id}`}
+          className="size-4 rounded-full border border-black/8 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-white/10"
+          style={{ backgroundColor: swatch.color }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ThemeGrid({
+  title,
+  description,
+  themes,
+  selectedThemeId,
+  activeThemeId,
+  onSelect,
+}: {
+  title: string;
+  description: string;
+  themes: readonly AppTheme[];
+  selectedThemeId: string;
+  activeThemeId: string | null;
+  onSelect: (themeId: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="px-0.5">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          {title}
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">{description}</div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {themes.map((theme) => {
+          const isSelected = theme.id === selectedThemeId;
+          const isActive = theme.id === activeThemeId;
+
+          return (
+            <button
+              key={theme.id}
+              type="button"
+              aria-pressed={isSelected}
+              className={cn(
+                "rounded-xl border bg-background/72 px-3 py-3 text-left transition-colors hover:bg-accent/60",
+                isSelected
+                  ? "border-ring/70 bg-accent/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"
+                  : "border-border/60",
+              )}
+              onClick={() => onSelect(theme.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="truncate text-sm font-medium text-foreground">{theme.name}</div>
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                    {theme.variant}
+                  </div>
+                </div>
+                <ThemePreviewSwatches theme={theme} />
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5",
+                    isSelected ? "bg-primary/10 text-foreground" : "bg-muted/70",
+                  )}
+                >
+                  {isSelected ? "Selected" : "Choose"}
+                </span>
+                {isActive ? (
+                  <span className="rounded-full bg-muted/70 px-2 py-0.5">Active</span>
+                ) : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function normalizeManagedWorktreePath(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : null;
@@ -251,7 +341,18 @@ function SettingsRouteView() {
   const activeSection = normalizeSettingsSection(routeSearch.section);
   const activeSectionItem = SETTINGS_NAV_ITEMS.find((item) => item.id === activeSection)!;
 
-  const { theme, setTheme } = useTheme();
+  const {
+    mode,
+    themeId,
+    lightThemeId,
+    darkThemeId,
+    activeTheme,
+    defaultThemePreference,
+    setMode,
+    setTheme,
+    setSystemTheme,
+    resetTheme,
+  } = useTheme();
   const { settings, defaults, updateSettings, resetSettings } = useAppSettings();
   const queryClient = useQueryClient();
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
@@ -367,9 +468,14 @@ function SettingsRouteView() {
     settings.claudeBinaryPath !== defaults.claudeBinaryPath ||
     settings.codexBinaryPath !== defaults.codexBinaryPath ||
     settings.codexHomePath !== defaults.codexHomePath;
+  const isThemeDirty =
+    mode !== defaultThemePreference.mode ||
+    lightThemeId !== defaultThemePreference.lightThemeId ||
+    darkThemeId !== defaultThemePreference.darkThemeId ||
+    (mode === "manual" && themeId !== defaultThemePreference.themeId);
 
   const changedSettingLabels = [
-    ...(theme !== "system" ? ["Theme"] : []),
+    ...(isThemeDirty ? ["Theme"] : []),
     ...(settings.defaultProvider !== defaults.defaultProvider ? ["Default provider"] : []),
     ...(settings.defaultThreadEnvMode !== defaults.defaultThreadEnvMode ? ["New thread mode"] : []),
     ...(settings.sidebarSide !== defaults.sidebarSide ? ["Sidebar position"] : []),
@@ -512,7 +618,7 @@ function SettingsRouteView() {
     );
     if (!confirmed) return;
 
-    setTheme("system");
+    resetTheme();
     resetSettings();
     setOpenInstallProviders({
       codex: false,
@@ -1033,28 +1139,27 @@ function SettingsRouteView() {
       <SettingsSection title="Theme and typography">
         <div className="space-y-2">
           <SettingsRow
-            title="Theme"
-            description="Choose how H3 Code looks across the app."
+            title="Theme mode"
+            description="Choose whether H3 Code follows your OS or sticks to one theme."
+            status={`Active: ${activeTheme.name} (${activeTheme.variant})`}
             resetAction={
-              theme !== "system" ? (
-                <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-              ) : null
+              isThemeDirty ? <SettingResetButton label="theme" onClick={resetTheme} /> : null
             }
             control={
               <Select
-                value={theme}
+                value={mode}
                 onValueChange={(value) => {
-                  if (value !== "system" && value !== "light" && value !== "dark") return;
-                  setTheme(value);
+                  if (value !== "system" && value !== "manual") return;
+                  setMode(value);
                 }}
               >
-                <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
+                <SelectTrigger className="w-full sm:w-44" aria-label="Theme mode">
                   <SelectValue>
-                    {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
+                    {THEME_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "System"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {THEME_OPTIONS.map((option) => (
+                  {THEME_MODE_OPTIONS.map((option) => (
                     <SelectItem hideIndicator key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -1062,7 +1167,39 @@ function SettingsRouteView() {
                 </SelectPopup>
               </Select>
             }
-          />
+          >
+            <div className="mt-3 space-y-4">
+              {mode === "manual" ? (
+                <ThemeGrid
+                  title="Manual theme"
+                  description="Pick the single theme that should stay active all the time."
+                  themes={THEME_CATALOG}
+                  selectedThemeId={themeId}
+                  activeThemeId={activeTheme.id}
+                  onSelect={setTheme}
+                />
+              ) : (
+                <>
+                  <ThemeGrid
+                    title="Light theme"
+                    description="Used when your operating system is in light appearance."
+                    themes={LIGHT_THEMES}
+                    selectedThemeId={lightThemeId}
+                    activeThemeId={activeTheme.variant === "light" ? activeTheme.id : null}
+                    onSelect={(nextThemeId) => setSystemTheme("light", nextThemeId)}
+                  />
+                  <ThemeGrid
+                    title="Dark theme"
+                    description="Used when your operating system is in dark appearance."
+                    themes={DARK_THEMES}
+                    selectedThemeId={darkThemeId}
+                    activeThemeId={activeTheme.variant === "dark" ? activeTheme.id : null}
+                    onSelect={(nextThemeId) => setSystemTheme("dark", nextThemeId)}
+                  />
+                </>
+              )}
+            </div>
+          </SettingsRow>
 
           <SettingsRow
             title="UI font"
