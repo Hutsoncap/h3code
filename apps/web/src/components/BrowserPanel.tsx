@@ -6,6 +6,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { type BrowserSurfaceId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -36,12 +37,14 @@ import {
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { normalizeWebAppUrl, useWebAppsStore } from "../webAppsStore";
 
 interface BrowserPanelProps {
   mode: DiffPanelMode;
   surfaceId: BrowserSurfaceId;
   onClosePanel: () => void;
   headerLeadingContent?: ReactNode;
+  initialUrl?: string | null;
 }
 
 function closeButtonClassName(isActive: boolean) {
@@ -66,11 +69,14 @@ export function BrowserPanel({
   surfaceId,
   onClosePanel,
   headerLeadingContent,
+  initialUrl,
 }: BrowserPanelProps) {
   const api = readNativeApi();
+  const navigate = useNavigate();
   const browserSurfaceState = useStore(useBrowserStateStore, selectBrowserSurfaceState(surfaceId));
   const recentHistory = useStore(useBrowserStateStore, selectBrowserSurfaceHistory(surfaceId));
   const upsertSurfaceState = useBrowserStateStore((store) => store.upsertSurfaceState);
+  const installFromTab = useWebAppsStore((store) => store.installFromTab);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const browserViewportRef = useRef<HTMLDivElement>(null);
   const addressDraftsByTabIdRef = useRef(new Map<string, string>());
@@ -89,6 +95,8 @@ export function BrowserPanel({
     browserSurfaceState?.tabs[0] ??
     null;
   const loading = activeTab?.isLoading ?? false;
+  const installableUrl = normalizeWebAppUrl(activeTab?.lastCommittedUrl ?? activeTab?.url);
+  const canInstallCurrentTab = surfaceId.kind !== "webapp" && installableUrl !== null;
   const activeTabStatus = activeTab?.status ?? "suspended";
   const browserChromeStatus = resolveBrowserChromeStatus({
     localError,
@@ -136,7 +144,12 @@ export function BrowserPanel({
     setWorkspaceReady(false);
     setLocalError(null);
 
-    void runBrowserAction(() => api.browser.open({ surfaceId })).then((state) => {
+    void runBrowserAction(() =>
+      api.browser.open({
+        surfaceId,
+        ...(initialUrl ? { initialUrl } : {}),
+      }),
+    ).then((state) => {
       if (cancelled) {
         return;
       }
@@ -152,7 +165,7 @@ export function BrowserPanel({
       cancelled = true;
       void api.browser.hide({ surfaceId });
     };
-  }, [api, runBrowserAction, surfaceId, upsertSurfaceState]);
+  }, [api, initialUrl, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   useEffect(() => {
     const activeTabId = activeTab?.id ?? null;
@@ -389,6 +402,26 @@ export function BrowserPanel({
     [api, onClosePanel, runBrowserAction, surfaceId, upsertSurfaceState],
   );
 
+  const onInstallCurrentTab = useCallback(() => {
+    if (!canInstallCurrentTab || !installableUrl || !activeTab) {
+      return;
+    }
+
+    const installedWebApp = installFromTab({
+      title: activeTab.title,
+      url: installableUrl,
+      faviconUrl: activeTab.faviconUrl,
+    });
+    if (!installedWebApp) {
+      return;
+    }
+
+    void navigate({
+      to: "/webapp/$webAppId",
+      params: { webAppId: installedWebApp.id },
+    });
+  }, [activeTab, canInstallCurrentTab, installFromTab, installableUrl, navigate]);
+
   const header = (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       {headerLeadingContent ? (
@@ -463,6 +496,20 @@ export function BrowserPanel({
             )}
             <span className="sr-only">Reload</span>
           </Button>
+          {surfaceId.kind !== "webapp" ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="size-7 shrink-0"
+              disabled={!canInstallCurrentTab}
+              onClick={onInstallCurrentTab}
+              title="Install as web app"
+            >
+              <PlusIcon className="size-3.5" />
+              <span className="sr-only">Install as web app</span>
+            </Button>
+          ) : null}
         </div>
         <form
           className="min-w-0 flex-1 [-webkit-app-region:no-drag]"

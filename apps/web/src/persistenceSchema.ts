@@ -38,6 +38,18 @@ export const PersistedPinnedItemsStateSchema = Schema.Struct({
   pinnedItems: Schema.Array(PersistedPinnedItemSchema),
 });
 
+export const PersistedWebAppSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  url: Schema.String,
+  faviconUrl: Schema.NullOr(Schema.String),
+  createdAt: Schema.String,
+});
+
+export const PersistedWebAppsStoreStateSchema = Schema.Struct({
+  webApps: Schema.Array(PersistedWebAppSchema),
+});
+
 export const PersistedSidebarSectionsStateSchema = Schema.Struct({
   sections: Schema.Struct({
     pinned: Schema.Boolean,
@@ -228,4 +240,16 @@ export interface PersistedPinnedItem {
 
 export interface PersistedPinnedItemsState {
   pinnedItems: PersistedPinnedItem[];
+}
+
+export interface PersistedWebApp {
+  id: string;
+  name: string;
+  url: string;
+  faviconUrl: string | null;
+  createdAt: string;
+}
+
+export interface PersistedWebAppsStoreState {
+  webApps: PersistedWebApp[];
 }
