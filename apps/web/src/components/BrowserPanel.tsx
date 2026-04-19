@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
-import { type ThreadId } from "@t3tools/contracts";
+import { type BrowserSurfaceId } from "@t3tools/contracts";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -22,8 +22,8 @@ import { cn } from "~/lib/utils";
 
 import {
   useBrowserStateStore,
-  selectThreadBrowserHistory,
-  selectThreadBrowserState,
+  selectBrowserSurfaceHistory,
+  selectBrowserSurfaceState,
 } from "../browserStateStore";
 import {
   browserAddressDisplayValue,
@@ -39,7 +39,7 @@ import { Input } from "./ui/input";
 
 interface BrowserPanelProps {
   mode: DiffPanelMode;
-  threadId: ThreadId;
+  surfaceId: BrowserSurfaceId;
   onClosePanel: () => void;
 }
 
@@ -60,11 +60,11 @@ function formatBrowserActionError(error: unknown): string | null {
   return "Couldn't complete that browser action.";
 }
 
-export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps) {
+export function BrowserPanel({ mode, surfaceId, onClosePanel }: BrowserPanelProps) {
   const api = readNativeApi();
-  const threadBrowserState = useStore(useBrowserStateStore, selectThreadBrowserState(threadId));
-  const recentHistory = useStore(useBrowserStateStore, selectThreadBrowserHistory(threadId));
-  const upsertThreadState = useBrowserStateStore((store) => store.upsertThreadState);
+  const browserSurfaceState = useStore(useBrowserStateStore, selectBrowserSurfaceState(surfaceId));
+  const recentHistory = useStore(useBrowserStateStore, selectBrowserSurfaceHistory(surfaceId));
+  const upsertSurfaceState = useBrowserStateStore((store) => store.upsertSurfaceState);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const browserViewportRef = useRef<HTMLDivElement>(null);
   const addressDraftsByTabIdRef = useRef(new Map<string, string>());
@@ -79,14 +79,14 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const activeTab =
-    threadBrowserState?.tabs.find((tab) => tab.id === threadBrowserState.activeTabId) ??
-    threadBrowserState?.tabs[0] ??
+    browserSurfaceState?.tabs.find((tab) => tab.id === browserSurfaceState.activeTabId) ??
+    browserSurfaceState?.tabs[0] ??
     null;
   const loading = activeTab?.isLoading ?? false;
   const activeTabStatus = activeTab?.status ?? "suspended";
   const browserChromeStatus = resolveBrowserChromeStatus({
     localError,
-    threadLastError: threadBrowserState?.lastError,
+    threadLastError: browserSurfaceState?.lastError,
     activeTabStatus,
     hasActiveTab: activeTab !== null,
     workspaceReady,
@@ -94,7 +94,7 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
   const browserAddressSuggestions = buildBrowserAddressSuggestions({
     query: addressValue,
     activeTabId: activeTab?.id ?? null,
-    tabs: threadBrowserState?.tabs ?? [],
+    tabs: browserSurfaceState?.tabs ?? [],
     recentHistory,
   });
   const showBrowserAddressSuggestions =
@@ -117,9 +117,9 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
     }
 
     return api.browser.onState((state) => {
-      upsertThreadState(state);
+      upsertSurfaceState(state);
     });
-  }, [api, upsertThreadState]);
+  }, [api, upsertSurfaceState]);
 
   useEffect(() => {
     if (!api) {
@@ -130,7 +130,7 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
     setWorkspaceReady(false);
     setLocalError(null);
 
-    void runBrowserAction(() => api.browser.open({ threadId })).then((state) => {
+    void runBrowserAction(() => api.browser.open({ surfaceId })).then((state) => {
       if (cancelled) {
         return;
       }
@@ -138,15 +138,15 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
         setWorkspaceReady(true);
         return;
       }
-      upsertThreadState(state);
+      upsertSurfaceState(state);
       setWorkspaceReady(true);
     });
 
     return () => {
       cancelled = true;
-      void api.browser.hide({ threadId });
+      void api.browser.hide({ surfaceId });
     };
-  }, [api, runBrowserAction, threadId, upsertThreadState]);
+  }, [api, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   useEffect(() => {
     const activeTabId = activeTab?.id ?? null;
@@ -176,14 +176,14 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
   }, [activeTab]);
 
   useEffect(() => {
-    const liveTabIds = new Set(threadBrowserState?.tabs.map((tab) => tab.id) ?? []);
+    const liveTabIds = new Set(browserSurfaceState?.tabs.map((tab) => tab.id) ?? []);
     for (const tabId of addressDraftsByTabIdRef.current.keys()) {
       if (!liveTabIds.has(tabId)) {
         addressDraftsByTabIdRef.current.delete(tabId);
         lastSyncedAddressByTabIdRef.current.delete(tabId);
       }
     }
-  }, [threadBrowserState?.tabs]);
+  }, [browserSurfaceState?.tabs]);
 
   useLayoutEffect(() => {
     if (!api) {
@@ -213,7 +213,7 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
         return;
       }
       lastSentBoundsRef.current = nextKey;
-      void runBrowserAction(() => api.browser.setPanelBounds({ threadId, bounds }));
+      void runBrowserAction(() => api.browser.setPanelBounds({ surfaceId, bounds }));
     };
 
     // The right panel opens with an off-canvas slide animation, so the viewport's
@@ -285,9 +285,9 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
         cancelAnimationFrame(boundsBurstFrameRef.current);
         boundsBurstFrameRef.current = null;
       }
-      void api.browser.hide({ threadId });
+      void api.browser.hide({ surfaceId });
     };
-  }, [api, runBrowserAction, threadId]);
+  }, [api, runBrowserAction, surfaceId]);
 
   const onSubmitAddress = useCallback(() => {
     if (!api || !activeTab) {
@@ -299,13 +299,13 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
     addressDraftsByTabIdRef.current.set(activeTab.id, normalizedAddress);
     setAddressValue(normalizedAddress);
     void runBrowserAction(() =>
-      api.browser.navigate({ threadId, tabId: activeTab.id, url: normalizedAddress }),
+      api.browser.navigate({ surfaceId, tabId: activeTab.id, url: normalizedAddress }),
     ).then((state) => {
       if (state) {
-        upsertThreadState(state);
+        upsertSurfaceState(state);
       }
     });
-  }, [activeTab, addressValue, api, runBrowserAction, threadId, upsertThreadState]);
+  }, [activeTab, addressValue, api, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   const onChooseSuggestion = useCallback(
     (suggestion: BrowserAddressSuggestion) => {
@@ -319,9 +319,9 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
 
       const tabId = suggestion.tabId;
       if (suggestion.kind === "tab" && typeof tabId === "string") {
-        void runBrowserAction(() => api.browser.selectTab({ threadId, tabId })).then((state) => {
+        void runBrowserAction(() => api.browser.selectTab({ surfaceId, tabId })).then((state) => {
           if (state) {
-            upsertThreadState(state);
+            upsertSurfaceState(state);
           }
           window.requestAnimationFrame(() => {
             addressInputRef.current?.focus();
@@ -337,50 +337,50 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
 
       void runBrowserAction(() =>
         api.browser.navigate({
-          threadId,
+          surfaceId,
           url: suggestion.url,
           ...(activeTab ? { tabId: activeTab.id } : {}),
         }),
       ).then((state) => {
         if (state) {
-          upsertThreadState(state);
+          upsertSurfaceState(state);
         }
       });
     },
-    [activeTab, api, runBrowserAction, threadId, upsertThreadState],
+    [activeTab, api, runBrowserAction, surfaceId, upsertSurfaceState],
   );
 
   const onCreateTab = useCallback(() => {
     if (!api) {
       return;
     }
-    void runBrowserAction(() => api.browser.newTab({ threadId, activate: true })).then((state) => {
+    void runBrowserAction(() => api.browser.newTab({ surfaceId, activate: true })).then((state) => {
       if (state) {
-        upsertThreadState(state);
+        upsertSurfaceState(state);
       }
       window.requestAnimationFrame(() => {
         addressInputRef.current?.focus();
         addressInputRef.current?.select();
       });
     });
-  }, [api, runBrowserAction, threadId, upsertThreadState]);
+  }, [api, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   const onCloseTab = useCallback(
     (tabId: string) => {
       if (!api) {
         return;
       }
-      void runBrowserAction(() => api.browser.closeTab({ threadId, tabId })).then((state) => {
+      void runBrowserAction(() => api.browser.closeTab({ surfaceId, tabId })).then((state) => {
         if (!state) {
           return;
         }
-        upsertThreadState(state);
+        upsertSurfaceState(state);
         if (!state.open && state.tabs.length === 0) {
           onClosePanel();
         }
       });
     },
-    [api, onClosePanel, runBrowserAction, threadId, upsertThreadState],
+    [api, onClosePanel, runBrowserAction, surfaceId, upsertSurfaceState],
   );
 
   const header = (
@@ -397,10 +397,10 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
             onClick={() => {
               if (!api || !activeTab) return;
               void runBrowserAction(() =>
-                api.browser.goBack({ threadId, tabId: activeTab.id }),
+                api.browser.goBack({ surfaceId, tabId: activeTab.id }),
               ).then((state) => {
                 if (state) {
-                  upsertThreadState(state);
+                  upsertSurfaceState(state);
                 }
               });
             }}
@@ -417,10 +417,10 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
             onClick={() => {
               if (!api || !activeTab) return;
               void runBrowserAction(() =>
-                api.browser.goForward({ threadId, tabId: activeTab.id }),
+                api.browser.goForward({ surfaceId, tabId: activeTab.id }),
               ).then((state) => {
                 if (state) {
-                  upsertThreadState(state);
+                  upsertSurfaceState(state);
                 }
               });
             }}
@@ -437,10 +437,10 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
             onClick={() => {
               if (!api || !activeTab) return;
               void runBrowserAction(() =>
-                api.browser.reload({ threadId, tabId: activeTab.id }),
+                api.browser.reload({ surfaceId, tabId: activeTab.id }),
               ).then((state) => {
                 if (state) {
-                  upsertThreadState(state);
+                  upsertSurfaceState(state);
                 }
               });
             }}
@@ -569,7 +569,7 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {threadBrowserState?.tabs.map((tab) => {
+            {browserSurfaceState?.tabs.map((tab) => {
               const isActive = tab.id === activeTab?.id;
               return (
                 <div
@@ -594,10 +594,10 @@ export function BrowserPanel({ mode, threadId, onClosePanel }: BrowserPanelProps
                     className="min-w-0 flex-1 truncate text-left"
                     onClick={() => {
                       void runBrowserAction(() =>
-                        api.browser.selectTab({ threadId, tabId: tab.id }),
+                        api.browser.selectTab({ surfaceId, tabId: tab.id }),
                       ).then((state) => {
                         if (state) {
-                          upsertThreadState(state);
+                          upsertSurfaceState(state);
                         }
                       });
                     }}

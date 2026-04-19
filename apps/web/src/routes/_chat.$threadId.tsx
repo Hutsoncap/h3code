@@ -9,6 +9,7 @@ import {
   type ThreadId as ThreadIdType,
   type TurnId,
 } from "@t3tools/contracts";
+import { createThreadBrowserSurfaceId } from "@t3tools/shared/browserSurface";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Suspense,
@@ -265,7 +266,11 @@ const PanePanelInlineSidebar = (props: {
       >
         {renderPanelContent && threadId ? (
           panel === "browser" ? (
-            <BrowserPanel mode="sidebar" threadId={threadId} onClosePanel={onClosePanel} />
+            <BrowserPanel
+              mode="sidebar"
+              surfaceId={createThreadBrowserSurfaceId(threadId)}
+              onClosePanel={onClosePanel}
+            />
           ) : (
             <LazyDiffPanel
               mode="sidebar"
@@ -380,7 +385,11 @@ function SplitPaneEmbeddedPanel(props: {
         onPointerDown={startResize}
       />
       {props.panel === "browser" ? (
-        <BrowserPanel mode="sidebar" threadId={props.threadId} onClosePanel={props.onClosePanel} />
+        <BrowserPanel
+          mode="sidebar"
+          surfaceId={createThreadBrowserSurfaceId(props.threadId)}
+          onClosePanel={props.onClosePanel}
+        />
       ) : (
         <LazyDiffPanel
           mode="sidebar"
@@ -1146,7 +1155,11 @@ function SingleChatSurface(props: {
       <RightPanelSheet panelOpen={panelOpen} onClosePanel={closePanel}>
         {shouldRenderPanelContent ? (
           activePanel === "browser" ? (
-            <BrowserPanel mode="sheet" threadId={props.threadId} onClosePanel={closePanel} />
+            <BrowserPanel
+              mode="sheet"
+              surfaceId={createThreadBrowserSurfaceId(props.threadId)}
+              onClosePanel={closePanel}
+            />
           ) : (
             <LazyDiffPanel
               mode="sheet"

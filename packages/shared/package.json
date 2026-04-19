@@ -56,6 +56,10 @@
       "types": "./src/threadWorkspace.ts",
       "import": "./src/threadWorkspace.ts"
     },
+    "./browserSurface": {
+      "types": "./src/browserSurface.ts",
+      "import": "./src/browserSurface.ts"
+    },
     "./subagents": {
       "types": "./src/subagents.ts",
       "import": "./src/subagents.ts"

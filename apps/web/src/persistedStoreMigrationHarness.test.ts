@@ -1,8 +1,10 @@
 import { ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
+import { browserSurfaceKey, createThreadBrowserSurfaceId } from "@t3tools/shared/browserSurface";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const THREAD_A = ThreadId.makeUnsafe("thread-a");
 const THREAD_B = ThreadId.makeUnsafe("thread-b");
+const THREAD_A_SURFACE_KEY = browserSurfaceKey(createThreadBrowserSurfaceId(THREAD_A));
 const PROJECT_ID = ProjectId.makeUnsafe("project-1");
 const TURN_ID = TurnId.makeUnsafe("turn-1");
 
@@ -100,8 +102,8 @@ describe("persisted store legacy-key migration harness", () => {
       importModule: () => import("./browserStateStore"),
       selectStore: (module) => module.useBrowserStateStore as PersistStore,
       mutate: (_module, store) => {
-        store.getState().upsertThreadState({
-          threadId: THREAD_A,
+        store.getState().upsertSurfaceState({
+          surfaceId: createThreadBrowserSurfaceId(THREAD_A),
           open: true,
           activeTabId: "tab-1",
           tabs: [
@@ -125,8 +127,8 @@ describe("persisted store legacy-key migration harness", () => {
 
     expect(storage.has(currentKey)).toBe(true);
     expect(storage.has(legacyKey)).toBe(false);
-    expect(store.getState().threadStatesByThreadId[THREAD_A]?.open).toBe(true);
-    expect(store.getState().recentHistoryByThreadId[THREAD_A]).toEqual([
+    expect(store.getState().surfaceStatesById[THREAD_A_SURFACE_KEY]?.open).toBe(true);
+    expect(store.getState().recentHistoryBySurfaceId[THREAD_A_SURFACE_KEY]).toEqual([
       {
         url: "https://example.com/",
         title: "example.com",

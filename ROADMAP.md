@@ -120,8 +120,8 @@ Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7
 | ID        | Title                                                                                    | Status                                                                                                                           |
 | --------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **v1a**   | Sidebar unify + theme catalog                                                            | ✅ merged on `main`: [#226](https://github.com/Hutsoncap/h3code/pull/226) + [#227](https://github.com/Hutsoncap/h3code/pull/227) |
-| **v1b**   | Pinned section + generalized pin store                                                   | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1b-pinned-section` (`feat/v1b-pinned-section`)                         |
-| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 📋 Planned                                                                                                                       |
+| **v1b**   | Pinned section + generalized pin store                                                   | ✅ merged on `main`: [#228](https://github.com/Hutsoncap/h3code/pull/228)                                                        |
+| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c1-browser-surface` (`feat/v1c1-browser-surface`)                     |
 | **v1c.2** | Standalone browser route + sidebar Browser section                                       | 📋 Planned                                                                                                                       |
 | **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 📋 Planned                                                                                                                       |
 
@@ -174,9 +174,9 @@ _(Importing the 450-theme Ghostty/iTerm2 corpus is scoped separately as v8c. v1a
 
 _Can run in parallel with v1c after v1a lands._
 
-Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1b-pinned-section` on `feat/v1b-pinned-section`.
+Merged slice: [#228](https://github.com/Hutsoncap/h3code/pull/228) landed the pinned section plus generalized pin store. `v1b` is complete on `main`.
 
-- Create `apps/web/src/pinnedItemsStore.ts` — generic `{ kind: "thread"|"workspace"|"webapp"; id: string }` items persisted at `t3code:pinned-items:v1`. Actions: `togglePin`, `unpin`, `reorder`, `prune`. Migrate existing pinned-threads localStorage.
+- Create `apps/web/src/pinnedItemsStore.ts` — generic `{ kind: "thread"|"workspace"|"webapp"; id: string }` items persisted at `h3code:pinned-items:v1` (legacy aliases still resolve through aliased storage). Actions: `togglePin`, `unpin`, `reorder`, `prune`. Migrate existing pinned-threads localStorage.
 - Keep the existing thread-only pin store as a thin selector wrapper during the deprecation window; remove once proven.
 - Add the **Pinned** section at the top of the sidebar; hidden when empty. Reuse existing thread and workspace row components. Web-app rows arrive with v1c.3.
 - Add pin affordance to workspace context menus (threads already have one).
@@ -197,6 +197,8 @@ Today's browser ([apps/web/src/components/BrowserPanel.tsx](apps/web/src/compone
 #### v1c.1 — Browser surface abstraction (no user-visible changes)
 
 _Can run in parallel with v1b after v1a lands._
+
+Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c1-browser-surface` on `feat/v1c1-browser-surface`.
 
 Pure refactor. No new routes, no new UI, no new stores. The thread-embedded browser behaves identically after this PR.
 

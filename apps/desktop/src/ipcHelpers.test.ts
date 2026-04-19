@@ -12,12 +12,14 @@ import {
   safeDecodeIpcPayload,
 } from "./ipcHelpers";
 
+type BrowserOpenInput = Schema.Schema.Type<typeof BrowserOpenInputSchema>;
+
 describe("registerValidatedIpcHandler", () => {
   it("parses payloads before invoking the handler", async () => {
     const removeHandler = vi.fn();
     const handle = vi.fn();
-    const listener = vi.fn(
-      (input: { threadId: string; initialUrl?: string | undefined }) => input.threadId,
+    const listener = vi.fn((input: BrowserOpenInput) =>
+      "surfaceId" in input ? input.surfaceId.kind : input.threadId,
     );
 
     registerValidatedIpcHandler(
@@ -89,7 +91,7 @@ describe("registerValidatedIpcHandler", () => {
   it("strips unknown fields outside development exact validation", async () => {
     const removeHandler = vi.fn();
     const handle = vi.fn();
-    const listener = vi.fn((input: { threadId: string; initialUrl?: string | undefined }) => input);
+    const listener = vi.fn((input: BrowserOpenInput) => input);
 
     registerValidatedIpcHandler(
       { removeHandler, handle },
@@ -122,7 +124,7 @@ describe("safeDecodeIpcPayload", () => {
   it("returns null for invalid event payloads", () => {
     expect(
       safeDecodeIpcPayload(ThreadBrowserStateSchema, {
-        threadId: 42,
+        surfaceId: { kind: "thread", threadId: 42 },
         open: true,
         activeTabId: null,
         tabs: [],

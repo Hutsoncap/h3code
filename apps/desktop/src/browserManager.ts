@@ -2,6 +2,8 @@ import * as Crypto from "node:crypto";
 
 import { BrowserWindow, session, shell, WebContentsView } from "electron";
 import type {
+  BrowserSurfaceId,
+  BrowserSurfaceState,
   BrowserNavigateInput,
   BrowserNewTabInput,
   BrowserOpenInput,
@@ -10,9 +12,12 @@ import type {
   BrowserTabInput,
   BrowserTabState,
   BrowserThreadInput,
-  ThreadBrowserState,
-  ThreadId,
 } from "@t3tools/contracts";
+import {
+  browserSurfaceKey,
+  resolveBrowserSurfaceId,
+  sameBrowserSurfaceId,
+} from "@t3tools/shared/browserSurface";
 
 const ABOUT_BLANK_URL = "about:blank";
 const BROWSER_SESSION_PARTITION = "persist:h3code-browser";
@@ -21,11 +26,11 @@ const BROWSER_THREAD_SUSPEND_DELAY_MS = 30_000;
 const BROWSER_ERROR_ABORTED = -3;
 const SEARCH_URL_PREFIX = "https://www.google.com/search?q=";
 
-type BrowserStateListener = (state: ThreadBrowserState) => void;
+type BrowserStateListener = (state: BrowserSurfaceState) => void;
 
 interface LiveTabRuntime {
   key: string;
-  threadId: ThreadId;
+  surfaceId: BrowserSurfaceId;
   tabId: string;
   view: WebContentsView;
 }
@@ -45,9 +50,9 @@ function createBrowserTab(url = ABOUT_BLANK_URL): BrowserTabState {
   };
 }
 
-function defaultThreadBrowserState(threadId: ThreadId): ThreadBrowserState {
+function defaultBrowserSurfaceState(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
   return {
-    threadId,
+    surfaceId,
     open: false,
     activeTabId: null,
     tabs: [],
@@ -55,7 +60,7 @@ function defaultThreadBrowserState(threadId: ThreadId): ThreadBrowserState {
   };
 }
 
-function cloneThreadState(state: ThreadBrowserState): ThreadBrowserState {
+function cloneBrowserState(state: BrowserSurfaceState): BrowserSurfaceState {
   return {
     ...state,
     tabs: state.tabs.map((tab) => ({ ...tab })),
@@ -175,8 +180,19 @@ function mapBrowserLoadError(errorCode: number): string {
   }
 }
 
-function buildRuntimeKey(threadId: ThreadId, tabId: string): string {
-  return `${threadId}:${tabId}`;
+function buildRuntimeKey(surfaceId: BrowserSurfaceId, tabId: string): string {
+  return `${browserSurfaceKey(surfaceId)}:${tabId}`;
+}
+
+function resolveSurfaceIdOrThrow(input: {
+  surfaceId?: BrowserSurfaceId | null | undefined;
+  threadId?: string | null | undefined;
+}): BrowserSurfaceId {
+  const surfaceId = resolveBrowserSurfaceId(input as never);
+  if (!surfaceId) {
+    throw new Error("Browser surfaceId is required.");
+  }
+  return surfaceId;
 }
 
 function resolveCookieUrl(cookie: Electron.Cookie): string | null {
@@ -235,19 +251,19 @@ export async function migrateLegacyBrowserSessionPartition(): Promise<void> {
 
 export class DesktopBrowserManager {
   private window: BrowserWindow | null = null;
-  private activeThreadId: ThreadId | null = null;
+  private activeSurfaceId: BrowserSurfaceId | null = null;
   private activeBounds: BrowserPanelBounds | null = null;
   private attachedRuntimeKey: string | null = null;
-  private readonly states = new Map<ThreadId, ThreadBrowserState>();
+  private readonly states = new Map<string, BrowserSurfaceState>();
   private readonly runtimes = new Map<string, LiveTabRuntime>();
   private readonly listeners = new Set<BrowserStateListener>();
-  private readonly suspendTimers = new Map<ThreadId, ReturnType<typeof setTimeout>>();
+  private readonly suspendTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   setWindow(window: BrowserWindow | null): void {
     this.window = window;
     if (window) {
-      if (this.activeThreadId && this.activeBounds) {
-        this.attachActiveTab(this.activeThreadId, this.activeBounds);
+      if (this.activeSurfaceId && this.activeBounds) {
+        this.attachActiveTab(this.activeSurfaceId, this.activeBounds);
       }
       return;
     }
@@ -273,83 +289,91 @@ export class DesktopBrowserManager {
     this.listeners.clear();
     this.states.clear();
     this.window = null;
-    this.activeThreadId = null;
+    this.activeSurfaceId = null;
     this.activeBounds = null;
   }
 
-  open(input: BrowserOpenInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId, input.initialUrl);
+  open(input: BrowserOpenInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId, input.initialUrl);
     state.open = true;
     syncThreadLastError(state);
 
     if (
       this.activeBounds &&
-      (this.activeThreadId === null || this.activeThreadId === input.threadId)
+      (this.activeSurfaceId === null || sameBrowserSurfaceId(this.activeSurfaceId, surfaceId))
     ) {
-      this.activateThread(input.threadId, this.activeBounds);
+      this.activateThread(surfaceId, this.activeBounds);
     }
 
-    this.emitState(input.threadId);
-    return cloneThreadState(state);
+    this.emitState(surfaceId);
+    return cloneBrowserState(state);
   }
 
-  close(input: BrowserThreadInput): ThreadBrowserState {
-    this.clearSuspendTimer(input.threadId);
+  close(input: BrowserThreadInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const surfaceKey = browserSurfaceKey(surfaceId);
+    this.clearSuspendTimer(surfaceId);
 
-    if (this.activeThreadId === input.threadId) {
+    if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
       this.detachAttachedRuntime();
-      this.activeThreadId = null;
+      this.activeSurfaceId = null;
     }
 
-    this.destroyThreadRuntimes(input.threadId);
+    this.destroyThreadRuntimes(surfaceId);
 
-    const state = this.getOrCreateState(input.threadId);
+    const state = this.getOrCreateState(surfaceId);
     state.open = false;
     state.activeTabId = null;
     state.tabs = [];
     state.lastError = null;
-    this.emitState(input.threadId);
-    return cloneThreadState(state);
+    this.states.set(surfaceKey, state);
+    this.emitState(surfaceId);
+    return cloneBrowserState(state);
   }
 
   hide(input: BrowserThreadInput): void {
-    const state = this.states.get(input.threadId);
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.states.get(browserSurfaceKey(surfaceId));
     if (!state?.open) {
       return;
     }
 
-    if (this.activeThreadId === input.threadId) {
+    if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
       this.detachAttachedRuntime();
-      this.activeThreadId = null;
+      this.activeSurfaceId = null;
     }
 
-    this.scheduleThreadSuspend(input.threadId);
+    this.scheduleThreadSuspend(surfaceId);
   }
 
-  getState(input: BrowserThreadInput): ThreadBrowserState {
-    return cloneThreadState(this.getOrCreateState(input.threadId));
+  getState(input: BrowserThreadInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    return cloneBrowserState(this.getOrCreateState(surfaceId));
   }
 
-  setPanelBounds(input: BrowserSetPanelBoundsInput): ThreadBrowserState {
-    const state = this.getOrCreateState(input.threadId);
+  setPanelBounds(input: BrowserSetPanelBoundsInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.getOrCreateState(surfaceId);
     const nextBounds = normalizeBounds(input.bounds);
     this.activeBounds = nextBounds;
 
     if (!state.open || nextBounds === null) {
-      if (this.activeThreadId === input.threadId) {
+      if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
         this.detachAttachedRuntime();
-        this.activeThreadId = null;
-        this.scheduleThreadSuspend(input.threadId);
+        this.activeSurfaceId = null;
+        this.scheduleThreadSuspend(surfaceId);
       }
-      return cloneThreadState(state);
+      return cloneBrowserState(state);
     }
 
-    this.activateThread(input.threadId, nextBounds);
-    return cloneThreadState(state);
+    this.activateThread(surfaceId, nextBounds);
+    return cloneBrowserState(state);
   }
 
-  navigate(input: BrowserNavigateInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId);
+  navigate(input: BrowserNavigateInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.resolveTab(state, input.tabId);
     const nextUrl = normalizeUrlInput(input.url);
     tab.url = nextUrl;
@@ -358,165 +382,178 @@ export class DesktopBrowserManager {
     tab.lastError = null;
     syncThreadLastError(state);
 
-    if (this.activeThreadId === input.threadId) {
+    if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
       // Load the target tab directly so we don't clobber its pending URL with a
       // thread-wide runtime sync from the old live page state.
-      const runtime = this.ensureLiveRuntime(input.threadId, tab.id);
-      this.clearSuspendTimer(input.threadId);
+      const runtime = this.ensureLiveRuntime(surfaceId, tab.id);
+      this.clearSuspendTimer(surfaceId);
       if (state.activeTabId === tab.id && this.activeBounds) {
         this.attachRuntime(runtime, this.activeBounds);
       }
-      void this.loadTab(input.threadId, tab.id, { force: true, runtime });
+      void this.loadTab(surfaceId, tab.id, { force: true, runtime });
     }
 
-    this.emitState(input.threadId);
-    return cloneThreadState(state);
+    this.emitState(surfaceId);
+    return cloneBrowserState(state);
   }
 
-  reload(input: BrowserTabInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId);
+  reload(input: BrowserTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.resolveTab(state, input.tabId);
-    const runtime = this.runtimes.get(buildRuntimeKey(input.threadId, tab.id));
+    const runtime = this.runtimes.get(buildRuntimeKey(surfaceId, tab.id));
     if (runtime) {
       runtime.view.webContents.reload();
-    } else if (this.activeThreadId === input.threadId) {
-      this.resumeThread(input.threadId);
-      void this.loadTab(input.threadId, tab.id, { force: true });
+    } else if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
+      this.resumeThread(surfaceId);
+      void this.loadTab(surfaceId, tab.id, { force: true });
     }
-    return cloneThreadState(state);
+    return cloneBrowserState(state);
   }
 
-  goBack(input: BrowserTabInput): ThreadBrowserState {
-    const runtime = this.runtimes.get(buildRuntimeKey(input.threadId, input.tabId));
+  goBack(input: BrowserTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const runtime = this.runtimes.get(buildRuntimeKey(surfaceId, input.tabId));
     if (runtime && runtime.view.webContents.canGoBack()) {
       runtime.view.webContents.goBack();
     }
-    return this.getState({ threadId: input.threadId });
+    return this.getState({ surfaceId });
   }
 
-  goForward(input: BrowserTabInput): ThreadBrowserState {
-    const runtime = this.runtimes.get(buildRuntimeKey(input.threadId, input.tabId));
+  goForward(input: BrowserTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const runtime = this.runtimes.get(buildRuntimeKey(surfaceId, input.tabId));
     if (runtime && runtime.view.webContents.canGoForward()) {
       runtime.view.webContents.goForward();
     }
-    return this.getState({ threadId: input.threadId });
+    return this.getState({ surfaceId });
   }
 
-  newTab(input: BrowserNewTabInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId);
+  newTab(input: BrowserNewTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = createBrowserTab(normalizeUrlInput(input.url));
     state.tabs = [...state.tabs, tab];
     if (input.activate !== false || !state.activeTabId) {
       state.activeTabId = tab.id;
     }
 
-    if (this.activeThreadId === input.threadId) {
-      this.resumeThread(input.threadId);
+    if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
+      this.resumeThread(surfaceId);
       if (state.activeTabId === tab.id && this.activeBounds) {
-        this.ensureLiveRuntime(input.threadId, tab.id);
-        void this.loadTab(input.threadId, tab.id, { force: true });
-        this.attachActiveTab(input.threadId, this.activeBounds);
+        this.ensureLiveRuntime(surfaceId, tab.id);
+        void this.loadTab(surfaceId, tab.id, { force: true });
+        this.attachActiveTab(surfaceId, this.activeBounds);
       }
     } else {
       tab.status = "suspended";
     }
 
     syncThreadLastError(state);
-    this.emitState(input.threadId);
-    return cloneThreadState(state);
+    this.emitState(surfaceId);
+    return cloneBrowserState(state);
   }
 
-  closeTab(input: BrowserTabInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId);
+  closeTab(input: BrowserTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const nextTabs = state.tabs.filter((tab) => tab.id !== input.tabId);
     if (nextTabs.length === state.tabs.length) {
-      return cloneThreadState(state);
+      return cloneBrowserState(state);
     }
 
-    this.destroyRuntime(input.threadId, input.tabId);
+    this.destroyRuntime(surfaceId, input.tabId);
     state.tabs = nextTabs;
 
     if (nextTabs.length === 0) {
       state.open = false;
       state.activeTabId = null;
       state.lastError = null;
-      if (this.activeThreadId === input.threadId) {
+      if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
         this.detachAttachedRuntime();
-        this.activeThreadId = null;
+        this.activeSurfaceId = null;
       }
-      this.emitState(input.threadId);
-      return cloneThreadState(state);
+      this.emitState(surfaceId);
+      return cloneBrowserState(state);
     }
 
     if (!state.activeTabId || state.activeTabId === input.tabId) {
       state.activeTabId = nextTabs[Math.max(0, nextTabs.length - 1)]?.id ?? null;
     }
 
-    if (this.activeThreadId === input.threadId && this.activeBounds) {
-      this.attachActiveTab(input.threadId, this.activeBounds);
+    if (
+      this.activeSurfaceId &&
+      sameBrowserSurfaceId(this.activeSurfaceId, surfaceId) &&
+      this.activeBounds
+    ) {
+      this.attachActiveTab(surfaceId, this.activeBounds);
     }
 
     syncThreadLastError(state);
-    this.emitState(input.threadId);
-    return cloneThreadState(state);
+    this.emitState(surfaceId);
+    return cloneBrowserState(state);
   }
 
-  selectTab(input: BrowserTabInput): ThreadBrowserState {
-    const state = this.ensureWorkspace(input.threadId);
+  selectTab(input: BrowserTabInput): BrowserSurfaceState {
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.resolveTab(state, input.tabId);
     if (state.activeTabId !== tab.id) {
       state.activeTabId = tab.id;
       syncThreadLastError(state);
-      this.emitState(input.threadId);
+      this.emitState(surfaceId);
     }
 
-    if (this.activeThreadId === input.threadId) {
-      this.resumeThread(input.threadId);
+    if (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)) {
+      this.resumeThread(surfaceId);
       if (this.activeBounds) {
-        this.attachActiveTab(input.threadId, this.activeBounds);
+        this.attachActiveTab(surfaceId, this.activeBounds);
       }
     }
 
-    return cloneThreadState(state);
+    return cloneBrowserState(state);
   }
 
   openDevTools(input: BrowserTabInput): void {
-    const state = this.ensureWorkspace(input.threadId);
+    const surfaceId = resolveSurfaceIdOrThrow(input);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.resolveTab(state, input.tabId);
     if (state.activeTabId !== tab.id) {
       state.activeTabId = tab.id;
       syncThreadLastError(state);
-      this.emitState(input.threadId);
+      this.emitState(surfaceId);
     }
 
-    this.resumeThread(input.threadId);
-    const runtime = this.ensureLiveRuntime(input.threadId, tab.id);
+    this.resumeThread(surfaceId);
+    const runtime = this.ensureLiveRuntime(surfaceId, tab.id);
     if (this.activeBounds) {
-      this.attachActiveTab(input.threadId, this.activeBounds);
+      this.attachActiveTab(surfaceId, this.activeBounds);
     }
     runtime.view.webContents.openDevTools({ mode: "detach" });
   }
 
-  private activateThread(threadId: ThreadId, bounds: BrowserPanelBounds): void {
-    const previousActiveThreadId =
-      this.activeThreadId && this.activeThreadId !== threadId ? this.activeThreadId : null;
+  private activateThread(surfaceId: BrowserSurfaceId, bounds: BrowserPanelBounds): void {
+    const previousActiveSurfaceId =
+      this.activeSurfaceId && !sameBrowserSurfaceId(this.activeSurfaceId, surfaceId)
+        ? this.activeSurfaceId
+        : null;
 
-    this.activeThreadId = threadId;
+    this.activeSurfaceId = surfaceId;
     this.activeBounds = bounds;
-    if (previousActiveThreadId) {
-      this.scheduleThreadSuspend(previousActiveThreadId);
+    if (previousActiveSurfaceId) {
+      this.scheduleThreadSuspend(previousActiveSurfaceId);
     }
-    this.resumeThread(threadId);
-    this.attachActiveTab(threadId, bounds);
+    this.resumeThread(surfaceId);
+    this.attachActiveTab(surfaceId, bounds);
   }
 
-  private resumeThread(threadId: ThreadId): void {
-    const state = this.ensureWorkspace(threadId);
+  private resumeThread(surfaceId: BrowserSurfaceId): void {
+    const state = this.ensureWorkspace(surfaceId);
     if (!state.open) {
       return;
     }
 
-    this.clearSuspendTimer(threadId);
+    this.clearSuspendTimer(surfaceId);
     const activeTab = this.getActiveTab(state);
 
     // Only resume the visible tab. Waking every tab can fan out into several
@@ -525,41 +562,45 @@ export class DesktopBrowserManager {
       if (tab.id !== activeTab?.id) {
         continue;
       }
-      const runtime = this.ensureLiveRuntime(threadId, tab.id);
+      const runtime = this.ensureLiveRuntime(surfaceId, tab.id);
       if (tab.status === "suspended") {
-        void this.loadTab(threadId, tab.id, { force: true, runtime });
+        void this.loadTab(surfaceId, tab.id, { force: true, runtime });
       } else {
         syncTabStateFromRuntime(state, tab, runtime.view.webContents);
       }
     }
 
     syncThreadLastError(state);
-    this.emitState(threadId);
+    this.emitState(surfaceId);
   }
 
-  private scheduleThreadSuspend(threadId: ThreadId): void {
-    const state = this.states.get(threadId);
-    if (!state?.open || this.activeThreadId === threadId) {
+  private scheduleThreadSuspend(surfaceId: BrowserSurfaceId): void {
+    const surfaceKey = browserSurfaceKey(surfaceId);
+    const state = this.states.get(surfaceKey);
+    if (
+      !state?.open ||
+      (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId))
+    ) {
       return;
     }
 
-    this.clearSuspendTimer(threadId);
+    this.clearSuspendTimer(surfaceId);
     const timer = setTimeout(() => {
-      this.suspendThread(threadId);
-      this.suspendTimers.delete(threadId);
+      this.suspendThread(surfaceId);
+      this.suspendTimers.delete(surfaceKey);
     }, BROWSER_THREAD_SUSPEND_DELAY_MS);
     timer.unref();
-    this.suspendTimers.set(threadId, timer);
+    this.suspendTimers.set(surfaceKey, timer);
   }
 
-  private suspendThread(threadId: ThreadId): void {
-    const state = this.states.get(threadId);
-    if (!state || this.activeThreadId === threadId) {
+  private suspendThread(surfaceId: BrowserSurfaceId): void {
+    const state = this.states.get(browserSurfaceKey(surfaceId));
+    if (!state || (this.activeSurfaceId && sameBrowserSurfaceId(this.activeSurfaceId, surfaceId))) {
       return;
     }
 
     for (const tab of state.tabs) {
-      this.destroyRuntime(threadId, tab.id);
+      this.destroyRuntime(surfaceId, tab.id);
       tab.status = "suspended";
       tab.isLoading = false;
       tab.canGoBack = false;
@@ -567,31 +608,32 @@ export class DesktopBrowserManager {
     }
 
     syncThreadLastError(state);
-    this.emitState(threadId);
+    this.emitState(surfaceId);
   }
 
-  private clearSuspendTimer(threadId: ThreadId): void {
-    const existing = this.suspendTimers.get(threadId);
+  private clearSuspendTimer(surfaceId: BrowserSurfaceId): void {
+    const surfaceKey = browserSurfaceKey(surfaceId);
+    const existing = this.suspendTimers.get(surfaceKey);
     if (!existing) {
       return;
     }
     clearTimeout(existing);
-    this.suspendTimers.delete(threadId);
+    this.suspendTimers.delete(surfaceKey);
   }
 
-  private attachActiveTab(threadId: ThreadId, bounds: BrowserPanelBounds): void {
-    const state = this.ensureWorkspace(threadId);
+  private attachActiveTab(surfaceId: BrowserSurfaceId, bounds: BrowserPanelBounds): void {
+    const state = this.ensureWorkspace(surfaceId);
     const activeTab = this.getActiveTab(state);
     if (!activeTab) {
       return;
     }
 
-    const runtime = this.ensureLiveRuntime(threadId, activeTab.id);
+    const runtime = this.ensureLiveRuntime(surfaceId, activeTab.id);
     this.attachRuntime(runtime, bounds);
     if (activeTab.status === "suspended") {
-      void this.loadTab(threadId, activeTab.id, { force: true, runtime });
+      void this.loadTab(surfaceId, activeTab.id, { force: true, runtime });
     } else {
-      this.syncRuntimeState(threadId, activeTab.id);
+      this.syncRuntimeState(surfaceId, activeTab.id);
     }
   }
 
@@ -625,16 +667,16 @@ export class DesktopBrowserManager {
     this.attachedRuntimeKey = null;
   }
 
-  private ensureLiveRuntime(threadId: ThreadId, tabId: string): LiveTabRuntime {
-    const key = buildRuntimeKey(threadId, tabId);
+  private ensureLiveRuntime(surfaceId: BrowserSurfaceId, tabId: string): LiveTabRuntime {
+    const key = buildRuntimeKey(surfaceId, tabId);
     const existing = this.runtimes.get(key);
     if (existing) {
       return existing;
     }
 
-    const runtime = this.createLiveRuntime(threadId, tabId);
+    const runtime = this.createLiveRuntime(surfaceId, tabId);
     this.runtimes.set(key, runtime);
-    const state = this.ensureWorkspace(threadId);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.getTab(state, tabId);
     if (tab) {
       tab.status = "live";
@@ -644,7 +686,7 @@ export class DesktopBrowserManager {
     return runtime;
   }
 
-  private createLiveRuntime(threadId: ThreadId, tabId: string): LiveTabRuntime {
+  private createLiveRuntime(surfaceId: BrowserSurfaceId, tabId: string): LiveTabRuntime {
     const view = new WebContentsView({
       webPreferences: {
         partition: BROWSER_SESSION_PARTITION,
@@ -654,8 +696,8 @@ export class DesktopBrowserManager {
       },
     });
     const runtime: LiveTabRuntime = {
-      key: buildRuntimeKey(threadId, tabId),
-      threadId,
+      key: buildRuntimeKey(surfaceId, tabId),
+      surfaceId,
       tabId,
       view,
     };
@@ -664,12 +706,16 @@ export class DesktopBrowserManager {
     webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith("http://") || url.startsWith("https://") || url === ABOUT_BLANK_URL) {
         this.newTab({
-          threadId,
+          surfaceId,
           url,
           activate: true,
         });
-        if (this.activeThreadId === threadId && this.activeBounds) {
-          this.attachActiveTab(threadId, this.activeBounds);
+        if (
+          this.activeSurfaceId &&
+          sameBrowserSurfaceId(this.activeSurfaceId, surfaceId) &&
+          this.activeBounds
+        ) {
+          this.attachActiveTab(surfaceId, this.activeBounds);
         }
         return { action: "deny" };
       }
@@ -680,22 +726,22 @@ export class DesktopBrowserManager {
 
     webContents.on("page-title-updated", (event) => {
       event.preventDefault();
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     });
     webContents.on("page-favicon-updated", (_event, faviconUrls) => {
-      this.syncRuntimeState(threadId, tabId, faviconUrls);
+      this.syncRuntimeState(surfaceId, tabId, faviconUrls);
     });
     webContents.on("did-start-loading", () => {
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     });
     webContents.on("did-stop-loading", () => {
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     });
     webContents.on("did-navigate", () => {
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     });
     webContents.on("did-navigate-in-page", () => {
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     });
     webContents.on(
       "did-fail-load",
@@ -704,7 +750,7 @@ export class DesktopBrowserManager {
           return;
         }
 
-        const state = this.states.get(threadId);
+        const state = this.states.get(browserSurfaceKey(surfaceId));
         const tab = state ? this.getTab(state, tabId) : null;
         if (!state || !tab) {
           return;
@@ -715,22 +761,26 @@ export class DesktopBrowserManager {
         tab.isLoading = false;
         tab.lastError = mapBrowserLoadError(errorCode);
         syncThreadLastError(state);
-        this.emitState(threadId);
+        this.emitState(surfaceId);
       },
     );
     webContents.on("render-process-gone", () => {
-      const state = this.states.get(threadId);
+      const state = this.states.get(browserSurfaceKey(surfaceId));
       const tab = state ? this.getTab(state, tabId) : null;
-      this.destroyRuntime(threadId, tabId);
+      this.destroyRuntime(surfaceId, tabId);
       if (state && tab) {
         tab.status = "suspended";
         tab.isLoading = false;
         tab.lastError = "This tab stopped unexpectedly.";
         syncThreadLastError(state);
-        this.emitState(threadId);
+        this.emitState(surfaceId);
       }
-      if (this.activeThreadId === threadId && this.activeBounds) {
-        this.attachActiveTab(threadId, this.activeBounds);
+      if (
+        this.activeSurfaceId &&
+        sameBrowserSurfaceId(this.activeSurfaceId, surfaceId) &&
+        this.activeBounds
+      ) {
+        this.attachActiveTab(surfaceId, this.activeBounds);
       }
     });
 
@@ -738,17 +788,17 @@ export class DesktopBrowserManager {
   }
 
   private async loadTab(
-    threadId: ThreadId,
+    surfaceId: BrowserSurfaceId,
     tabId: string,
     options: { force?: boolean; runtime?: LiveTabRuntime } = {},
   ): Promise<void> {
-    const state = this.ensureWorkspace(threadId);
+    const state = this.ensureWorkspace(surfaceId);
     const tab = this.getTab(state, tabId);
     if (!tab) {
       return;
     }
 
-    const runtime = options.runtime ?? this.ensureLiveRuntime(threadId, tabId);
+    const runtime = options.runtime ?? this.ensureLiveRuntime(surfaceId, tabId);
     const webContents = runtime.view.webContents;
     const nextUrl = normalizeUrlInput(
       options.force === true ? tab.url : (tab.lastCommittedUrl ?? tab.url),
@@ -757,7 +807,7 @@ export class DesktopBrowserManager {
     const shouldLoad = options.force === true || currentUrl !== nextUrl || currentUrl.length === 0;
 
     if (!shouldLoad) {
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
       return;
     }
 
@@ -766,56 +816,60 @@ export class DesktopBrowserManager {
     tab.isLoading = true;
     tab.lastError = null;
     syncThreadLastError(state);
-    this.emitState(threadId);
+    this.emitState(surfaceId);
 
     try {
       await webContents.loadURL(nextUrl);
-      this.syncRuntimeState(threadId, tabId);
+      this.syncRuntimeState(surfaceId, tabId);
     } catch (error) {
       if (isAbortedNavigationError(error)) {
-        this.syncRuntimeState(threadId, tabId);
+        this.syncRuntimeState(surfaceId, tabId);
         return;
       }
 
       tab.isLoading = false;
       tab.lastError = "Couldn't open this page.";
       syncThreadLastError(state);
-      this.emitState(threadId);
+      this.emitState(surfaceId);
     }
   }
 
-  private syncRuntimeState(threadId: ThreadId, tabId: string, faviconUrls?: string[]): void {
-    const state = this.states.get(threadId);
+  private syncRuntimeState(
+    surfaceId: BrowserSurfaceId,
+    tabId: string,
+    faviconUrls?: string[],
+  ): void {
+    const state = this.states.get(browserSurfaceKey(surfaceId));
     const tab = state ? this.getTab(state, tabId) : null;
-    const runtime = this.runtimes.get(buildRuntimeKey(threadId, tabId));
+    const runtime = this.runtimes.get(buildRuntimeKey(surfaceId, tabId));
     if (!state || !tab || !runtime) {
       return;
     }
 
     syncTabStateFromRuntime(state, tab, runtime.view.webContents, faviconUrls);
     syncThreadLastError(state);
-    this.emitState(threadId);
+    this.emitState(surfaceId);
   }
 
-  private destroyThreadRuntimes(threadId: ThreadId): void {
-    const state = this.states.get(threadId);
+  private destroyThreadRuntimes(surfaceId: BrowserSurfaceId): void {
+    const state = this.states.get(browserSurfaceKey(surfaceId));
     if (!state) {
       return;
     }
 
     for (const tab of state.tabs) {
-      this.destroyRuntime(threadId, tab.id);
+      this.destroyRuntime(surfaceId, tab.id);
     }
   }
 
   private destroyAllRuntimes(): void {
     for (const runtime of this.runtimes.values()) {
-      this.destroyRuntime(runtime.threadId, runtime.tabId);
+      this.destroyRuntime(runtime.surfaceId, runtime.tabId);
     }
   }
 
-  private destroyRuntime(threadId: ThreadId, tabId: string): void {
-    const key = buildRuntimeKey(threadId, tabId);
+  private destroyRuntime(surfaceId: BrowserSurfaceId, tabId: string): void {
+    const key = buildRuntimeKey(surfaceId, tabId);
     const runtime = this.runtimes.get(key);
     if (!runtime) {
       return;
@@ -832,19 +886,20 @@ export class DesktopBrowserManager {
     }
   }
 
-  private getOrCreateState(threadId: ThreadId): ThreadBrowserState {
-    const existing = this.states.get(threadId);
+  private getOrCreateState(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
+    const surfaceKey = browserSurfaceKey(surfaceId);
+    const existing = this.states.get(surfaceKey);
     if (existing) {
       return existing;
     }
 
-    const initial = defaultThreadBrowserState(threadId);
-    this.states.set(threadId, initial);
+    const initial = defaultBrowserSurfaceState(surfaceId);
+    this.states.set(surfaceKey, initial);
     return initial;
   }
 
-  private ensureWorkspace(threadId: ThreadId, initialUrl?: string): ThreadBrowserState {
-    const state = this.getOrCreateState(threadId);
+  private ensureWorkspace(surfaceId: BrowserSurfaceId, initialUrl?: string): BrowserSurfaceState {
+    const state = this.getOrCreateState(surfaceId);
     if (state.tabs.length === 0) {
       const initialTab = createBrowserTab(normalizeUrlInput(initialUrl));
       state.tabs = [initialTab];
@@ -858,7 +913,7 @@ export class DesktopBrowserManager {
     return state;
   }
 
-  private resolveTab(state: ThreadBrowserState, tabId?: string): BrowserTabState {
+  private resolveTab(state: BrowserSurfaceState, tabId?: string): BrowserTabState {
     const resolvedTabId = tabId ?? state.activeTabId;
     const existing =
       (resolvedTabId ? state.tabs.find((tab) => tab.id === resolvedTabId) : undefined) ??
@@ -873,19 +928,19 @@ export class DesktopBrowserManager {
     return fallback;
   }
 
-  private getActiveTab(state: ThreadBrowserState): BrowserTabState | null {
+  private getActiveTab(state: BrowserSurfaceState): BrowserTabState | null {
     if (!state.activeTabId) {
       return state.tabs[0] ?? null;
     }
     return state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0] ?? null;
   }
 
-  private getTab(state: ThreadBrowserState, tabId: string): BrowserTabState | null {
+  private getTab(state: BrowserSurfaceState, tabId: string): BrowserTabState | null {
     return state.tabs.find((tab) => tab.id === tabId) ?? null;
   }
 
-  private emitState(threadId: ThreadId): void {
-    const state = cloneThreadState(this.getOrCreateState(threadId));
+  private emitState(surfaceId: BrowserSurfaceId): void {
+    const state = cloneBrowserState(this.getOrCreateState(surfaceId));
     for (const listener of this.listeners) {
       listener(state);
     }
@@ -893,7 +948,7 @@ export class DesktopBrowserManager {
 }
 
 function syncTabStateFromRuntime(
-  state: ThreadBrowserState,
+  state: BrowserSurfaceState,
   tab: BrowserTabState,
   webContents: WebContentsView["webContents"],
   faviconUrls?: string[],
@@ -917,7 +972,7 @@ function syncTabStateFromRuntime(
   syncThreadLastError(state);
 }
 
-function syncThreadLastError(state: ThreadBrowserState): void {
+function syncThreadLastError(state: BrowserSurfaceState): void {
   const activeTab =
     (state.activeTabId ? state.tabs.find((tab) => tab.id === state.activeTabId) : undefined) ??
     state.tabs[0];

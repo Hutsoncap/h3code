@@ -1,6 +1,7 @@
 import {
+  type BrowserSurfaceId,
+  type BrowserSurfaceState,
   type ThreadId,
-  type ThreadBrowserState,
   type GitActionProgressEvent,
   OpenInEditorInput,
   type ServerProviderStatusesUpdatedPayload,
@@ -18,6 +19,11 @@ import {
   WS_METHODS,
   type WsWelcomePayload,
 } from "@t3tools/contracts";
+import {
+  browserSurfaceKey,
+  createThreadBrowserSurfaceId,
+  resolveBrowserSurfaceId,
+} from "@t3tools/shared/browserSurface";
 import { Schema } from "effect";
 
 import { showConfirmDialogFallback } from "./confirmDialogFallback";
@@ -32,17 +38,17 @@ const serverProviderStatusesUpdatedListeners = new Set<
 >();
 const gitActionProgressListeners = new Set<(payload: GitActionProgressEvent) => void>();
 const terminalEventListeners = new Set<(payload: TerminalEvent) => void>();
-const fallbackBrowserStateListeners = new Set<(state: ThreadBrowserState) => void>();
-const fallbackBrowserStates = new Map<ThreadId, ThreadBrowserState>();
+const fallbackBrowserStateListeners = new Set<(state: BrowserSurfaceState) => void>();
+const fallbackBrowserStates = new Map<string, BrowserSurfaceState>();
 const decodeOpenInEditorInput = Schema.decodeUnknownSync(OpenInEditorInput);
 const decodeProjectWriteFileInput = Schema.decodeUnknownSync(ProjectWriteFileInput);
 const decodeConfirmMessage = Schema.decodeUnknownSync(DesktopConfirmMessageSchema);
 const decodeShellOpenExternalInput = Schema.decodeUnknownSync(DesktopShellOpenExternalInputSchema);
 const decodeShellShowInFolderInput = Schema.decodeUnknownSync(DesktopShellShowInFolderInputSchema);
 
-function defaultBrowserState(threadId: ThreadId): ThreadBrowserState {
+function defaultBrowserState(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
   return {
-    threadId,
+    surfaceId,
     open: false,
     activeTabId: null,
     tabs: [],
@@ -76,33 +82,45 @@ function createFallbackTab(url = "about:blank") {
   };
 }
 
-function cloneBrowserState(state: ThreadBrowserState): ThreadBrowserState {
+function cloneBrowserState(state: BrowserSurfaceState): BrowserSurfaceState {
   return {
     ...state,
     tabs: state.tabs.map((tab) => ({ ...tab })),
   };
 }
 
-function getFallbackBrowserState(threadId: ThreadId): ThreadBrowserState {
-  const existing = fallbackBrowserStates.get(threadId);
+function resolveRequiredBrowserSurfaceId(input: {
+  surfaceId?: BrowserSurfaceId | null | undefined;
+  threadId?: ThreadId | null | undefined;
+}): BrowserSurfaceId {
+  const surfaceId = resolveBrowserSurfaceId(input);
+  if (!surfaceId) {
+    throw new Error("Browser surfaceId is required.");
+  }
+  return surfaceId;
+}
+
+function getFallbackBrowserState(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
+  const surfaceKey = browserSurfaceKey(surfaceId);
+  const existing = fallbackBrowserStates.get(surfaceKey);
   if (existing) {
     return existing;
   }
-  const initial = defaultBrowserState(threadId);
-  fallbackBrowserStates.set(threadId, initial);
+  const initial = defaultBrowserState(surfaceId);
+  fallbackBrowserStates.set(surfaceKey, initial);
   return initial;
 }
 
-function emitFallbackBrowserState(threadId: ThreadId): ThreadBrowserState {
-  const state = cloneBrowserState(getFallbackBrowserState(threadId));
+function emitFallbackBrowserState(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
+  const state = cloneBrowserState(getFallbackBrowserState(surfaceId));
   for (const listener of fallbackBrowserStateListeners) {
     listener(state);
   }
   return state;
 }
 
-function ensureFallbackBrowserWorkspace(threadId: ThreadId): ThreadBrowserState {
-  const state = getFallbackBrowserState(threadId);
+function ensureFallbackBrowserWorkspace(surfaceId: BrowserSurfaceId): BrowserSurfaceState {
+  const state = getFallbackBrowserState(surfaceId);
   if (state.tabs.length === 0) {
     const tab = createFallbackTab();
     state.tabs = [tab];
@@ -112,7 +130,7 @@ function ensureFallbackBrowserWorkspace(threadId: ThreadId): ThreadBrowserState 
   return state;
 }
 
-function resolveFallbackBrowserTab(state: ThreadBrowserState, tabId?: string) {
+function resolveFallbackBrowserTab(state: BrowserSurfaceState, tabId?: string) {
   const existing =
     (tabId ? state.tabs.find((tab) => tab.id === tabId) : undefined) ??
     (state.activeTabId ? state.tabs.find((tab) => tab.id === state.activeTabId) : undefined) ??
@@ -385,25 +403,27 @@ export function createWsNativeApi(): NativeApi {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.open(input);
         }
-        const state = ensureFallbackBrowserWorkspace(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = ensureFallbackBrowserWorkspace(surfaceId);
         if (input.initialUrl && state.tabs.length > 0) {
           const activeTab = resolveFallbackBrowserTab(state);
           activeTab.url = input.initialUrl;
           activeTab.title = defaultBrowserTitle(input.initialUrl);
           activeTab.lastCommittedUrl = input.initialUrl;
         }
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       close: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.close(input);
         }
-        const state = getFallbackBrowserState(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = getFallbackBrowserState(surfaceId);
         state.open = false;
         state.activeTabId = null;
         state.tabs = [];
         state.lastError = null;
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       hide: async (input) => {
         if (window.desktopBridge) {
@@ -414,19 +434,20 @@ export function createWsNativeApi(): NativeApi {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.getState(input);
         }
-        return cloneBrowserState(getFallbackBrowserState(input.threadId));
+        return cloneBrowserState(getFallbackBrowserState(resolveRequiredBrowserSurfaceId(input)));
       },
       setPanelBounds: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.setPanelBounds(input);
         }
-        return cloneBrowserState(getFallbackBrowserState(input.threadId));
+        return cloneBrowserState(getFallbackBrowserState(resolveRequiredBrowserSurfaceId(input)));
       },
       navigate: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.navigate(input);
         }
-        const state = ensureFallbackBrowserWorkspace(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = ensureFallbackBrowserWorkspace(surfaceId);
         const tab = resolveFallbackBrowserTab(state, input.tabId);
         tab.url = input.url;
         tab.title = defaultBrowserTitle(input.url);
@@ -434,43 +455,45 @@ export function createWsNativeApi(): NativeApi {
         tab.lastError = null;
         tab.status = "live";
         state.activeTabId = tab.id;
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       reload: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.reload(input);
         }
-        return cloneBrowserState(getFallbackBrowserState(input.threadId));
+        return cloneBrowserState(getFallbackBrowserState(resolveRequiredBrowserSurfaceId(input)));
       },
       goBack: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.goBack(input);
         }
-        return cloneBrowserState(getFallbackBrowserState(input.threadId));
+        return cloneBrowserState(getFallbackBrowserState(resolveRequiredBrowserSurfaceId(input)));
       },
       goForward: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.goForward(input);
         }
-        return cloneBrowserState(getFallbackBrowserState(input.threadId));
+        return cloneBrowserState(getFallbackBrowserState(resolveRequiredBrowserSurfaceId(input)));
       },
       newTab: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.newTab(input);
         }
-        const state = ensureFallbackBrowserWorkspace(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = ensureFallbackBrowserWorkspace(surfaceId);
         const tab = createFallbackTab(input.url);
         state.tabs = [...state.tabs, tab];
         if (input.activate !== false || !state.activeTabId) {
           state.activeTabId = tab.id;
         }
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       closeTab: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.closeTab(input);
         }
-        const state = getFallbackBrowserState(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = getFallbackBrowserState(surfaceId);
         state.tabs = state.tabs.filter((tab) => tab.id !== input.tabId);
         if (state.tabs.length === 0) {
           state.open = false;
@@ -478,16 +501,17 @@ export function createWsNativeApi(): NativeApi {
         } else if (!state.tabs.some((tab) => tab.id === state.activeTabId)) {
           state.activeTabId = state.tabs[0]?.id ?? null;
         }
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       selectTab: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.selectTab(input);
         }
-        const state = ensureFallbackBrowserWorkspace(input.threadId);
+        const surfaceId = resolveRequiredBrowserSurfaceId(input);
+        const state = ensureFallbackBrowserWorkspace(surfaceId);
         const tab = resolveFallbackBrowserTab(state, input.tabId);
         state.activeTabId = tab.id;
-        return emitFallbackBrowserState(input.threadId);
+        return emitFallbackBrowserState(surfaceId);
       },
       openDevTools: async (input) => {
         if (window.desktopBridge) {

@@ -1,8 +1,8 @@
 import {
+  type BrowserSurfaceState,
+  BrowserSurfaceStateSchema,
   ProjectId,
   ThreadId,
-  type ThreadBrowserState,
-  ThreadBrowserStateSchema,
   TurnId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -66,8 +66,8 @@ const BrowserHistoryEntrySchema = Schema.Struct({
 });
 
 export const PersistedBrowserStateSchema = Schema.Struct({
-  threadStatesByThreadId: Schema.Record(Schema.String, ThreadBrowserStateSchema),
-  recentHistoryByThreadId: Schema.Record(Schema.String, Schema.Array(BrowserHistoryEntrySchema)),
+  surfaceStatesById: Schema.Record(Schema.String, BrowserSurfaceStateSchema),
+  recentHistoryBySurfaceId: Schema.Record(Schema.String, Schema.Array(BrowserHistoryEntrySchema)),
 });
 
 export const PersistedWorkspacePageSchema = Schema.Struct({
@@ -208,8 +208,8 @@ export interface PersistedWorkspacePage {
 }
 
 export interface PersistedBrowserState {
-  threadStatesByThreadId: Record<string, ThreadBrowserState>;
-  recentHistoryByThreadId: Record<string, PersistedBrowserHistoryEntry[]>;
+  surfaceStatesById: Record<string, BrowserSurfaceState>;
+  recentHistoryBySurfaceId: Record<string, PersistedBrowserHistoryEntry[]>;
 }
 
 export interface PersistedSidebarSectionsState {
