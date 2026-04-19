@@ -174,6 +174,34 @@ export const DesktopUpdateActionResultSchema = Schema.Struct({
   state: DesktopUpdateStateSchema,
 });
 
+export interface BrowserSurfaceId {
+  kind: "thread" | "standalone" | "webapp";
+  threadId?: ThreadId | undefined;
+  id?: string | undefined;
+  webAppId?: string | undefined;
+}
+
+const ThreadBrowserSurfaceIdSchema = Schema.Struct({
+  kind: Schema.Literal("thread"),
+  threadId: ThreadId,
+});
+
+const StandaloneBrowserSurfaceIdSchema = Schema.Struct({
+  kind: Schema.Literal("standalone"),
+  id: TrimmedNonEmptyString,
+});
+
+const WebAppBrowserSurfaceIdSchema = Schema.Struct({
+  kind: Schema.Literal("webapp"),
+  webAppId: TrimmedNonEmptyString,
+});
+
+export const BrowserSurfaceIdSchema = Schema.Union([
+  ThreadBrowserSurfaceIdSchema,
+  StandaloneBrowserSurfaceIdSchema,
+  WebAppBrowserSurfaceIdSchema,
+]);
+
 export interface BrowserTabState {
   id: string;
   url: string;
@@ -200,73 +228,110 @@ export const BrowserTabStateSchema = Schema.Struct({
   lastError: Schema.NullOr(Schema.String),
 });
 
-export interface ThreadBrowserState {
-  threadId: ThreadId;
+export interface BrowserSurfaceState {
+  surfaceId: BrowserSurfaceId;
   open: boolean;
   activeTabId: string | null;
   tabs: BrowserTabState[];
   lastError: string | null;
 }
 
-export const ThreadBrowserStateSchema = Schema.Struct({
-  threadId: ThreadId,
+export const BrowserSurfaceStateSchema = Schema.Struct({
+  surfaceId: BrowserSurfaceIdSchema,
   open: Schema.Boolean,
   activeTabId: Schema.NullOr(Schema.String),
   tabs: Schema.Array(BrowserTabStateSchema),
   lastError: Schema.NullOr(Schema.String),
 });
 
-export interface BrowserOpenInput {
-  threadId: ThreadId;
+export type ThreadBrowserState = BrowserSurfaceState;
+export const ThreadBrowserStateSchema = BrowserSurfaceStateSchema;
+
+export interface BrowserSurfaceScopedInput {
+  surfaceId?: BrowserSurfaceId | undefined;
+  threadId?: ThreadId | undefined;
+}
+
+const BrowserLegacyThreadInputSchema = Schema.Struct({
+  threadId: ThreadId,
+});
+
+const BrowserSurfaceScopedInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+  }),
+  BrowserLegacyThreadInputSchema,
+]);
+
+export interface BrowserOpenInput extends BrowserSurfaceScopedInput {
   initialUrl?: string | undefined;
 }
 
-export const BrowserOpenInputSchema = Schema.Struct({
-  threadId: ThreadId,
-  initialUrl: Schema.optional(Schema.String),
-});
+export const BrowserOpenInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+    initialUrl: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    initialUrl: Schema.optional(Schema.String),
+  }),
+]);
 
-export interface BrowserThreadInput {
-  threadId: ThreadId;
-}
+export interface BrowserThreadInput extends BrowserSurfaceScopedInput {}
 
-export const BrowserThreadInputSchema = Schema.Struct({
-  threadId: ThreadId,
-});
+export const BrowserThreadInputSchema = BrowserSurfaceScopedInputSchema;
 
-export interface BrowserTabInput {
-  threadId: ThreadId;
+export interface BrowserTabInput extends BrowserSurfaceScopedInput {
   tabId: string;
 }
 
-export const BrowserTabInputSchema = Schema.Struct({
-  ...BrowserThreadInputSchema.fields,
-  tabId: Schema.String,
-});
+export const BrowserTabInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+    tabId: Schema.String,
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    tabId: Schema.String,
+  }),
+]);
 
-export interface BrowserNavigateInput {
-  threadId: ThreadId;
+export interface BrowserNavigateInput extends BrowserSurfaceScopedInput {
   tabId?: string | undefined;
   url: string;
 }
 
-export const BrowserNavigateInputSchema = Schema.Struct({
-  ...BrowserThreadInputSchema.fields,
-  tabId: Schema.optional(Schema.String),
-  url: Schema.String,
-});
+export const BrowserNavigateInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+    tabId: Schema.optional(Schema.String),
+    url: Schema.String,
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    tabId: Schema.optional(Schema.String),
+    url: Schema.String,
+  }),
+]);
 
-export interface BrowserNewTabInput {
-  threadId: ThreadId;
+export interface BrowserNewTabInput extends BrowserSurfaceScopedInput {
   url?: string | undefined;
   activate?: boolean | undefined;
 }
 
-export const BrowserNewTabInputSchema = Schema.Struct({
-  ...BrowserThreadInputSchema.fields,
-  url: Schema.optional(Schema.String),
-  activate: Schema.optional(Schema.Boolean),
-});
+export const BrowserNewTabInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+    url: Schema.optional(Schema.String),
+    activate: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    url: Schema.optional(Schema.String),
+    activate: Schema.optional(Schema.Boolean),
+  }),
+]);
 
 export interface BrowserPanelBounds {
   x: number;
@@ -282,15 +347,20 @@ export const BrowserPanelBoundsSchema = Schema.Struct({
   height: Schema.Number,
 });
 
-export interface BrowserSetPanelBoundsInput {
-  threadId: ThreadId;
+export interface BrowserSetPanelBoundsInput extends BrowserSurfaceScopedInput {
   bounds: BrowserPanelBounds | null;
 }
 
-export const BrowserSetPanelBoundsInputSchema = Schema.Struct({
-  ...BrowserThreadInputSchema.fields,
-  bounds: Schema.NullOr(BrowserPanelBoundsSchema),
-});
+export const BrowserSetPanelBoundsInputSchema = Schema.Union([
+  Schema.Struct({
+    surfaceId: BrowserSurfaceIdSchema,
+    bounds: Schema.NullOr(BrowserPanelBoundsSchema),
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    bounds: Schema.NullOr(BrowserPanelBoundsSchema),
+  }),
+]);
 
 export interface DesktopNotificationInput {
   title: string;
@@ -350,20 +420,20 @@ export interface DesktopBridge {
     ) => Promise<DesktopServerTranscribeVoiceResult>;
   };
   browser: {
-    open: (input: BrowserOpenInput) => Promise<ThreadBrowserState>;
-    close: (input: BrowserThreadInput) => Promise<ThreadBrowserState>;
+    open: (input: BrowserOpenInput) => Promise<BrowserSurfaceState>;
+    close: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     hide: (input: BrowserThreadInput) => Promise<void>;
-    getState: (input: BrowserThreadInput) => Promise<ThreadBrowserState>;
-    setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<ThreadBrowserState>;
-    navigate: (input: BrowserNavigateInput) => Promise<ThreadBrowserState>;
-    reload: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    goBack: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    goForward: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    newTab: (input: BrowserNewTabInput) => Promise<ThreadBrowserState>;
-    closeTab: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    selectTab: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
+    getState: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
+    setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<BrowserSurfaceState>;
+    navigate: (input: BrowserNavigateInput) => Promise<BrowserSurfaceState>;
+    reload: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    goBack: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    goForward: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    newTab: (input: BrowserNewTabInput) => Promise<BrowserSurfaceState>;
+    closeTab: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    selectTab: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
     openDevTools: (input: BrowserTabInput) => Promise<void>;
-    onState: (listener: (state: ThreadBrowserState) => void) => () => void;
+    onState: (listener: (state: BrowserSurfaceState) => void) => () => void;
   };
 }
 
@@ -453,19 +523,19 @@ export interface NativeApi {
     onDomainEvent: (callback: (event: OrchestrationEvent) => void) => () => void;
   };
   browser: {
-    open: (input: BrowserOpenInput) => Promise<ThreadBrowserState>;
-    close: (input: BrowserThreadInput) => Promise<ThreadBrowserState>;
+    open: (input: BrowserOpenInput) => Promise<BrowserSurfaceState>;
+    close: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     hide: (input: BrowserThreadInput) => Promise<void>;
-    getState: (input: BrowserThreadInput) => Promise<ThreadBrowserState>;
-    setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<ThreadBrowserState>;
-    navigate: (input: BrowserNavigateInput) => Promise<ThreadBrowserState>;
-    reload: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    goBack: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    goForward: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    newTab: (input: BrowserNewTabInput) => Promise<ThreadBrowserState>;
-    closeTab: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
-    selectTab: (input: BrowserTabInput) => Promise<ThreadBrowserState>;
+    getState: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
+    setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<BrowserSurfaceState>;
+    navigate: (input: BrowserNavigateInput) => Promise<BrowserSurfaceState>;
+    reload: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    goBack: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    goForward: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    newTab: (input: BrowserNewTabInput) => Promise<BrowserSurfaceState>;
+    closeTab: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
+    selectTab: (input: BrowserTabInput) => Promise<BrowserSurfaceState>;
     openDevTools: (input: BrowserTabInput) => Promise<void>;
-    onState: (callback: (state: ThreadBrowserState) => void) => () => void;
+    onState: (callback: (state: BrowserSurfaceState) => void) => () => void;
   };
 }

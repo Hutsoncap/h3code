@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Schema } from "effect";
 
 import {
+  BrowserSurfaceIdSchema,
   BrowserOpenInputSchema,
   BrowserNavigateInputSchema,
   BrowserNewTabInputSchema,
@@ -22,6 +23,7 @@ import {
   ThreadBrowserStateSchema,
 } from "./ipc";
 
+const decodeBrowserSurfaceId = Schema.decodeUnknownSync(BrowserSurfaceIdSchema);
 const decodeBrowserOpenInput = Schema.decodeUnknownSync(BrowserOpenInputSchema);
 const decodeContextMenuRequest = Schema.decodeUnknownSync(ContextMenuRequestSchema);
 const decodeContextMenuPosition = Schema.decodeUnknownSync(ContextMenuPositionSchema);
@@ -67,12 +69,15 @@ describe("ContextMenuRequestSchema", () => {
 describe("BrowserNavigateInputSchema", () => {
   it("parses browser navigation payloads", () => {
     const parsed = decodeBrowserNavigateInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
       tabId: "tab-1",
       url: "https://example.com",
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser navigate input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.tabId).toBe("tab-1");
     expect(parsed.url).toBe("https://example.com");
   });
@@ -89,7 +94,7 @@ describe("BrowserNavigateInputSchema", () => {
 describe("BrowserSetPanelBoundsInputSchema", () => {
   it("parses nullable panel bounds payloads", () => {
     const parsed = decodeBrowserSetPanelBoundsInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
       bounds: {
         x: 24,
         y: 48,
@@ -98,7 +103,10 @@ describe("BrowserSetPanelBoundsInputSchema", () => {
       },
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser bounds input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.bounds).toEqual({
       x: 24,
       y: 48,
@@ -132,12 +140,15 @@ describe("BrowserSetPanelBoundsInputSchema", () => {
 describe("BrowserNewTabInputSchema", () => {
   it("parses new-tab payloads with optional url and activation state", () => {
     const parsed = decodeBrowserNewTabInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
       url: "https://example.com/docs",
       activate: false,
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser new-tab input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.url).toBe("https://example.com/docs");
     expect(parsed.activate).toBe(false);
   });
@@ -155,19 +166,25 @@ describe("BrowserNewTabInputSchema", () => {
 describe("BrowserOpenInputSchema", () => {
   it("parses browser open payloads with optional initial urls", () => {
     const parsed = decodeBrowserOpenInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
       initialUrl: "https://example.com",
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser open input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.initialUrl).toBe("https://example.com");
   });
 
-  it("parses browser open payloads without an initial url", () => {
+  it("parses legacy browser open payloads without an initial url", () => {
     const parsed = decodeBrowserOpenInput({
       threadId: "thread-1",
     });
 
+    if (!("threadId" in parsed)) {
+      throw new Error("expected legacy thread-scoped browser open input");
+    }
     expect(parsed.threadId).toBe("thread-1");
     expect(parsed.initialUrl).toBeUndefined();
   });
@@ -176,22 +193,45 @@ describe("BrowserOpenInputSchema", () => {
 describe("BrowserThreadInputSchema", () => {
   it("parses thread-scoped browser payloads", () => {
     const parsed = decodeBrowserThreadInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser thread input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
   });
 });
 
 describe("BrowserTabInputSchema", () => {
   it("parses browser tab payloads", () => {
     const parsed = decodeBrowserTabInput({
-      threadId: " thread-1 ",
+      surfaceId: { kind: "thread", threadId: " thread-1 " },
       tabId: " tab-1 ",
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    if (!("surfaceId" in parsed)) {
+      throw new Error("expected surface-scoped browser tab input");
+    }
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.tabId).toBe(" tab-1 ");
+  });
+});
+
+describe("BrowserSurfaceIdSchema", () => {
+  it("parses all supported browser surface kinds", () => {
+    expect(decodeBrowserSurfaceId({ kind: "thread", threadId: " thread-1 " })).toEqual({
+      kind: "thread",
+      threadId: "thread-1",
+    });
+    expect(decodeBrowserSurfaceId({ kind: "standalone", id: " main " })).toEqual({
+      kind: "standalone",
+      id: "main",
+    });
+    expect(decodeBrowserSurfaceId({ kind: "webapp", webAppId: " webapp-1 " })).toEqual({
+      kind: "webapp",
+      webAppId: "webapp-1",
+    });
   });
 });
 
@@ -389,7 +429,7 @@ describe("DesktopServerTranscribeVoiceInputSchema", () => {
 describe("ThreadBrowserStateSchema", () => {
   it("parses browser state snapshots", () => {
     const parsed = decodeThreadBrowserState({
-      threadId: "thread-1",
+      surfaceId: { kind: "thread", threadId: "thread-1" },
       open: true,
       activeTabId: "tab-1",
       tabs: [
@@ -409,7 +449,7 @@ describe("ThreadBrowserStateSchema", () => {
       lastError: null,
     });
 
-    expect(parsed.threadId).toBe("thread-1");
+    expect(parsed.surfaceId).toEqual({ kind: "thread", threadId: "thread-1" });
     expect(parsed.tabs[0]?.status).toBe("live");
   });
 });
