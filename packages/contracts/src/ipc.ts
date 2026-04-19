@@ -423,6 +423,7 @@ export interface DesktopBridge {
     open: (input: BrowserOpenInput) => Promise<BrowserSurfaceState>;
     close: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     hide: (input: BrowserThreadInput) => Promise<void>;
+    clearData: () => Promise<void>;
     getState: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<BrowserSurfaceState>;
     navigate: (input: BrowserNavigateInput) => Promise<BrowserSurfaceState>;
@@ -526,6 +527,7 @@ export interface NativeApi {
     open: (input: BrowserOpenInput) => Promise<BrowserSurfaceState>;
     close: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     hide: (input: BrowserThreadInput) => Promise<void>;
+    clearData: () => Promise<void>;
     getState: (input: BrowserThreadInput) => Promise<BrowserSurfaceState>;
     setPanelBounds: (input: BrowserSetPanelBoundsInput) => Promise<BrowserSurfaceState>;
     navigate: (input: BrowserNavigateInput) => Promise<BrowserSurfaceState>;

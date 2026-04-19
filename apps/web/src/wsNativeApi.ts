@@ -430,6 +430,11 @@ export function createWsNativeApi(): NativeApi {
           await window.desktopBridge.browser.hide(input);
         }
       },
+      clearData: async () => {
+        if (window.desktopBridge) {
+          return window.desktopBridge.browser.clearData();
+        }
+      },
       getState: async (input) => {
         if (window.desktopBridge) {
           return window.desktopBridge.browser.getState(input);

@@ -2,6 +2,12 @@ import { useCallback } from "react";
 import { Option, Schema } from "effect";
 import { TrimmedNonEmptyString, ProviderKind, type ProviderStartOptions } from "@t3tools/contracts";
 import {
+  ABOUT_BLANK_URL,
+  BROWSER_SEARCH_URL_TEMPLATES,
+  normalizeBrowserSearchTemplate,
+  parseBrowserHomepageUrl,
+} from "@t3tools/shared/browserAddress";
+import {
   getDefaultModel,
   getModelOptions,
   normalizeModelSlug,
@@ -30,6 +36,10 @@ export const DEFAULT_SIDEBAR_PROJECT_SORT_ORDER: SidebarProjectSortOrder = "upda
 export const SidebarThreadSortOrder = Schema.Literals(["updated_at", "created_at"]);
 export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 export const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
+export const BrowserSearchEngine = Schema.Literals(["google", "duckduckgo", "bing", "custom"]);
+export type BrowserSearchEngine = typeof BrowserSearchEngine.Type;
+export const DEFAULT_BROWSER_SEARCH_ENGINE: BrowserSearchEngine = "google";
+export const DEFAULT_BROWSER_HOMEPAGE_URL = ABOUT_BLANK_URL;
 type CustomModelSettingsKey = "customCodexModels" | "customClaudeModels";
 export type ProviderCustomModelConfig = {
   provider: ProviderKind;
@@ -66,6 +76,13 @@ export const AppSettingsSchema = Schema.Struct({
   codexBinaryPath: Schema.String.check(Schema.isMaxLength(4096)).pipe(withDefaults(() => "")),
   codexHomePath: Schema.String.check(Schema.isMaxLength(4096)).pipe(withDefaults(() => "")),
   defaultThreadEnvMode: EnvMode.pipe(withDefaults(() => "local" as const satisfies EnvMode)),
+  browserSearchEngine: BrowserSearchEngine.pipe(withDefaults(() => DEFAULT_BROWSER_SEARCH_ENGINE)),
+  browserCustomSearchTemplate: Schema.String.check(Schema.isMaxLength(4096)).pipe(
+    withDefaults(() => ""),
+  ),
+  browserHomepageUrl: Schema.String.check(Schema.isMaxLength(4096)).pipe(
+    withDefaults(() => DEFAULT_BROWSER_HOMEPAGE_URL),
+  ),
   confirmThreadDelete: Schema.Boolean.pipe(withDefaults(() => true)),
   confirmThreadArchive: Schema.Boolean.pipe(withDefaults(() => false)),
   confirmTerminalTabClose: Schema.Boolean.pipe(withDefaults(() => true)),
@@ -157,12 +174,43 @@ export function normalizeChatFontSizePx(value: number | null | undefined): numbe
 function normalizeAppSettings(settings: AppSettings): AppSettings {
   return {
     ...settings,
+    browserCustomSearchTemplate:
+      normalizeBrowserSearchTemplate(settings.browserCustomSearchTemplate) ?? "",
+    browserHomepageUrl:
+      parseBrowserHomepageUrl(settings.browserHomepageUrl) ?? DEFAULT_BROWSER_HOMEPAGE_URL,
     chatCodeFontFamily: trimOrNull(settings.chatCodeFontFamily) ?? "",
     chatFontSizePx: normalizeChatFontSizePx(settings.chatFontSizePx),
     customCodexModels: normalizeCustomModelSlugs(settings.customCodexModels, "codex"),
     customClaudeModels: normalizeCustomModelSlugs(settings.customClaudeModels, "claudeAgent"),
     uiFontFamily: trimOrNull(settings.uiFontFamily) ?? "",
   };
+}
+
+export function parseBrowserSearchTemplateInput(input: string | null | undefined): string | null {
+  return normalizeBrowserSearchTemplate(input);
+}
+
+export function parseBrowserHomepageInput(input: string | null | undefined): string | null {
+  return parseBrowserHomepageUrl(input);
+}
+
+export function resolveBrowserSearchTemplate(
+  settings: Pick<AppSettings, "browserSearchEngine" | "browserCustomSearchTemplate">,
+): string {
+  if (settings.browserSearchEngine === "custom") {
+    return (
+      normalizeBrowserSearchTemplate(settings.browserCustomSearchTemplate) ??
+      BROWSER_SEARCH_URL_TEMPLATES.google
+    );
+  }
+
+  return BROWSER_SEARCH_URL_TEMPLATES[settings.browserSearchEngine];
+}
+
+export function resolveBrowserHomepageUrl(
+  settings: Pick<AppSettings, "browserHomepageUrl">,
+): string {
+  return parseBrowserHomepageUrl(settings.browserHomepageUrl) ?? DEFAULT_BROWSER_HOMEPAGE_URL;
 }
 
 export function getCustomModelsForProvider(

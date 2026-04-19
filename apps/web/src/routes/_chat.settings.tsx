@@ -13,6 +13,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
+  type BrowserSearchEngine,
+  DEFAULT_BROWSER_HOMEPAGE_URL,
   MAX_CHAT_FONT_SIZE_PX,
   getAppModelOptions,
   getCustomModelsForProvider,
@@ -20,7 +22,11 @@ import {
   MIN_CHAT_FONT_SIZE_PX,
   MODEL_PROVIDER_SETTINGS,
   normalizeChatFontSizePx,
+  parseBrowserHomepageInput,
+  parseBrowserSearchTemplateInput,
   patchCustomModels,
+  resolveBrowserHomepageUrl,
+  resolveBrowserSearchTemplate,
   useAppSettings,
 } from "../appSettings";
 import { APP_VERSION } from "../branding";
@@ -108,6 +114,13 @@ const SIDEBAR_THREAD_SORT_ORDER_LABELS = {
   updated_at: "Recently active",
   created_at: "Newest first",
 } as const;
+
+const BROWSER_SEARCH_ENGINE_LABELS: Record<BrowserSearchEngine, string> = {
+  google: "Google",
+  duckduckgo: "DuckDuckGo",
+  bing: "Bing",
+  custom: "Custom template",
+};
 
 type InstallBinarySettingsKey = "claudeBinaryPath" | "codexBinaryPath";
 type InstallProviderSettings = {
@@ -394,6 +407,17 @@ function SettingsRouteView() {
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(
     readBrowserNotificationPermissionState(),
   );
+  const [browserCustomSearchTemplateDraft, setBrowserCustomSearchTemplateDraft] = useState(
+    settings.browserCustomSearchTemplate,
+  );
+  const [browserCustomSearchTemplateError, setBrowserCustomSearchTemplateError] = useState<
+    string | null
+  >(null);
+  const [browserHomepageDraft, setBrowserHomepageDraft] = useState(
+    settings.browserHomepageUrl === DEFAULT_BROWSER_HOMEPAGE_URL ? "" : settings.browserHomepageUrl,
+  );
+  const [browserHomepageError, setBrowserHomepageError] = useState<string | null>(null);
+  const [isClearingBrowserData, setIsClearingBrowserData] = useState(false);
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
@@ -473,9 +497,16 @@ function SettingsRouteView() {
     lightThemeId !== defaultThemePreference.lightThemeId ||
     darkThemeId !== defaultThemePreference.darkThemeId ||
     (mode === "manual" && themeId !== defaultThemePreference.themeId);
+  const resolvedBrowserSearchTemplate = resolveBrowserSearchTemplate(settings);
+  const resolvedBrowserHomepageUrl = resolveBrowserHomepageUrl(settings);
 
   const changedSettingLabels = [
     ...(isThemeDirty ? ["Theme"] : []),
+    ...(settings.browserSearchEngine !== defaults.browserSearchEngine ||
+    settings.browserCustomSearchTemplate !== defaults.browserCustomSearchTemplate
+      ? ["Browser search"]
+      : []),
+    ...(settings.browserHomepageUrl !== defaults.browserHomepageUrl ? ["Browser homepage"] : []),
     ...(settings.defaultProvider !== defaults.defaultProvider ? ["Default provider"] : []),
     ...(settings.defaultThreadEnvMode !== defaults.defaultThreadEnvMode ? ["New thread mode"] : []),
     ...(settings.sidebarSide !== defaults.sidebarSide ? ["Sidebar position"] : []),
@@ -542,6 +573,18 @@ function SettingsRouteView() {
   useEffect(() => {
     setBrowserNotificationPermission(readBrowserNotificationPermissionState());
   }, []);
+
+  useEffect(() => {
+    setBrowserCustomSearchTemplateDraft(settings.browserCustomSearchTemplate);
+  }, [settings.browserCustomSearchTemplate]);
+
+  useEffect(() => {
+    setBrowserHomepageDraft(
+      settings.browserHomepageUrl === DEFAULT_BROWSER_HOMEPAGE_URL
+        ? ""
+        : settings.browserHomepageUrl,
+    );
+  }, [settings.browserHomepageUrl]);
 
   const addCustomModel = useCallback(
     (provider: ProviderKind) => {
@@ -630,6 +673,10 @@ function SettingsRouteView() {
       claudeAgent: "",
     });
     setCustomModelErrorByProvider({});
+    setBrowserCustomSearchTemplateDraft("");
+    setBrowserCustomSearchTemplateError(null);
+    setBrowserHomepageDraft("");
+    setBrowserHomepageError(null);
     setShowAllCustomModels(false);
     setShowRecoveryTools(false);
     setOpenKeybindingsError(null);
@@ -701,6 +748,77 @@ function SettingsRouteView() {
       description: "Your browser should show the notification.",
     });
   }
+
+  const commitBrowserSearchTemplate = useCallback(() => {
+    if (settings.browserSearchEngine !== "custom") {
+      updateSettings({ browserCustomSearchTemplate: "" });
+      setBrowserCustomSearchTemplateDraft("");
+      setBrowserCustomSearchTemplateError(null);
+      return;
+    }
+
+    const normalizedTemplate = parseBrowserSearchTemplateInput(browserCustomSearchTemplateDraft);
+    if (!normalizedTemplate) {
+      setBrowserCustomSearchTemplateError(
+        "Use a valid http(s) URL that includes the {query} placeholder.",
+      );
+      return;
+    }
+
+    updateSettings({ browserCustomSearchTemplate: normalizedTemplate });
+    setBrowserCustomSearchTemplateDraft(normalizedTemplate);
+    setBrowserCustomSearchTemplateError(null);
+  }, [browserCustomSearchTemplateDraft, settings.browserSearchEngine, updateSettings]);
+
+  const commitBrowserHomepage = useCallback(() => {
+    const normalizedHomepage = parseBrowserHomepageInput(browserHomepageDraft);
+    if (!normalizedHomepage) {
+      setBrowserHomepageError("Enter a valid http(s) URL or leave it blank for about:blank.");
+      return;
+    }
+
+    updateSettings({ browserHomepageUrl: normalizedHomepage });
+    setBrowserHomepageDraft(
+      normalizedHomepage === DEFAULT_BROWSER_HOMEPAGE_URL ? "" : normalizedHomepage,
+    );
+    setBrowserHomepageError(null);
+  }, [browserHomepageDraft, updateSettings]);
+
+  const clearBrowserData = useCallback(async () => {
+    if (!window.desktopBridge || isClearingBrowserData) {
+      return;
+    }
+
+    const api = readNativeApi() ?? ensureNativeApi();
+    const confirmed = await api.dialogs.confirm(
+      [
+        "Clear browsing data?",
+        "This removes cookies, local storage, and other persisted website data for the in-app browser.",
+      ].join("\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsClearingBrowserData(true);
+    try {
+      await api.browser.clearData();
+      toastManager.add({
+        type: "success",
+        title: "Browsing data cleared",
+        description: "Website cookies and stored browser session data were removed.",
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not clear browsing data",
+        description:
+          error instanceof Error ? error.message : "Unable to clear the browser session data.",
+      });
+    } finally {
+      setIsClearingBrowserData(false);
+    }
+  }, [isClearingBrowserData]);
 
   // Rebuild the local project indexes after an older install leaves them out of sync.
   const repairLocalState = useCallback(async () => {
@@ -1561,6 +1679,189 @@ function SettingsRouteView() {
     </div>
   );
 
+  const renderBrowserPanel = () => (
+    <div className="space-y-6">
+      <SettingsSection title="Search and startup">
+        <div className="space-y-2">
+          <SettingsRow
+            title="Default search engine"
+            description="Choose how the browser resolves free-form address bar queries."
+            status={
+              settings.browserSearchEngine === "custom"
+                ? browserCustomSearchTemplateError
+                  ? browserCustomSearchTemplateError
+                  : `Custom template: ${resolvedBrowserSearchTemplate}`
+                : `Current template: ${resolvedBrowserSearchTemplate}`
+            }
+            resetAction={
+              settings.browserSearchEngine !== defaults.browserSearchEngine ||
+              settings.browserCustomSearchTemplate !== defaults.browserCustomSearchTemplate ? (
+                <SettingResetButton
+                  label="browser search"
+                  onClick={() => {
+                    updateSettings({
+                      browserSearchEngine: defaults.browserSearchEngine,
+                      browserCustomSearchTemplate: defaults.browserCustomSearchTemplate,
+                    });
+                    setBrowserCustomSearchTemplateDraft(defaults.browserCustomSearchTemplate);
+                    setBrowserCustomSearchTemplateError(null);
+                  }}
+                />
+              ) : null
+            }
+            control={
+              <Select
+                value={settings.browserSearchEngine}
+                onValueChange={(value) => {
+                  if (
+                    value !== "google" &&
+                    value !== "duckduckgo" &&
+                    value !== "bing" &&
+                    value !== "custom"
+                  ) {
+                    return;
+                  }
+                  updateSettings({ browserSearchEngine: value });
+                  setBrowserCustomSearchTemplateError(null);
+                }}
+              >
+                <SelectTrigger
+                  className="w-full sm:w-52"
+                  aria-label="Default browser search engine"
+                >
+                  <SelectValue>
+                    {BROWSER_SEARCH_ENGINE_LABELS[settings.browserSearchEngine]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="google">
+                    Google
+                  </SelectItem>
+                  <SelectItem hideIndicator value="duckduckgo">
+                    DuckDuckGo
+                  </SelectItem>
+                  <SelectItem hideIndicator value="bing">
+                    Bing
+                  </SelectItem>
+                  <SelectItem hideIndicator value="custom">
+                    Custom template
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            }
+          >
+            {settings.browserSearchEngine === "custom" ? (
+              <div className="mt-3 space-y-2">
+                <Input
+                  value={browserCustomSearchTemplateDraft}
+                  onChange={(event) => {
+                    setBrowserCustomSearchTemplateDraft(event.target.value);
+                    setBrowserCustomSearchTemplateError(null);
+                  }}
+                  onBlur={commitBrowserSearchTemplate}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
+                    event.preventDefault();
+                    commitBrowserSearchTemplate();
+                  }}
+                  placeholder="https://example.com/search?q={query}"
+                  aria-label="Custom browser search template"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Include <code>{"{query}"}</code> where the encoded search term should go.
+                </p>
+              </div>
+            ) : null}
+          </SettingsRow>
+
+          <SettingsRow
+            title="Homepage"
+            description="Set the page used for fresh browser surfaces and new tabs."
+            status={
+              browserHomepageError
+                ? browserHomepageError
+                : resolvedBrowserHomepageUrl === DEFAULT_BROWSER_HOMEPAGE_URL
+                  ? "New tabs open to about:blank."
+                  : `Current homepage: ${resolvedBrowserHomepageUrl}`
+            }
+            resetAction={
+              settings.browserHomepageUrl !== defaults.browserHomepageUrl ? (
+                <SettingResetButton
+                  label="browser homepage"
+                  onClick={() => {
+                    updateSettings({ browserHomepageUrl: defaults.browserHomepageUrl });
+                    setBrowserHomepageDraft("");
+                    setBrowserHomepageError(null);
+                  }}
+                />
+              ) : null
+            }
+          >
+            <div className="mt-3 space-y-2">
+              <Input
+                value={browserHomepageDraft}
+                onChange={(event) => {
+                  setBrowserHomepageDraft(event.target.value);
+                  setBrowserHomepageError(null);
+                }}
+                onBlur={commitBrowserHomepage}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") {
+                    return;
+                  }
+                  event.preventDefault();
+                  commitBrowserHomepage();
+                }}
+                placeholder="about:blank"
+                aria-label="Browser homepage"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Leave blank to use <code>about:blank</code>, or enter an HTTP(S) URL.
+              </p>
+            </div>
+          </SettingsRow>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Data and extensions">
+        <div className="space-y-2">
+          <SettingsRow
+            title="Clear browsing data"
+            description="Remove cookies, local storage, and other persisted site data for the embedded browser."
+            status={
+              window.desktopBridge
+                ? "Desktop only action."
+                : "Desktop only action unavailable in the browser preview."
+            }
+            control={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!window.desktopBridge || isClearingBrowserData}
+                onClick={() => void clearBrowserData()}
+              >
+                {isClearingBrowserData ? "Clearing..." : "Clear data"}
+              </Button>
+            }
+          />
+
+          <SettingsRow
+            title="Extensions"
+            description="Extension support is planned, but the browser currently ships without a Web Store-style install surface."
+            status="Coming soon: curated extension support."
+            control={
+              <Button size="sm" variant="outline" disabled>
+                Coming soon
+              </Button>
+            }
+          />
+        </div>
+      </SettingsSection>
+    </div>
+  );
+
   const renderWorktreesPanel = () => (
     <div className="space-y-6">
       <SettingsSection title="Managed worktrees">
@@ -2182,6 +2483,8 @@ function SettingsRouteView() {
         return renderNotificationsPanel();
       case "behavior":
         return renderBehaviorPanel();
+      case "browser":
+        return renderBrowserPanel();
       case "worktrees":
         return renderWorktreesPanel();
       case "archived":

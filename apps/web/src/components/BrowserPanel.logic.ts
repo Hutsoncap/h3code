@@ -5,12 +5,15 @@
 // Depends on: browser tab metadata and thread-local browser history
 
 import type { BrowserTabState } from "@t3tools/contracts";
+import {
+  browserAddressDisplayValue as formatBrowserAddressDisplayValue,
+  normalizeBrowserAddressInput as normalizeBrowserAddressTarget,
+  resolveBrowserNavigationTarget,
+} from "@t3tools/shared/browserAddress";
 import { trimOrNull } from "@t3tools/shared/model";
 import type { BrowserHistoryEntry } from "../browserStateStore";
 
-const ABOUT_BLANK_URL = "about:blank";
 const BROWSER_SUGGESTION_LIMIT = 6;
-const SEARCH_URL_PREFIX = "https://www.google.com/search?q=";
 
 interface ResolveBrowserAddressSyncInput {
   activeTabId: string | null;
@@ -43,6 +46,7 @@ export interface BrowserAddressSuggestion {
 
 interface BuildBrowserAddressSuggestionsInput {
   query: string;
+  searchTemplate?: string;
   activeTabId: string | null;
   tabs: Array<Pick<BrowserTabState, "id" | "title" | "url" | "faviconUrl" | "lastCommittedUrl">>;
   recentHistory: BrowserHistoryEntry[];
@@ -57,58 +61,15 @@ export interface BrowserChromeStatus {
 export function browserAddressDisplayValue(
   tab: Pick<BrowserTabState, "url"> | null | undefined,
 ): string {
-  const nextUrl = trimOrNull(tab?.url) ?? "";
-  return nextUrl === ABOUT_BLANK_URL ? "" : nextUrl;
-}
-
-function looksLikeUrlInput(value: string): boolean {
-  return (
-    value.includes(".") ||
-    value.startsWith("localhost") ||
-    value.startsWith("127.0.0.1") ||
-    value.startsWith("0.0.0.0") ||
-    value.startsWith("[::1]")
-  );
+  return formatBrowserAddressDisplayValue(tab?.url);
 }
 
 // Normalizes typed text into the url or search target we should submit.
-export function normalizeBrowserAddressInput(input: string): string {
-  const trimmed = trimOrNull(input);
-  if (trimmed === null) {
-    return ABOUT_BLANK_URL;
-  }
-
-  try {
-    const withScheme = new URL(trimmed);
-    if (withScheme.protocol === "http:" || withScheme.protocol === "https:") {
-      return withScheme.toString();
-    }
-    if (withScheme.protocol === "about:") {
-      return withScheme.toString();
-    }
-  } catch {
-    // Fall through to browser-style heuristics below.
-  }
-
-  if (trimmed.includes(" ")) {
-    return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
-  }
-
-  if (looksLikeUrlInput(trimmed)) {
-    const prefersHttp =
-      trimmed.startsWith("localhost") ||
-      trimmed.startsWith("127.0.0.1") ||
-      trimmed.startsWith("0.0.0.0") ||
-      trimmed.startsWith("[::1]");
-    const scheme = prefersHttp ? "http" : "https";
-    try {
-      return new URL(`${scheme}://${trimmed}`).toString();
-    } catch {
-      return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
-    }
-  }
-
-  return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
+export function normalizeBrowserAddressInput(
+  input: string,
+  options?: { searchTemplate?: string },
+): string {
+  return normalizeBrowserAddressTarget(input, options);
 }
 
 function normalizeQuery(value: string): string {
@@ -147,18 +108,21 @@ export function buildBrowserAddressSuggestions(
   const query = normalizeQuery(input.query);
   const suggestions: BrowserAddressSuggestion[] = [];
   const seenUrls = new Set<string>();
-  const directTarget = normalizeBrowserAddressInput(input.query);
+  const directTarget = resolveBrowserNavigationTarget(input.query, {
+    searchTemplate: input.searchTemplate,
+  });
 
   if (query.length > 0) {
-    const directTitle = directTarget.startsWith(SEARCH_URL_PREFIX)
-      ? `Search the web for "${input.query.trim()}"`
-      : `Open ${directTarget}`;
+    const directTitle =
+      directTarget.kind === "search"
+        ? `Search the web for "${input.query.trim()}"`
+        : `Open ${directTarget.url}`;
     pushSuggestion(suggestions, seenUrls, {
-      id: `direct:${directTarget}`,
+      id: `direct:${directTarget.url}`,
       kind: "navigate",
       title: directTitle,
-      detail: directTarget,
-      url: directTarget,
+      detail: directTarget.url,
+      url: directTarget.url,
     });
   }
 

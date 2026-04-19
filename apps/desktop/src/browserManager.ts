@@ -14,17 +14,19 @@ import type {
   BrowserThreadInput,
 } from "@t3tools/contracts";
 import {
+  ABOUT_BLANK_URL,
+  normalizeBrowserAddressInput as normalizeBrowserAddressTarget,
+} from "@t3tools/shared/browserAddress";
+import {
   browserSurfaceKey,
   resolveBrowserSurfaceId,
   sameBrowserSurfaceId,
 } from "@t3tools/shared/browserSurface";
 
-const ABOUT_BLANK_URL = "about:blank";
 const BROWSER_SESSION_PARTITION = "persist:h3code-browser";
 const LEGACY_BROWSER_SESSION_PARTITION = "persist:t3code-browser";
 const BROWSER_THREAD_SUSPEND_DELAY_MS = 30_000;
 const BROWSER_ERROR_ABORTED = -3;
-const SEARCH_URL_PREFIX = "https://www.google.com/search?q=";
 
 type BrowserStateListener = (state: BrowserSurfaceState) => void;
 
@@ -105,53 +107,8 @@ function normalizeBounds(bounds: BrowserPanelBounds | null): BrowserPanelBounds 
   };
 }
 
-function looksLikeUrlInput(value: string): boolean {
-  return (
-    value.includes(".") ||
-    value.startsWith("localhost") ||
-    value.startsWith("127.0.0.1") ||
-    value.startsWith("0.0.0.0") ||
-    value.startsWith("[::1]")
-  );
-}
-
 function normalizeUrlInput(input: string | undefined): string {
-  const trimmed = input?.trim() ?? "";
-  if (trimmed.length === 0) {
-    return ABOUT_BLANK_URL;
-  }
-
-  try {
-    const withScheme = new URL(trimmed);
-    if (withScheme.protocol === "http:" || withScheme.protocol === "https:") {
-      return withScheme.toString();
-    }
-    if (withScheme.protocol === "about:") {
-      return withScheme.toString();
-    }
-  } catch {
-    // Fall through to heuristics below.
-  }
-
-  if (trimmed.includes(" ")) {
-    return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
-  }
-
-  if (looksLikeUrlInput(trimmed)) {
-    const prefersHttp =
-      trimmed.startsWith("localhost") ||
-      trimmed.startsWith("127.0.0.1") ||
-      trimmed.startsWith("0.0.0.0") ||
-      trimmed.startsWith("[::1]");
-    const scheme = prefersHttp ? "http" : "https";
-    try {
-      return new URL(`${scheme}://${trimmed}`).toString();
-    } catch {
-      return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
-    }
-  }
-
-  return `${SEARCH_URL_PREFIX}${encodeURIComponent(trimmed)}`;
+  return normalizeBrowserAddressTarget(input ?? "");
 }
 
 function isAbortedNavigationError(error: unknown): boolean {
@@ -308,6 +265,14 @@ export class DesktopBrowserManager {
 
     this.emitState(surfaceId);
     return cloneBrowserState(state);
+  }
+
+  async clearData(): Promise<void> {
+    for (const partition of [BROWSER_SESSION_PARTITION, LEGACY_BROWSER_SESSION_PARTITION]) {
+      const browserSession = session.fromPartition(partition);
+      await browserSession.clearStorageData();
+      await browserSession.flushStorageData();
+    }
   }
 
   close(input: BrowserThreadInput): BrowserSurfaceState {

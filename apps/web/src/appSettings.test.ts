@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppSettingsSchema,
+  DEFAULT_BROWSER_HOMEPAGE_URL,
+  DEFAULT_BROWSER_SEARCH_ENGINE,
   DEFAULT_CHAT_FONT_SIZE_PX,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
@@ -18,8 +20,12 @@ import {
   MODEL_PROVIDER_SETTINGS,
   normalizeChatFontSizePx,
   normalizeCustomModelSlugs,
+  parseBrowserHomepageInput,
+  parseBrowserSearchTemplateInput,
   patchCustomModels,
+  resolveBrowserHomepageUrl,
   resolveAppModelSelection,
+  resolveBrowserSearchTemplate,
 } from "./appSettings";
 
 const ORIGINAL_WINDOW = globalThis.window;
@@ -181,6 +187,16 @@ describe("resolveAppModelSelection", () => {
 describe("timestamp format defaults", () => {
   it("defaults timestamp format to locale", () => {
     expect(DEFAULT_TIMESTAMP_FORMAT).toBe("locale");
+  });
+});
+
+describe("browser defaults", () => {
+  it("defaults browser search to Google", () => {
+    expect(DEFAULT_BROWSER_SEARCH_ENGINE).toBe("google");
+  });
+
+  it("defaults the homepage to about:blank", () => {
+    expect(DEFAULT_BROWSER_HOMEPAGE_URL).toBe("about:blank");
   });
 });
 
@@ -378,6 +394,45 @@ describe("provider-indexed custom model settings", () => {
   });
 });
 
+describe("browser settings helpers", () => {
+  it("parses valid custom browser search templates", () => {
+    expect(parseBrowserSearchTemplateInput("https://example.com/?q={query}")).toBe(
+      "https://example.com/?q={query}",
+    );
+  });
+
+  it("rejects invalid custom browser search templates", () => {
+    expect(parseBrowserSearchTemplateInput("https://example.com/search")).toBeNull();
+  });
+
+  it("resolves the selected preset browser search template", () => {
+    expect(
+      resolveBrowserSearchTemplate({
+        browserSearchEngine: "duckduckgo",
+        browserCustomSearchTemplate: "",
+      }),
+    ).toBe("https://duckduckgo.com/?q={query}");
+  });
+
+  it("falls back to Google when the custom browser search template is invalid", () => {
+    expect(
+      resolveBrowserSearchTemplate({
+        browserSearchEngine: "custom",
+        browserCustomSearchTemplate: "https://example.com/search",
+      }),
+    ).toBe("https://www.google.com/search?q={query}");
+  });
+
+  it("normalizes homepage inputs and falls back to about:blank", () => {
+    expect(parseBrowserHomepageInput("example.com")).toBe("https://example.com/");
+    expect(
+      resolveBrowserHomepageUrl({
+        browserHomepageUrl: "not a real homepage",
+      }),
+    ).toBe("about:blank");
+  });
+});
+
 describe("AppSettingsSchema", () => {
   it("fills decoding defaults for persisted settings that predate newer keys", () => {
     const decode = Schema.decodeSync(Schema.fromJsonString(AppSettingsSchema));
@@ -391,6 +446,9 @@ describe("AppSettingsSchema", () => {
       ),
     ).toMatchObject({
       claudeBinaryPath: "",
+      browserSearchEngine: DEFAULT_BROWSER_SEARCH_ENGINE,
+      browserCustomSearchTemplate: "",
+      browserHomepageUrl: DEFAULT_BROWSER_HOMEPAGE_URL,
       chatFontSizePx: DEFAULT_CHAT_FONT_SIZE_PX,
       codexBinaryPath: "/usr/local/bin/codex",
       codexHomePath: "",
