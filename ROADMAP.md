@@ -117,13 +117,13 @@ Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7
 
 ## Phase 1 — Foundations: sidebar, theme, browser surface
 
-| ID        | Title                                                                                    | Status                                                                                                                           |
-| --------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **v1a**   | Sidebar unify + theme catalog                                                            | ✅ merged on `main`: [#226](https://github.com/Hutsoncap/h3code/pull/226) + [#227](https://github.com/Hutsoncap/h3code/pull/227) |
-| **v1b**   | Pinned section + generalized pin store                                                   | ✅ merged on `main`: [#228](https://github.com/Hutsoncap/h3code/pull/228)                                                        |
-| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | ✅ merged on `main`: [#229](https://github.com/Hutsoncap/h3code/pull/229)                                                        |
-| **v1c.2** | Standalone browser route + sidebar Browser section                                       | ✅ merged on `main`: [#230](https://github.com/Hutsoncap/h3code/pull/230)                                                        |
-| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-web-apps-browser-settings` (`feat/v1c3-web-apps-browser-settings`) |
+| ID        | Title                                                                                    | Status                                                                                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1a**   | Sidebar unify + theme catalog                                                            | ✅ merged on `main`: [#226](https://github.com/Hutsoncap/h3code/pull/226) + [#227](https://github.com/Hutsoncap/h3code/pull/227)                              |
+| **v1b**   | Pinned section + generalized pin store                                                   | ✅ merged on `main`: [#228](https://github.com/Hutsoncap/h3code/pull/228)                                                                                     |
+| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | ✅ merged on `main`: [#229](https://github.com/Hutsoncap/h3code/pull/229)                                                                                     |
+| **v1c.2** | Standalone browser route + sidebar Browser section                                       | ✅ merged on `main`: [#230](https://github.com/Hutsoncap/h3code/pull/230)                                                                                     |
+| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 🚧 merged slice: [#231](https://github.com/Hutsoncap/h3code/pull/231) + worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-browser-settings-closeout` |
 
 ### v1a — Sidebar unify + theme catalog
 
@@ -237,9 +237,11 @@ Merged slice: [#230](https://github.com/Hutsoncap/h3code/pull/230) landed the st
 
 _Depends on v1c.2._
 
-Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-web-apps-browser-settings` on `feat/v1c3-web-apps-browser-settings`.
+Merged slice: [#231](https://github.com/Hutsoncap/h3code/pull/231) landed the web-app store, install flow, standalone `/webapp/$id` surface, and sidebar/pinned integration on `main`.
 
-Current slice publishes the web-app store, install flow, standalone `/webapp/$id` surface, and sidebar/pinned integration first. The Browser settings page remains the closeout portion of `v1c.3`.
+Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-browser-settings-closeout` on `feat/v1c3-browser-settings-closeout`.
+
+Current closeout slice finishes the Browser settings portion of `v1c.3`.
 
 - New `apps/web/src/webAppsStore.ts` — persist `{ id, name, url, faviconUrl, createdAt }[]` at `h3code:web-apps:v1` with legacy `t3code:` migration. Actions: `installFromTab`, `addWebApp`, `renameWebApp`, `deleteWebApp`, `reorderWebApp`.
 - Add route `/webapp/$webAppId` rendering `<BrowserPanel surfaceId={{ kind: "webapp", webAppId }} />`.

@@ -37,6 +37,11 @@ import {
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import {
+  resolveBrowserHomepageUrl,
+  resolveBrowserSearchTemplate,
+  useAppSettings,
+} from "../appSettings";
 import { normalizeWebAppUrl, useWebAppsStore } from "../webAppsStore";
 
 interface BrowserPanelProps {
@@ -77,6 +82,7 @@ export function BrowserPanel({
   const recentHistory = useStore(useBrowserStateStore, selectBrowserSurfaceHistory(surfaceId));
   const upsertSurfaceState = useBrowserStateStore((store) => store.upsertSurfaceState);
   const installFromTab = useWebAppsStore((store) => store.installFromTab);
+  const { settings: appSettings } = useAppSettings();
   const addressInputRef = useRef<HTMLInputElement>(null);
   const browserViewportRef = useRef<HTMLDivElement>(null);
   const addressDraftsByTabIdRef = useRef(new Map<string, string>());
@@ -97,6 +103,9 @@ export function BrowserPanel({
   const loading = activeTab?.isLoading ?? false;
   const installableUrl = normalizeWebAppUrl(activeTab?.lastCommittedUrl ?? activeTab?.url);
   const canInstallCurrentTab = surfaceId.kind !== "webapp" && installableUrl !== null;
+  const browserSearchTemplate = resolveBrowserSearchTemplate(appSettings);
+  const browserHomepageUrl = resolveBrowserHomepageUrl(appSettings);
+  const initialBrowserUrl = initialUrl ?? browserHomepageUrl;
   const activeTabStatus = activeTab?.status ?? "suspended";
   const browserChromeStatus = resolveBrowserChromeStatus({
     localError,
@@ -107,6 +116,7 @@ export function BrowserPanel({
   });
   const browserAddressSuggestions = buildBrowserAddressSuggestions({
     query: addressValue,
+    searchTemplate: browserSearchTemplate,
     activeTabId: activeTab?.id ?? null,
     tabs: browserSurfaceState?.tabs ?? [],
     recentHistory,
@@ -147,7 +157,7 @@ export function BrowserPanel({
     void runBrowserAction(() =>
       api.browser.open({
         surfaceId,
-        ...(initialUrl ? { initialUrl } : {}),
+        ...(initialBrowserUrl ? { initialUrl: initialBrowserUrl } : {}),
       }),
     ).then((state) => {
       if (cancelled) {
@@ -165,7 +175,7 @@ export function BrowserPanel({
       cancelled = true;
       void api.browser.hide({ surfaceId });
     };
-  }, [api, initialUrl, runBrowserAction, surfaceId, upsertSurfaceState]);
+  }, [api, initialBrowserUrl, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   useEffect(() => {
     const activeTabId = activeTab?.id ?? null;
@@ -314,7 +324,9 @@ export function BrowserPanel({
     }
     isAddressEditingRef.current = false;
     setIsAddressFocused(false);
-    const normalizedAddress = normalizeBrowserAddressInput(addressValue);
+    const normalizedAddress = normalizeBrowserAddressInput(addressValue, {
+      searchTemplate: browserSearchTemplate,
+    });
     addressDraftsByTabIdRef.current.set(activeTab.id, normalizedAddress);
     setAddressValue(normalizedAddress);
     void runBrowserAction(() =>
@@ -324,7 +336,15 @@ export function BrowserPanel({
         upsertSurfaceState(state);
       }
     });
-  }, [activeTab, addressValue, api, runBrowserAction, surfaceId, upsertSurfaceState]);
+  }, [
+    activeTab,
+    addressValue,
+    api,
+    browserSearchTemplate,
+    runBrowserAction,
+    surfaceId,
+    upsertSurfaceState,
+  ]);
 
   const onChooseSuggestion = useCallback(
     (suggestion: BrowserAddressSuggestion) => {
@@ -373,7 +393,9 @@ export function BrowserPanel({
     if (!api) {
       return;
     }
-    void runBrowserAction(() => api.browser.newTab({ surfaceId, activate: true })).then((state) => {
+    void runBrowserAction(() =>
+      api.browser.newTab({ surfaceId, url: browserHomepageUrl, activate: true }),
+    ).then((state) => {
       if (state) {
         upsertSurfaceState(state);
       }
@@ -382,7 +404,7 @@ export function BrowserPanel({
         addressInputRef.current?.select();
       });
     });
-  }, [api, runBrowserAction, surfaceId, upsertSurfaceState]);
+  }, [api, browserHomepageUrl, runBrowserAction, surfaceId, upsertSurfaceState]);
 
   const onCloseTab = useCallback(
     (tabId: string) => {

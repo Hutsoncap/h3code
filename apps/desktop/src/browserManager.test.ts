@@ -103,6 +103,7 @@ function createSession(cookiesToRead: readonly CookieLike[]) {
       get: vi.fn(async () => cookiesToRead),
       set: vi.fn(async () => undefined),
     },
+    clearStorageData: vi.fn(async () => undefined),
     flushStorageData: vi.fn(async () => undefined),
   };
 }
@@ -236,6 +237,36 @@ describe("migrateLegacyBrowserSessionPartition", () => {
 
     expect(nextSession.cookies.set).not.toHaveBeenCalled();
     expect(nextSession.flushStorageData).not.toHaveBeenCalled();
+  });
+});
+
+describe("DesktopBrowserManager.clearData", () => {
+  beforeEach(() => {
+    fromPartition.mockReset();
+    resetElectronMocks();
+  });
+
+  it("clears both the h3code and legacy browser session partitions", async () => {
+    const nextSession = createSession([]);
+    const legacySession = createSession([]);
+
+    fromPartition.mockImplementation((partition: string) => {
+      if (partition === "persist:h3code-browser") {
+        return nextSession;
+      }
+      if (partition === "persist:t3code-browser") {
+        return legacySession;
+      }
+      throw new Error(`unexpected partition ${partition}`);
+    });
+
+    const manager = new DesktopBrowserManager();
+    await manager.clearData();
+
+    expect(nextSession.clearStorageData).toHaveBeenCalledTimes(1);
+    expect(nextSession.flushStorageData).toHaveBeenCalledTimes(1);
+    expect(legacySession.clearStorageData).toHaveBeenCalledTimes(1);
+    expect(legacySession.flushStorageData).toHaveBeenCalledTimes(1);
   });
 });
 

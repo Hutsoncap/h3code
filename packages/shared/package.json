@@ -60,6 +60,10 @@
       "types": "./src/browserSurface.ts",
       "import": "./src/browserSurface.ts"
     },
+    "./browserAddress": {
+      "types": "./src/browserAddress.ts",
+      "import": "./src/browserAddress.ts"
+    },
     "./subagents": {
       "types": "./src/subagents.ts",
       "import": "./src/subagents.ts"

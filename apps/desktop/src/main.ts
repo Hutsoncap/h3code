@@ -73,6 +73,7 @@ const BROWSER_STATE_CHANNEL = "desktop:browser-state";
 const BROWSER_OPEN_CHANNEL = "desktop:browser-open";
 const BROWSER_CLOSE_CHANNEL = "desktop:browser-close";
 const BROWSER_HIDE_CHANNEL = "desktop:browser-hide";
+const BROWSER_CLEAR_DATA_CHANNEL = "desktop:browser-clear-data";
 const BROWSER_GET_STATE_CHANNEL = "desktop:browser-get-state";
 const BROWSER_SET_BOUNDS_CHANNEL = "desktop:browser-set-bounds";
 const BROWSER_NAVIGATE_CHANNEL = "desktop:browser-navigate";
@@ -1383,6 +1384,10 @@ function registerIpcHandlers(): void {
       browserManager.hide(input);
     },
   );
+
+  registerValidatedIpcHandler(ipcMain, BROWSER_CLEAR_DATA_CHANNEL, Schema.Undefined, async () => {
+    await browserManager.clearData();
+  });
 
   registerValidatedIpcHandler(
     ipcMain,

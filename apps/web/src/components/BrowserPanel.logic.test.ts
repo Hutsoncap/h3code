@@ -87,12 +87,21 @@ describe("normalizeBrowserAddressInput", () => {
       "https://www.google.com/search?q=how%20to%20bake%20bread",
     );
   });
+
+  it("uses a custom search template when provided", () => {
+    expect(
+      normalizeBrowserAddressInput("how to bake bread", {
+        searchTemplate: "https://duckduckgo.com/?q={query}",
+      }),
+    ).toBe("https://duckduckgo.com/?q=how%20to%20bake%20bread");
+  });
 });
 
 describe("buildBrowserAddressSuggestions", () => {
   it("hides blank tabs and surfaces direct navigation", () => {
     const suggestions = buildBrowserAddressSuggestions({
       query: "open",
+      searchTemplate: "https://duckduckgo.com/?q={query}",
       activeTabId: "tab-1",
       tabs: [
         {
@@ -126,7 +135,7 @@ describe("buildBrowserAddressSuggestions", () => {
 
     expect(suggestions[0]).toMatchObject({
       kind: "navigate",
-      url: "https://www.google.com/search?q=open",
+      url: "https://duckduckgo.com/?q=open",
     });
     expect(suggestions.some((suggestion) => suggestion.url === "about:blank")).toBe(false);
     expect(suggestions.some((suggestion) => suggestion.url === "https://openai.com/")).toBe(true);

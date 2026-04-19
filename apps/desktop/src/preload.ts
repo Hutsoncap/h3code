@@ -30,6 +30,7 @@ const BROWSER_STATE_CHANNEL = "desktop:browser-state";
 const BROWSER_OPEN_CHANNEL = "desktop:browser-open";
 const BROWSER_CLOSE_CHANNEL = "desktop:browser-close";
 const BROWSER_HIDE_CHANNEL = "desktop:browser-hide";
+const BROWSER_CLEAR_DATA_CHANNEL = "desktop:browser-clear-data";
 const BROWSER_GET_STATE_CHANNEL = "desktop:browser-get-state";
 const BROWSER_SET_BOUNDS_CHANNEL = "desktop:browser-set-bounds";
 const BROWSER_NAVIGATE_CHANNEL = "desktop:browser-navigate";
@@ -110,6 +111,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     open: (input) => ipcRenderer.invoke(BROWSER_OPEN_CHANNEL, input),
     close: (input) => ipcRenderer.invoke(BROWSER_CLOSE_CHANNEL, input),
     hide: (input) => ipcRenderer.invoke(BROWSER_HIDE_CHANNEL, input),
+    clearData: () => ipcRenderer.invoke(BROWSER_CLEAR_DATA_CHANNEL),
     getState: (input) => ipcRenderer.invoke(BROWSER_GET_STATE_CHANNEL, input),
     setPanelBounds: (input) => ipcRenderer.invoke(BROWSER_SET_BOUNDS_CHANNEL, input),
     navigate: (input) => ipcRenderer.invoke(BROWSER_NAVIGATE_CHANNEL, input),
