@@ -190,6 +190,26 @@ describe("persisted store legacy-key migration harness", () => {
     expect(store.getState().pinnedThreadIds).toEqual([THREAD_B, THREAD_A]);
   });
 
+  it("hydrates sidebar sections from the legacy t3code key", async () => {
+    const { storage, currentKey, legacyKey, store } = await seedLegacyState({
+      importModule: () => import("./sidebarSectionsStore"),
+      selectStore: (module) => module.useSidebarSectionsStore as PersistStore,
+      mutate: (_module, store) => {
+        store.getState().setSectionOpen("threads", false);
+        store.getState().setSectionOpen("browser", false);
+      },
+    });
+
+    expect(storage.has(currentKey)).toBe(true);
+    expect(storage.has(legacyKey)).toBe(false);
+    expect(store.getState().sections).toMatchObject({
+      pinned: true,
+      threads: false,
+      workspaces: true,
+      browser: false,
+    });
+  });
+
   it("hydrates split views from the legacy t3code key", async () => {
     const { storage, currentKey, legacyKey, store } = await seedLegacyState({
       importModule: () => import("./splitViewStore"),
