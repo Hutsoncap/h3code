@@ -2,13 +2,14 @@
 // Purpose: Verifies the global pinned-thread store mutates ids predictably.
 // Layer: UI state store test
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ThreadId } from "@t3tools/contracts";
+import { usePinnedItemsStore } from "./pinnedItemsStore";
 import { usePinnedThreadsStore } from "./pinnedThreadsStore";
 
 describe("usePinnedThreadsStore", () => {
   beforeEach(() => {
-    usePinnedThreadsStore.setState({ pinnedThreadIds: [] });
+    usePinnedItemsStore.setState({ pinnedItems: [] });
   });
 
   it("toggles a pinned thread id on and off", () => {
@@ -20,46 +21,25 @@ describe("usePinnedThreadsStore", () => {
   });
 
   it("prunes thread ids that are no longer present", () => {
-    usePinnedThreadsStore.setState({
-      pinnedThreadIds: ["thread-2" as ThreadId, "thread-1" as ThreadId],
+    usePinnedItemsStore.setState({
+      pinnedItems: [
+        { kind: "thread", id: "thread-2" as ThreadId },
+        { kind: "thread", id: "thread-1" as ThreadId },
+      ],
     });
 
     usePinnedThreadsStore.getState().prunePinnedThreads(["thread-1" as ThreadId]);
     expect(usePinnedThreadsStore.getState().pinnedThreadIds).toEqual(["thread-1"]);
   });
 
-  it("falls back to the current state when persisted pins are malformed", async () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => null,
-      setItem: () => undefined,
-      removeItem: () => undefined,
-      clear: () => undefined,
-      key: () => null,
-      length: 0,
-    } satisfies Storage);
-    vi.resetModules();
-    try {
-      const { usePinnedThreadsStore: freshUsePinnedThreadsStore } =
-        await import("./pinnedThreadsStore");
-      const persistApi = freshUsePinnedThreadsStore.persist as unknown as {
-        getOptions: () => {
-          merge: (
-            persistedState: unknown,
-            currentState: ReturnType<typeof freshUsePinnedThreadsStore.getState>,
-          ) => ReturnType<typeof freshUsePinnedThreadsStore.getState>;
-        };
-      };
+  it("ignores non-thread pinned items from the generalized store", () => {
+    usePinnedItemsStore.setState({
+      pinnedItems: [
+        { kind: "workspace", id: "workspace-1" },
+        { kind: "thread", id: "thread-1" as ThreadId },
+      ],
+    });
 
-      const mergedState = persistApi.getOptions().merge(
-        {
-          pinnedThreadIds: "not-an-array",
-        },
-        freshUsePinnedThreadsStore.getInitialState(),
-      );
-
-      expect(mergedState.pinnedThreadIds).toEqual([]);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    expect(usePinnedThreadsStore.getState().pinnedThreadIds).toEqual(["thread-1"]);
   });
 });

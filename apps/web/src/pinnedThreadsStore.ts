@@ -1,13 +1,11 @@
 // FILE: pinnedThreadsStore.ts
-// Purpose: Persists the globally pinned chat thread ids used by the sidebar.
+// Purpose: Back-compat thread pin selector wrapper over the generalized pinned-items store.
 // Layer: UI state store
 // Exports: usePinnedThreadsStore
 
 import { type ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { createAliasedStateStorage } from "./lib/storage";
-import { decodePersistedStateOrNull, PersistedPinnedThreadsStateSchema } from "./persistenceSchema";
+import { type PinnedItem, usePinnedItemsStore } from "./pinnedItemsStore";
 
 interface PinnedThreadsStoreState {
   pinnedThreadIds: ThreadId[];
@@ -16,8 +14,6 @@ interface PinnedThreadsStoreState {
   togglePinnedThread: (threadId: ThreadId) => void;
   prunePinnedThreads: (threadIds: readonly ThreadId[]) => void;
 }
-
-const PINNED_THREADS_STORAGE_KEY = "h3code:pinned-threads:v1";
 
 function normalizePinnedThreadIds(threadIds: readonly ThreadId[]): ThreadId[] {
   const seen = new Set<ThreadId>();
@@ -34,72 +30,49 @@ function normalizePinnedThreadIds(threadIds: readonly ThreadId[]): ThreadId[] {
   return normalized;
 }
 
-export const usePinnedThreadsStore = create<PinnedThreadsStoreState>()(
-  persist(
-    (set) => ({
-      pinnedThreadIds: [],
-      pinThread: (threadId) => {
-        if (threadId.length === 0) return;
-        set((state) => {
-          if (state.pinnedThreadIds.includes(threadId)) {
-            return state;
-          }
-          return {
-            pinnedThreadIds: [threadId, ...state.pinnedThreadIds],
-          };
-        });
-      },
-      unpinThread: (threadId) => {
-        if (threadId.length === 0) return;
-        set((state) => {
-          if (!state.pinnedThreadIds.includes(threadId)) {
-            return state;
-          }
-          return {
-            pinnedThreadIds: state.pinnedThreadIds.filter((candidate) => candidate !== threadId),
-          };
-        });
-      },
-      togglePinnedThread: (threadId) => {
-        if (threadId.length === 0) return;
-        set((state) => {
-          if (state.pinnedThreadIds.includes(threadId)) {
-            return {
-              pinnedThreadIds: state.pinnedThreadIds.filter((candidate) => candidate !== threadId),
-            };
-          }
-          return {
-            pinnedThreadIds: [threadId, ...state.pinnedThreadIds],
-          };
-        });
-      },
-      prunePinnedThreads: (threadIds) => {
-        const allowedThreadIds = new Set(threadIds);
-        set((state) => {
-          const nextPinnedThreadIds = state.pinnedThreadIds.filter((threadId) =>
-            allowedThreadIds.has(threadId),
-          );
-          return nextPinnedThreadIds.length === state.pinnedThreadIds.length
-            ? state
-            : { pinnedThreadIds: nextPinnedThreadIds };
-        });
-      },
-    }),
-    {
-      name: PINNED_THREADS_STORAGE_KEY,
-      storage: createJSONStorage(() => createAliasedStateStorage(localStorage)),
-      partialize: (state) => ({
-        pinnedThreadIds: normalizePinnedThreadIds(state.pinnedThreadIds),
-      }),
-      merge: (persistedState, currentState) => {
-        const candidate =
-          decodePersistedStateOrNull(PersistedPinnedThreadsStateSchema, persistedState)
-            ?.pinnedThreadIds ?? [];
-        return {
-          ...currentState,
-          pinnedThreadIds: normalizePinnedThreadIds(candidate),
-        };
-      },
-    },
-  ),
-);
+function selectPinnedThreadIds(pinnedItems: readonly PinnedItem[]): ThreadId[] {
+  return normalizePinnedThreadIds(
+    pinnedItems
+      .filter((item): item is PinnedItem & { kind: "thread" } => item.kind === "thread")
+      .map((item) => item.id as ThreadId),
+  );
+}
+
+function sameThreadIds(a: readonly ThreadId[], b: readonly ThreadId[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((threadId, index) => threadId === b[index]);
+}
+
+export const usePinnedThreadsStore = create<PinnedThreadsStoreState>(() => ({
+  pinnedThreadIds: selectPinnedThreadIds(usePinnedItemsStore.getState().pinnedItems),
+  pinThread: (threadId) => {
+    if (threadId.length === 0) return;
+    usePinnedItemsStore.getState().pinItem({ kind: "thread", id: threadId });
+  },
+  unpinThread: (threadId) => {
+    if (threadId.length === 0) return;
+    usePinnedItemsStore.getState().unpinItem({ kind: "thread", id: threadId });
+  },
+  togglePinnedThread: (threadId) => {
+    if (threadId.length === 0) return;
+    usePinnedItemsStore.getState().togglePin({ kind: "thread", id: threadId });
+  },
+  prunePinnedThreads: (threadIds) => {
+    usePinnedItemsStore.getState().prune({ thread: threadIds });
+  },
+}));
+
+function syncPinnedThreadIds(): void {
+  const nextPinnedThreadIds = selectPinnedThreadIds(usePinnedItemsStore.getState().pinnedItems);
+  usePinnedThreadsStore.setState((state) =>
+    sameThreadIds(state.pinnedThreadIds, nextPinnedThreadIds)
+      ? state
+      : { pinnedThreadIds: nextPinnedThreadIds },
+  );
+}
+
+syncPinnedThreadIds();
+usePinnedItemsStore.subscribe(syncPinnedThreadIds);

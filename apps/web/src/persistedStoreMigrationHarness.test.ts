@@ -175,19 +175,22 @@ describe("persisted store legacy-key migration harness", () => {
     });
   });
 
-  it("hydrates pinned threads from the legacy t3code key", async () => {
+  it("hydrates pinned items from the legacy t3code key", async () => {
     const { storage, currentKey, legacyKey, store } = await seedLegacyState({
-      importModule: () => import("./pinnedThreadsStore"),
-      selectStore: (module) => module.usePinnedThreadsStore as PersistStore,
+      importModule: () => import("./pinnedItemsStore"),
+      selectStore: (module) => module.usePinnedItemsStore as PersistStore,
       mutate: (_module, store) => {
-        store.getState().pinThread(THREAD_A);
-        store.getState().pinThread(THREAD_B);
+        store.getState().pinItem({ kind: "thread", id: THREAD_A });
+        store.getState().pinItem({ kind: "thread", id: THREAD_B });
       },
     });
 
     expect(storage.has(currentKey)).toBe(true);
     expect(storage.has(legacyKey)).toBe(false);
-    expect(store.getState().pinnedThreadIds).toEqual([THREAD_B, THREAD_A]);
+    expect(store.getState().pinnedItems).toEqual([
+      { kind: "thread", id: THREAD_B },
+      { kind: "thread", id: THREAD_A },
+    ]);
   });
 
   it("hydrates sidebar sections from the legacy t3code key", async () => {

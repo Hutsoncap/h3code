@@ -27,6 +27,17 @@ export const PersistedPinnedThreadsStateSchema = Schema.Struct({
   pinnedThreadIds: Schema.Array(ThreadId),
 });
 
+const PinnedItemKindSchema = Schema.Literals(["thread", "workspace", "webapp"]);
+
+export const PersistedPinnedItemSchema = Schema.Struct({
+  kind: PinnedItemKindSchema,
+  id: Schema.String,
+});
+
+export const PersistedPinnedItemsStateSchema = Schema.Struct({
+  pinnedItems: Schema.Array(PersistedPinnedItemSchema),
+});
+
 export const PersistedSidebarSectionsStateSchema = Schema.Struct({
   sections: Schema.Struct({
     pinned: Schema.Boolean,
@@ -208,4 +219,13 @@ export interface PersistedSidebarSectionsState {
     workspaces: boolean;
     browser: boolean;
   };
+}
+
+export interface PersistedPinnedItem {
+  kind: "thread" | "workspace" | "webapp";
+  id: string;
+}
+
+export interface PersistedPinnedItemsState {
+  pinnedItems: PersistedPinnedItem[];
 }
