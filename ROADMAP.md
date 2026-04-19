@@ -122,8 +122,8 @@ Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7
 | **v1a**   | Sidebar unify + theme catalog                                                            | ✅ merged on `main`: [#226](https://github.com/Hutsoncap/h3code/pull/226) + [#227](https://github.com/Hutsoncap/h3code/pull/227) |
 | **v1b**   | Pinned section + generalized pin store                                                   | ✅ merged on `main`: [#228](https://github.com/Hutsoncap/h3code/pull/228)                                                        |
 | **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | ✅ merged on `main`: [#229](https://github.com/Hutsoncap/h3code/pull/229)                                                        |
-| **v1c.2** | Standalone browser route + sidebar Browser section                                       | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c2-browser-section` (`feat/v1c2-browser-section`)                     |
-| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 📋 Planned                                                                                                                       |
+| **v1c.2** | Standalone browser route + sidebar Browser section                                       | ✅ merged on `main`: [#230](https://github.com/Hutsoncap/h3code/pull/230)                                                        |
+| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-web-apps-browser-settings` (`feat/v1c3-web-apps-browser-settings`) |
 
 ### v1a — Sidebar unify + theme catalog
 
@@ -220,7 +220,7 @@ Pure refactor. No new routes, no new UI, no new stores. The thread-embedded brow
 
 _Depends on v1c.1. Can run in parallel with v1b._
 
-Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c2-browser-section` on `feat/v1c2-browser-section`.
+Merged slice: [#230](https://github.com/Hutsoncap/h3code/pull/230) landed the standalone `/browser` route, the sidebar Browser section, and standalone browser-surface plumbing. `v1c.2` is complete on `main`.
 
 - Add TanStack Router route `/browser` rendering `<BrowserPanel surfaceId={{ kind: "standalone", id: "main" }} />`.
 - Add the **Browser** section to the sidebar (key `browser` already exists in `sidebarSectionsStore` from v1a). Contents: a single "Open Browser" row that navigates to `/browser`.
@@ -237,12 +237,17 @@ Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c2-browser-section` on 
 
 _Depends on v1c.2._
 
-- New `apps/web/src/webAppsStore.ts` — persist `{ id, name, url, faviconUrl, createdAt }[]` at `t3code:web-apps:v1`. Actions: `installFromTab`, `rename`, `delete`, `reorder`.
+Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c3-web-apps-browser-settings` on `feat/v1c3-web-apps-browser-settings`.
+
+Current slice publishes the web-app store, install flow, standalone `/webapp/$id` surface, and sidebar/pinned integration first. The Browser settings page remains the closeout portion of `v1c.3`.
+
+- New `apps/web/src/webAppsStore.ts` — persist `{ id, name, url, faviconUrl, createdAt }[]` at `h3code:web-apps:v1` with legacy `t3code:` migration. Actions: `installFromTab`, `addWebApp`, `renameWebApp`, `deleteWebApp`, `reorderWebApp`.
 - Add route `/webapp/$webAppId` rendering `<BrowserPanel surfaceId={{ kind: "webapp", webAppId }} />`.
 - Add **Install as web app** button in `BrowserPanel` chrome, visible when `surfaceId.kind !== "webapp"`. Writes current tab → `webAppsStore`.
 - Extend the sidebar Browser section with a **Web Apps** sub-list and an "Add web app…" inline form.
 - Pin integration: right-click a web-app → Pin uses the generalized pin store from v1b (records `{ kind: "webapp", id }`).
-- Settings → **Browser** page:
+- Remaining closeout in this milestone:
+  - Settings → **Browser** page:
   - Default search engine (Google / DuckDuckGo / Bing / custom `{query}` template). Replaces hardcoded `SEARCH_URL_PREFIX` at [browserManager.ts:21](apps/desktop/src/browserManager.ts:21); plumbed through `appSettings`.
   - Homepage URL (default `about:blank`).
   - Clear browsing data button (clears `persist:t3code-browser` session).

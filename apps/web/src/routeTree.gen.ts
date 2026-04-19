@@ -17,6 +17,7 @@ import { Route as ChatBrowserRouteImport } from './routes/_chat.browser'
 import { Route as ChatThreadIdRouteImport } from './routes/_chat.$threadId'
 import { Route as ChatWorkspaceIndexRouteImport } from './routes/_chat.workspace.index'
 import { Route as ChatWorkspaceWorkspaceIdRouteImport } from './routes/_chat.workspace.$workspaceId'
+import { Route as ChatWebappWebAppIdRouteImport } from './routes/_chat.webapp.$webAppId'
 
 const ChatRoute = ChatRouteImport.update({
   id: '/_chat',
@@ -58,6 +59,11 @@ const ChatWorkspaceWorkspaceIdRoute =
     path: '/workspace/$workspaceId',
     getParentRoute: () => ChatRoute,
   } as any)
+const ChatWebappWebAppIdRoute = ChatWebappWebAppIdRouteImport.update({
+  id: '/webapp/$webAppId',
+  path: '/webapp/$webAppId',
+  getParentRoute: () => ChatRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/browser': typeof ChatBrowserRoute
   '/plugins': typeof ChatPluginsRoute
   '/settings': typeof ChatSettingsRoute
+  '/webapp/$webAppId': typeof ChatWebappWebAppIdRoute
   '/workspace/$workspaceId': typeof ChatWorkspaceWorkspaceIdRoute
   '/workspace/': typeof ChatWorkspaceIndexRoute
 }
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/plugins': typeof ChatPluginsRoute
   '/settings': typeof ChatSettingsRoute
   '/': typeof ChatIndexRoute
+  '/webapp/$webAppId': typeof ChatWebappWebAppIdRoute
   '/workspace/$workspaceId': typeof ChatWorkspaceWorkspaceIdRoute
   '/workspace': typeof ChatWorkspaceIndexRoute
 }
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/_chat/plugins': typeof ChatPluginsRoute
   '/_chat/settings': typeof ChatSettingsRoute
   '/_chat/': typeof ChatIndexRoute
+  '/_chat/webapp/$webAppId': typeof ChatWebappWebAppIdRoute
   '/_chat/workspace/$workspaceId': typeof ChatWorkspaceWorkspaceIdRoute
   '/_chat/workspace/': typeof ChatWorkspaceIndexRoute
 }
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/browser'
     | '/plugins'
     | '/settings'
+    | '/webapp/$webAppId'
     | '/workspace/$workspaceId'
     | '/workspace/'
   fileRoutesByTo: FileRoutesByTo
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/plugins'
     | '/settings'
     | '/'
+    | '/webapp/$webAppId'
     | '/workspace/$workspaceId'
     | '/workspace'
   id:
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '/_chat/plugins'
     | '/_chat/settings'
     | '/_chat/'
+    | '/_chat/webapp/$webAppId'
     | '/_chat/workspace/$workspaceId'
     | '/_chat/workspace/'
   fileRoutesById: FileRoutesById
@@ -181,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatWorkspaceWorkspaceIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/webapp/$webAppId': {
+      id: '/_chat/webapp/$webAppId'
+      path: '/webapp/$webAppId'
+      fullPath: '/webapp/$webAppId'
+      preLoaderRoute: typeof ChatWebappWebAppIdRouteImport
+      parentRoute: typeof ChatRoute
+    }
   }
 }
 
@@ -190,6 +209,7 @@ interface ChatRouteChildren {
   ChatPluginsRoute: typeof ChatPluginsRoute
   ChatSettingsRoute: typeof ChatSettingsRoute
   ChatIndexRoute: typeof ChatIndexRoute
+  ChatWebappWebAppIdRoute: typeof ChatWebappWebAppIdRoute
   ChatWorkspaceWorkspaceIdRoute: typeof ChatWorkspaceWorkspaceIdRoute
   ChatWorkspaceIndexRoute: typeof ChatWorkspaceIndexRoute
 }
@@ -200,6 +220,7 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatPluginsRoute: ChatPluginsRoute,
   ChatSettingsRoute: ChatSettingsRoute,
   ChatIndexRoute: ChatIndexRoute,
+  ChatWebappWebAppIdRoute: ChatWebappWebAppIdRoute,
   ChatWorkspaceWorkspaceIdRoute: ChatWorkspaceWorkspaceIdRoute,
   ChatWorkspaceIndexRoute: ChatWorkspaceIndexRoute,
 }

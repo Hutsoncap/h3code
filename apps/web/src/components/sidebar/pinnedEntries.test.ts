@@ -13,14 +13,17 @@ describe("buildPinnedSidebarEntries", () => {
       ],
       threads: [{ id: "thread-1" }, { id: "thread-2" }],
       workspaces: [{ id: "workspace-1" }, { id: "workspace-2" }],
+      webApps: [{ id: "webapp-1" }, { id: "webapp-2" }],
     });
 
     expect(result.pinnedEntries).toMatchObject([
       { kind: "workspace", workspace: { id: "workspace-1" } },
       { kind: "thread", thread: { id: "thread-2" } },
+      { kind: "webapp", webApp: { id: "webapp-1" } },
       { kind: "thread", thread: { id: "thread-1" } },
     ]);
     expect(result.pinnedThreadIds).toEqual(["thread-2", "thread-1"]);
     expect(result.pinnedWorkspaceIds).toEqual(["workspace-1"]);
+    expect(result.pinnedWebAppIds).toEqual(["webapp-1"]);
   });
 });

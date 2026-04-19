@@ -1,6 +1,10 @@
 import type { PinnedItem } from "../../pinnedItemsStore";
 
-export type PinnedSidebarEntry<TThread extends { id: string }, TWorkspace extends { id: string }> =
+export type PinnedSidebarEntry<
+  TThread extends { id: string },
+  TWorkspace extends { id: string },
+  TWebApp extends { id: string },
+> =
   | {
       kind: "thread";
       itemKey: string;
@@ -10,33 +14,44 @@ export type PinnedSidebarEntry<TThread extends { id: string }, TWorkspace extend
       kind: "workspace";
       itemKey: string;
       workspace: TWorkspace;
+    }
+  | {
+      kind: "webapp";
+      itemKey: string;
+      webApp: TWebApp;
     };
 
 export interface BuildPinnedSidebarEntriesResult<
   TThread extends { id: string },
   TWorkspace extends { id: string },
+  TWebApp extends { id: string },
 > {
-  pinnedEntries: Array<PinnedSidebarEntry<TThread, TWorkspace>>;
+  pinnedEntries: Array<PinnedSidebarEntry<TThread, TWorkspace, TWebApp>>;
   pinnedThreadIds: string[];
   pinnedWorkspaceIds: string[];
+  pinnedWebAppIds: string[];
 }
 
 export function buildPinnedSidebarEntries<
   TThread extends { id: string },
   TWorkspace extends { id: string },
+  TWebApp extends { id: string },
 >(input: {
   pinnedItems: readonly PinnedItem[];
   threads: readonly TThread[];
   workspaces: readonly TWorkspace[];
-}): BuildPinnedSidebarEntriesResult<TThread, TWorkspace> {
+  webApps: readonly TWebApp[];
+}): BuildPinnedSidebarEntriesResult<TThread, TWorkspace, TWebApp> {
   const threadById = new Map(input.threads.map((thread) => [thread.id, thread] as const));
   const workspaceById = new Map(
     input.workspaces.map((workspace) => [workspace.id, workspace] as const),
   );
+  const webAppById = new Map(input.webApps.map((webApp) => [webApp.id, webApp] as const));
 
-  const pinnedEntries: Array<PinnedSidebarEntry<TThread, TWorkspace>> = [];
+  const pinnedEntries: Array<PinnedSidebarEntry<TThread, TWorkspace, TWebApp>> = [];
   const pinnedThreadIds: string[] = [];
   const pinnedWorkspaceIds: string[] = [];
+  const pinnedWebAppIds: string[] = [];
 
   for (const item of input.pinnedItems) {
     if (item.kind === "thread") {
@@ -66,6 +81,21 @@ export function buildPinnedSidebarEntries<
         itemKey: `workspace:${item.id}`,
         workspace,
       });
+      continue;
+    }
+
+    if (item.kind === "webapp") {
+      const webApp = webAppById.get(item.id);
+      if (!webApp) {
+        continue;
+      }
+
+      pinnedWebAppIds.push(item.id);
+      pinnedEntries.push({
+        kind: "webapp",
+        itemKey: `webapp:${item.id}`,
+        webApp,
+      });
     }
   }
 
@@ -73,5 +103,6 @@ export function buildPinnedSidebarEntries<
     pinnedEntries,
     pinnedThreadIds,
     pinnedWorkspaceIds,
+    pinnedWebAppIds,
   };
 }

@@ -170,6 +170,7 @@ import { useTemporaryThreadStore } from "../temporaryThreadStore";
 import { usePinnedItemsStore } from "../pinnedItemsStore";
 import { usePinnedThreadsStore } from "../pinnedThreadsStore";
 import { useWorkspaceStore, workspaceThreadId } from "../workspaceStore";
+import { useWebAppsStore, type WebAppEntry } from "../webAppsStore";
 import { buildSidebarRenderModel, type SidebarProjectRenderModel } from "./sidebar/renderModel";
 import { buildPinnedSidebarEntries } from "./sidebar/pinnedEntries";
 import { SidebarSection } from "./sidebar/SidebarSection";
@@ -209,6 +210,23 @@ const PROJECT_CONTEXT_MENU_REMOVE_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 const PROJECT_CONTEXT_MENU_COPY_PATH_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+
+function renderWebAppLeadingIcon(webApp: WebAppEntry) {
+  if (webApp.faviconUrl) {
+    return (
+      <img
+        alt=""
+        src={webApp.faviconUrl}
+        className="size-3.5 rounded-[4px] object-cover"
+        onError={(event) => {
+          event.currentTarget.style.display = "none";
+        }}
+      />
+    );
+  }
+
+  return <GlobeIcon className="size-3.5" />;
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -695,6 +713,7 @@ export default function Sidebar() {
   const clearTemporaryThread = useTemporaryThreadStore((store) => store.clearTemporaryThread);
   const pinnedItems = usePinnedItemsStore((store) => store.pinnedItems);
   const togglePinnedItem = usePinnedItemsStore((store) => store.togglePin);
+  const unpinPinnedItem = usePinnedItemsStore((store) => store.unpinItem);
   const prunePinnedItems = usePinnedItemsStore((store) => store.prune);
   const pinnedThreadIds = usePinnedThreadsStore((store) => store.pinnedThreadIds);
   const togglePinnedThread = usePinnedThreadsStore((store) => store.togglePinnedThread);
@@ -704,6 +723,10 @@ export default function Sidebar() {
   const renameWorkspace = useWorkspaceStore((store) => store.renameWorkspace);
   const deleteWorkspace = useWorkspaceStore((store) => store.deleteWorkspace);
   const reorderWorkspace = useWorkspaceStore((store) => store.reorderWorkspace);
+  const webApps = useWebAppsStore((store) => store.webApps);
+  const addWebApp = useWebAppsStore((store) => store.addWebApp);
+  const renameWebApp = useWebAppsStore((store) => store.renameWebApp);
+  const deleteWebApp = useWebAppsStore((store) => store.deleteWebApp);
   const sidebarSections = useSidebarSectionsStore((store) => store.sections);
   const setSidebarSectionOpen = useSidebarSectionsStore((store) => store.setSectionOpen);
   const navigate = useNavigate();
@@ -719,6 +742,10 @@ export default function Sidebar() {
   const routeWorkspaceId = useParams({
     strict: false,
     select: (params) => (typeof params.workspaceId === "string" ? params.workspaceId : null),
+  });
+  const routeWebAppId = useParams({
+    strict: false,
+    select: (params) => (typeof params.webAppId === "string" ? params.webAppId : null),
   });
   const routeSearch = useSearch({
     strict: false,
@@ -771,6 +798,12 @@ export default function Sidebar() {
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
   const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null);
   const [renamingWorkspaceTitle, setRenamingWorkspaceTitle] = useState("");
+  const [renamingWebAppId, setRenamingWebAppId] = useState<string | null>(null);
+  const [renamingWebAppName, setRenamingWebAppName] = useState("");
+  const [showAddWebAppInput, setShowAddWebAppInput] = useState(false);
+  const [newWebAppName, setNewWebAppName] = useState("");
+  const [newWebAppUrl, setNewWebAppUrl] = useState("");
+  const [addWebAppError, setAddWebAppError] = useState<string | null>(null);
   const [installingDesktopUpdate, setInstallingDesktopUpdate] = useState(false);
   const selectedThreadIds = useThreadSelectionStore((s) => s.selectedThreadIds);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -830,8 +863,9 @@ export default function Sidebar() {
         pinnedItems,
         threads: sidebarDisplayThreads,
         workspaces: workspaceRows,
+        webApps,
       }),
-    [pinnedItems, sidebarDisplayThreads, workspaceRows],
+    [pinnedItems, sidebarDisplayThreads, webApps, workspaceRows],
   );
   const pinnedWorkspaceIdSet = useMemo(
     () => new Set(pinnedSidebarModel.pinnedWorkspaceIds),
@@ -840,6 +874,14 @@ export default function Sidebar() {
   const unpinnedWorkspaceRows = useMemo(
     () => workspaceRows.filter((workspace) => !pinnedWorkspaceIdSet.has(workspace.id)),
     [pinnedWorkspaceIdSet, workspaceRows],
+  );
+  const pinnedWebAppIdSet = useMemo(
+    () => new Set(pinnedSidebarModel.pinnedWebAppIds),
+    [pinnedSidebarModel.pinnedWebAppIds],
+  );
+  const unpinnedWebApps = useMemo(
+    () => webApps.filter((webApp) => !pinnedWebAppIdSet.has(webApp.id)),
+    [pinnedWebAppIdSet, webApps],
   );
   const threadGitTargets = useMemo(
     () =>
@@ -1188,6 +1230,17 @@ export default function Sidebar() {
     [navigate],
   );
 
+  const navigateToWebApp = useCallback(
+    (webAppId: string, options?: { replace?: boolean }) => {
+      void navigate({
+        to: "/webapp/$webAppId",
+        params: { webAppId },
+        ...(options?.replace ? { replace: true } : {}),
+      });
+    },
+    [navigate],
+  );
+
   const handleCreateWorkspace = useCallback(() => {
     const workspaceId = createWorkspace();
     navigateToWorkspace(workspaceId);
@@ -1205,6 +1258,19 @@ export default function Sidebar() {
     renameWorkspace(renamingWorkspaceId, renamingWorkspaceTitle);
     setRenamingWorkspaceId(null);
   }, [renameWorkspace, renamingWorkspaceId, renamingWorkspaceTitle]);
+
+  const beginWebAppRename = useCallback((webAppId: string, name: string) => {
+    setRenamingWebAppId(webAppId);
+    setRenamingWebAppName(name);
+  }, []);
+
+  const commitWebAppRename = useCallback(() => {
+    if (!renamingWebAppId) {
+      return;
+    }
+    renameWebApp(renamingWebAppId, renamingWebAppName);
+    setRenamingWebAppId(null);
+  }, [renameWebApp, renamingWebAppId, renamingWebAppName]);
 
   const handleDeleteWorkspace = useCallback(
     async (workspaceId: string) => {
@@ -1292,6 +1358,70 @@ export default function Sidebar() {
       reorderWorkspace(String(active.id), nextIndex);
     },
     [reorderWorkspace, workspacePages],
+  );
+
+  const handleDeleteWebApp = useCallback(
+    (webAppId: string) => {
+      unpinPinnedItem({ kind: "webapp", id: webAppId });
+      deleteWebApp(webAppId);
+
+      if (routeWebAppId === webAppId) {
+        void navigate({ to: "/browser", replace: true });
+      }
+    },
+    [deleteWebApp, navigate, routeWebAppId, unpinPinnedItem],
+  );
+
+  const handleAddWebApp = useCallback(() => {
+    const createdWebApp = addWebApp({
+      name: newWebAppName,
+      url: newWebAppUrl,
+    });
+    if (!createdWebApp) {
+      setAddWebAppError("Enter a valid http:// or https:// URL.");
+      return;
+    }
+
+    setNewWebAppName("");
+    setNewWebAppUrl("");
+    setAddWebAppError(null);
+    setShowAddWebAppInput(false);
+    navigateToWebApp(createdWebApp.id);
+  }, [addWebApp, navigateToWebApp, newWebAppName, newWebAppUrl]);
+
+  const handleWebAppContextMenu = useCallback(
+    async (webAppId: string, position: { x: number; y: number }) => {
+      const api = readNativeApi();
+      if (!api) return;
+
+      const webApp = webApps.find((entry) => entry.id === webAppId);
+      if (!webApp) return;
+
+      const isPinned = pinnedWebAppIdSet.has(webAppId);
+      const clicked = await api.contextMenu.show(
+        [
+          { id: "rename", label: "Rename web app" },
+          { id: "toggle-pin", label: isPinned ? "Unpin web app" : "Pin web app" },
+          { id: "delete", label: "Delete web app", destructive: true },
+        ],
+        position,
+      );
+
+      if (clicked === "rename") {
+        beginWebAppRename(webApp.id, webApp.name);
+        return;
+      }
+
+      if (clicked === "toggle-pin") {
+        togglePinnedItem({ kind: "webapp", id: webApp.id });
+        return;
+      }
+
+      if (clicked === "delete") {
+        handleDeleteWebApp(webApp.id);
+      }
+    },
+    [beginWebAppRename, handleDeleteWebApp, pinnedWebAppIdSet, togglePinnedItem, webApps],
   );
 
   const addProjectFromPath = useCallback(
@@ -2360,8 +2490,9 @@ export default function Sidebar() {
     prunePinnedItems({
       thread: sidebarThreads.map((thread) => thread.id),
       workspace: workspaceRows.map((workspace) => workspace.id),
+      webapp: webApps.map((webApp) => webApp.id),
     });
-  }, [prunePinnedItems, sidebarThreads, threadsHydrated, workspaceRows]);
+  }, [prunePinnedItems, sidebarThreads, threadsHydrated, webApps, workspaceRows]);
 
   useEffect(() => {
     if (!activeSidebarThreadId) {
@@ -2711,6 +2842,82 @@ export default function Sidebar() {
     return (
       <div key={`workspace:${workspace.id}`} className="w-full">
         {renderWorkspaceRow(workspace)}
+      </div>
+    );
+  }
+
+  function renderWebAppRow(webApp: WebAppEntry) {
+    const isActive = routeWebAppId === webApp.id;
+    const isRenaming = renamingWebAppId === webApp.id;
+
+    if (isRenaming) {
+      return (
+        <div className="px-1.5 py-0.5">
+          <input
+            autoFocus
+            value={renamingWebAppName}
+            onChange={(event) => {
+              setRenamingWebAppName(event.target.value);
+            }}
+            onBlur={commitWebAppRename}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitWebAppRename();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setRenamingWebAppId(null);
+                setRenamingWebAppName(webApp.name);
+              }
+            }}
+            className="h-7 w-full rounded-md border border-border bg-background px-2 text-[length:var(--app-font-size-ui,12px)] outline-none focus:border-ring"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="sm"
+          isActive={isActive}
+          className="group/webapp h-8 gap-2 rounded-lg px-2 font-system-ui text-[length:var(--app-font-size-ui,12px)] font-normal text-foreground/82 transition-colors hover:bg-accent/55 hover:text-foreground data-[active=true]:bg-accent/65"
+          onClick={() => {
+            navigateToWebApp(webApp.id);
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            void handleWebAppContextMenu(webApp.id, {
+              x: event.clientX,
+              y: event.clientY,
+            });
+          }}
+        >
+          <span className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground/65">
+            {renderWebAppLeadingIcon(webApp)}
+          </span>
+          <span className="min-w-0 flex-1 truncate">{webApp.name}</span>
+          <button
+            type="button"
+            className="sidebar-icon-button ml-auto inline-flex size-5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity group-hover/webapp:opacity-100"
+            aria-label="Delete web app"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDeleteWebApp(webApp.id);
+            }}
+          >
+            <Trash2 className="size-3" />
+          </button>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
+  function renderPinnedWebAppRow(webApp: WebAppEntry) {
+    return (
+      <div key={`webapp:${webApp.id}`} className="w-full">
+        {renderWebAppRow(webApp)}
       </div>
     );
   }
@@ -4081,7 +4288,9 @@ export default function Sidebar() {
                       {pinnedSidebarModel.pinnedEntries.map((entry) =>
                         entry.kind === "thread"
                           ? renderPinnedThreadRow(entry.thread)
-                          : renderPinnedWorkspaceRow(entry.workspace),
+                          : entry.kind === "workspace"
+                            ? renderPinnedWorkspaceRow(entry.workspace)
+                            : renderPinnedWebAppRow(entry.webApp),
                       )}
                     </div>
                   </div>
@@ -4272,6 +4481,71 @@ export default function Sidebar() {
                 }}
               >
                 <div className="px-1.5 pb-1.5">
+                  <div className="mb-2.5 px-1">
+                    {!showAddWebAppInput ? (
+                      <button
+                        type="button"
+                        className="flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-accent/40 px-2 text-[length:var(--app-font-size-ui,12px)] font-normal text-muted-foreground/72 transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={() => {
+                          setShowAddWebAppInput(true);
+                          setAddWebAppError(null);
+                        }}
+                      >
+                        <FiPlus className="size-3.5" />
+                        Add web app
+                      </button>
+                    ) : (
+                      <div className="space-y-1.5 rounded-lg border border-border bg-secondary p-2">
+                        <input
+                          className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[length:var(--app-font-size-ui,12px)] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-ring"
+                          placeholder="Name (optional)"
+                          value={newWebAppName}
+                          onChange={(event) => {
+                            setNewWebAppName(event.target.value);
+                            setAddWebAppError(null);
+                          }}
+                        />
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            className="h-7 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-2 text-[length:var(--app-font-size-ui,12px)] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-ring"
+                            placeholder="https://example.com"
+                            value={newWebAppUrl}
+                            onChange={(event) => {
+                              setNewWebAppUrl(event.target.value);
+                              setAddWebAppError(null);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                handleAddWebApp();
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setShowAddWebAppInput(false);
+                                setNewWebAppName("");
+                                setNewWebAppUrl("");
+                                setAddWebAppError(null);
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="h-7 shrink-0 rounded-md px-2 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-foreground"
+                            onClick={handleAddWebApp}
+                            aria-label="Add web app"
+                          >
+                            ↵
+                          </button>
+                        </div>
+                        {addWebAppError ? (
+                          <p className="px-0.5 text-xs leading-tight text-red-400">
+                            {addWebAppError}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                   <SidebarMenu className="gap-0.5">
                     <SidebarMenuItem>
                       <SidebarMenuButton
@@ -4289,6 +4563,7 @@ export default function Sidebar() {
                         <span>Open Browser</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
+                    {unpinnedWebApps.map((webApp) => renderWebAppRow(webApp))}
                   </SidebarMenu>
                 </div>
               </SidebarSection>
