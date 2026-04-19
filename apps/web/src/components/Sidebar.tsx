@@ -166,9 +166,11 @@ import {
   useSplitViewStore,
 } from "../splitViewStore";
 import { useTemporaryThreadStore } from "../temporaryThreadStore";
+import { usePinnedItemsStore } from "../pinnedItemsStore";
 import { usePinnedThreadsStore } from "../pinnedThreadsStore";
 import { useWorkspaceStore, workspaceThreadId } from "../workspaceStore";
 import { buildSidebarRenderModel, type SidebarProjectRenderModel } from "./sidebar/renderModel";
+import { buildPinnedSidebarEntries } from "./sidebar/pinnedEntries";
 import { SidebarSection } from "./sidebar/SidebarSection";
 import type {
   SidebarSearchAction,
@@ -690,10 +692,12 @@ export default function Sidebar() {
   const draftThreadsByThreadId = useComposerDraftStore((store) => store.draftThreadsByThreadId);
   const temporaryThreadIds = useTemporaryThreadStore((store) => store.temporaryThreadIds);
   const clearTemporaryThread = useTemporaryThreadStore((store) => store.clearTemporaryThread);
+  const pinnedItems = usePinnedItemsStore((store) => store.pinnedItems);
+  const togglePinnedItem = usePinnedItemsStore((store) => store.togglePin);
+  const prunePinnedItems = usePinnedItemsStore((store) => store.prune);
   const pinnedThreadIds = usePinnedThreadsStore((store) => store.pinnedThreadIds);
   const togglePinnedThread = usePinnedThreadsStore((store) => store.togglePinnedThread);
   const unpinThread = usePinnedThreadsStore((store) => store.unpinThread);
-  const prunePinnedThreads = usePinnedThreadsStore((store) => store.prunePinnedThreads);
   const workspacePages = useWorkspaceStore((store) => store.workspacePages);
   const createWorkspace = useWorkspaceStore((store) => store.createWorkspace);
   const renameWorkspace = useWorkspaceStore((store) => store.renameWorkspace);
@@ -817,6 +821,23 @@ export default function Sidebar() {
         };
       }),
     [terminalStateByThreadId, workspacePages],
+  );
+  const pinnedSidebarModel = useMemo(
+    () =>
+      buildPinnedSidebarEntries({
+        pinnedItems,
+        threads: sidebarDisplayThreads,
+        workspaces: workspaceRows,
+      }),
+    [pinnedItems, sidebarDisplayThreads, workspaceRows],
+  );
+  const pinnedWorkspaceIdSet = useMemo(
+    () => new Set(pinnedSidebarModel.pinnedWorkspaceIds),
+    [pinnedSidebarModel.pinnedWorkspaceIds],
+  );
+  const unpinnedWorkspaceRows = useMemo(
+    () => workspaceRows.filter((workspace) => !pinnedWorkspaceIdSet.has(workspace.id)),
+    [pinnedWorkspaceIdSet, workspaceRows],
   );
   const threadGitTargets = useMemo(
     () =>
@@ -1213,6 +1234,47 @@ export default function Sidebar() {
       }
     },
     [clearTerminalState, deleteWorkspace, navigateToWorkspace, routeWorkspaceId],
+  );
+
+  const handleWorkspaceContextMenu = useCallback(
+    async (workspaceId: string, position: { x: number; y: number }) => {
+      const api = readNativeApi();
+      if (!api) return;
+
+      const workspace = workspaceRows.find((entry) => entry.id === workspaceId);
+      if (!workspace) return;
+
+      const isPinned = pinnedWorkspaceIdSet.has(workspaceId);
+      const clicked = await api.contextMenu.show(
+        [
+          { id: "rename", label: "Rename workspace" },
+          { id: "toggle-pin", label: isPinned ? "Unpin workspace" : "Pin workspace" },
+          { id: "delete", label: "Delete workspace", destructive: true },
+        ],
+        position,
+      );
+
+      if (clicked === "rename") {
+        beginWorkspaceRename(workspace.id, workspace.title);
+        return;
+      }
+
+      if (clicked === "toggle-pin") {
+        togglePinnedItem({ kind: "workspace", id: workspace.id });
+        return;
+      }
+
+      if (clicked === "delete") {
+        await handleDeleteWorkspace(workspace.id);
+      }
+    },
+    [
+      beginWorkspaceRename,
+      handleDeleteWorkspace,
+      pinnedWorkspaceIdSet,
+      togglePinnedItem,
+      workspaceRows,
+    ],
   );
 
   const handleWorkspaceDragEnd = useCallback(
@@ -2283,7 +2345,7 @@ export default function Sidebar() {
       splitViews,
     ],
   );
-  const { pinnedThreads, projectRenderModels, visibleSidebarThreadIds } = sidebarRenderModel;
+  const { projectRenderModels, visibleSidebarThreadIds } = sidebarRenderModel;
   const allProjectsExpanded = useMemo(
     () => projects.length > 0 && projects.every((project) => project.expanded),
     [projects],
@@ -2293,8 +2355,11 @@ export default function Sidebar() {
     if (!shouldPrunePinnedThreads({ threadsHydrated })) {
       return;
     }
-    prunePinnedThreads(sidebarThreads.map((thread) => thread.id));
-  }, [prunePinnedThreads, sidebarThreads, threadsHydrated]);
+    prunePinnedItems({
+      thread: sidebarThreads.map((thread) => thread.id),
+      workspace: workspaceRows.map((workspace) => workspace.id),
+    });
+  }, [prunePinnedItems, sidebarThreads, threadsHydrated, workspaceRows]);
 
   useEffect(() => {
     if (!activeSidebarThreadId) {
@@ -2543,6 +2608,107 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  function renderWorkspaceRow(
+    workspace: (typeof workspaceRows)[number],
+    options?: {
+      leadingAccessory?: ReactNode;
+    },
+  ) {
+    const isActive = routeWorkspaceId === workspace.id;
+    const isRenaming = renamingWorkspaceId === workspace.id;
+    const leadingAccessory = options?.leadingAccessory ?? (
+      <span className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground/65">
+        <TerminalIcon className="size-3.5" />
+      </span>
+    );
+
+    if (isRenaming) {
+      return (
+        <div className="px-1.5 py-0.5">
+          <input
+            autoFocus
+            value={renamingWorkspaceTitle}
+            onChange={(event) => {
+              setRenamingWorkspaceTitle(event.target.value);
+            }}
+            onBlur={commitWorkspaceRename}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitWorkspaceRename();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setRenamingWorkspaceId(null);
+                setRenamingWorkspaceTitle(workspace.title);
+              }
+            }}
+            className="h-7 w-full rounded-md border border-border bg-background px-2 text-[length:var(--app-font-size-ui,12px)] outline-none focus:border-ring"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="sm"
+          isActive={isActive}
+          className="group/ws h-8 gap-2 rounded-lg px-2 font-system-ui text-[length:var(--app-font-size-ui,12px)] font-normal text-foreground/82 transition-colors hover:bg-accent/55 hover:text-foreground data-[active=true]:bg-accent/65"
+          onClick={() => {
+            navigateToWorkspace(workspace.id);
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            void handleWorkspaceContextMenu(workspace.id, {
+              x: event.clientX,
+              y: event.clientY,
+            });
+          }}
+        >
+          {leadingAccessory}
+          <span className="min-w-0 flex-1 truncate">{workspace.title}</span>
+          {workspace.terminalStatus && (
+            <span
+              className={cn(
+                "inline-flex size-1.5 shrink-0 rounded-full",
+                workspace.terminalStatus.label === "Terminal input needed"
+                  ? "bg-amber-500 dark:bg-amber-300/90"
+                  : workspace.terminalStatus.label === "Terminal process running"
+                    ? "bg-teal-500 dark:bg-teal-300/90"
+                    : "bg-emerald-500 dark:bg-emerald-300/90",
+              )}
+            />
+          )}
+          {workspace.terminalCount > 0 && (
+            <span className="shrink-0 text-[length:var(--app-font-size-ui-xs,10px)] tabular-nums text-muted-foreground/50">
+              {workspace.terminalCount}
+            </span>
+          )}
+          <button
+            type="button"
+            className="sidebar-icon-button ml-auto inline-flex size-5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity group-hover/ws:opacity-100"
+            aria-label="Delete workspace"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleDeleteWorkspace(workspace.id);
+            }}
+          >
+            <Trash2 className="size-3" />
+          </button>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
+  function renderPinnedWorkspaceRow(workspace: (typeof workspaceRows)[number]) {
+    return (
+      <div key={`workspace:${workspace.id}`} className="w-full">
+        {renderWorkspaceRow(workspace)}
       </div>
     );
   }
@@ -3900,6 +4066,26 @@ export default function Sidebar() {
             </SidebarGroup>
 
             <SidebarGroup className="space-y-2 px-1.5 py-1.5">
+              {pinnedSidebarModel.pinnedEntries.length > 0 ? (
+                <SidebarSection
+                  title="Pinned"
+                  open={sidebarSections.pinned}
+                  onOpenChange={(open) => {
+                    setSidebarSectionOpen("pinned", open);
+                  }}
+                >
+                  <div className="px-1.5 pb-1.5">
+                    <div className="flex flex-col gap-0.5">
+                      {pinnedSidebarModel.pinnedEntries.map((entry) =>
+                        entry.kind === "thread"
+                          ? renderPinnedThreadRow(entry.thread)
+                          : renderPinnedWorkspaceRow(entry.workspace),
+                      )}
+                    </div>
+                  </div>
+                </SidebarSection>
+              ) : null}
+
               <SidebarSection
                 title="Threads"
                 open={sidebarSections.threads}
@@ -3987,15 +4173,6 @@ export default function Sidebar() {
                     </div>
                   )}
 
-                  {pinnedThreads.length > 0 ? (
-                    <>
-                      <div className="flex flex-col gap-0.5">
-                        {pinnedThreads.map((thread) => renderPinnedThreadRow(thread))}
-                      </div>
-                      <div className="-mx-1.5 my-1.5 h-px bg-border/70" />
-                    </>
-                  ) : null}
-
                   {isManualProjectSorting ? (
                     <DndContext
                       sensors={projectDnDSensors}
@@ -4058,100 +4235,27 @@ export default function Sidebar() {
                   >
                     <SidebarMenu className="gap-0.5">
                       <SortableContext
-                        items={workspaceRows.map((workspace) => workspace.id)}
+                        items={unpinnedWorkspaceRows.map((workspace) => workspace.id)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {workspaceRows.map((workspace) => {
-                          const isActive = routeWorkspaceId === workspace.id;
-                          const isRenaming = renamingWorkspaceId === workspace.id;
-                          return (
-                            <SortableWorkspaceItem key={workspace.id} workspaceId={workspace.id}>
-                              {(dragHandleProps) =>
-                                isRenaming ? (
-                                  <div className="px-1.5 py-0.5">
-                                    <input
-                                      autoFocus
-                                      value={renamingWorkspaceTitle}
-                                      onChange={(event) => {
-                                        setRenamingWorkspaceTitle(event.target.value);
-                                      }}
-                                      onBlur={commitWorkspaceRename}
-                                      onKeyDown={(event) => {
-                                        if (event.key === "Enter") {
-                                          event.preventDefault();
-                                          commitWorkspaceRename();
-                                        }
-                                        if (event.key === "Escape") {
-                                          event.preventDefault();
-                                          setRenamingWorkspaceId(null);
-                                          setRenamingWorkspaceTitle(workspace.title);
-                                        }
-                                      }}
-                                      className="h-7 w-full rounded-md border border-border bg-background px-2 text-[length:var(--app-font-size-ui,12px)] outline-none focus:border-ring"
-                                    />
-                                  </div>
-                                ) : (
-                                  <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                      size="sm"
-                                      isActive={isActive}
-                                      className="group/ws h-8 gap-2 rounded-lg px-2 font-system-ui text-[length:var(--app-font-size-ui,12px)] font-normal text-foreground/82 transition-colors hover:bg-accent/55 hover:text-foreground data-[active=true]:bg-accent/65"
-                                      onClick={() => {
-                                        navigateToWorkspace(workspace.id);
-                                      }}
-                                      onContextMenu={(event) => {
-                                        event.preventDefault();
-                                        beginWorkspaceRename(workspace.id, workspace.title);
-                                      }}
-                                    >
-                                      <span
-                                        ref={dragHandleProps.setActivatorNodeRef}
-                                        {...dragHandleProps.attributes}
-                                        {...dragHandleProps.listeners}
-                                        className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground/65"
-                                      >
-                                        <TerminalIcon className="size-3.5" />
-                                      </span>
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {workspace.title}
-                                      </span>
-                                      {workspace.terminalStatus && (
-                                        <span
-                                          className={cn(
-                                            "inline-flex size-1.5 shrink-0 rounded-full",
-                                            workspace.terminalStatus.label ===
-                                              "Terminal input needed"
-                                              ? "bg-amber-500 dark:bg-amber-300/90"
-                                              : workspace.terminalStatus.label ===
-                                                  "Terminal process running"
-                                                ? "bg-teal-500 dark:bg-teal-300/90"
-                                                : "bg-emerald-500 dark:bg-emerald-300/90",
-                                          )}
-                                        />
-                                      )}
-                                      {workspace.terminalCount > 0 && (
-                                        <span className="shrink-0 text-[length:var(--app-font-size-ui-xs,10px)] tabular-nums text-muted-foreground/50">
-                                          {workspace.terminalCount}
-                                        </span>
-                                      )}
-                                      <button
-                                        type="button"
-                                        className="sidebar-icon-button ml-auto inline-flex size-5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity group-hover/ws:opacity-100"
-                                        aria-label="Delete workspace"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          void handleDeleteWorkspace(workspace.id);
-                                        }}
-                                      >
-                                        <Trash2 className="size-3" />
-                                      </button>
-                                    </SidebarMenuButton>
-                                  </SidebarMenuItem>
-                                )
-                              }
-                            </SortableWorkspaceItem>
-                          );
-                        })}
+                        {unpinnedWorkspaceRows.map((workspace) => (
+                          <SortableWorkspaceItem key={workspace.id} workspaceId={workspace.id}>
+                            {(dragHandleProps) =>
+                              renderWorkspaceRow(workspace, {
+                                leadingAccessory: (
+                                  <span
+                                    ref={dragHandleProps.setActivatorNodeRef}
+                                    {...dragHandleProps.attributes}
+                                    {...dragHandleProps.listeners}
+                                    className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground/65"
+                                  >
+                                    <TerminalIcon className="size-3.5" />
+                                  </span>
+                                ),
+                              })
+                            }
+                          </SortableWorkspaceItem>
+                        ))}
                       </SortableContext>
                     </SidebarMenu>
                   </DndContext>
