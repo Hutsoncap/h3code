@@ -3,7 +3,7 @@
 // Layer: Desktop-only React component
 // Depends on: browserStateStore, nativeApi browser bridge, DiffPanelShell
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { type BrowserSurfaceId } from "@t3tools/contracts";
 import {
@@ -41,6 +41,7 @@ interface BrowserPanelProps {
   mode: DiffPanelMode;
   surfaceId: BrowserSurfaceId;
   onClosePanel: () => void;
+  headerLeadingContent?: ReactNode;
 }
 
 function closeButtonClassName(isActive: boolean) {
@@ -60,7 +61,12 @@ function formatBrowserActionError(error: unknown): string | null {
   return "Couldn't complete that browser action.";
 }
 
-export function BrowserPanel({ mode, surfaceId, onClosePanel }: BrowserPanelProps) {
+export function BrowserPanel({
+  mode,
+  surfaceId,
+  onClosePanel,
+  headerLeadingContent,
+}: BrowserPanelProps) {
   const api = readNativeApi();
   const browserSurfaceState = useStore(useBrowserStateStore, selectBrowserSurfaceState(surfaceId));
   const recentHistory = useStore(useBrowserStateStore, selectBrowserSurfaceHistory(surfaceId));
@@ -385,6 +391,11 @@ export function BrowserPanel({ mode, surfaceId, onClosePanel }: BrowserPanelProp
 
   const header = (
     <div className="flex min-w-0 flex-1 items-center gap-2">
+      {headerLeadingContent ? (
+        <div className="flex shrink-0 items-center [-webkit-app-region:no-drag]">
+          {headerLeadingContent}
+        </div>
+      ) : null}
       {/* Keep the browser chrome interactive inside Electron's draggable titlebar. */}
       <div className="relative flex min-w-0 flex-1 items-center gap-2 [-webkit-app-region:no-drag]">
         <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">

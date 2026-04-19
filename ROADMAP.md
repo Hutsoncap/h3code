@@ -121,8 +121,8 @@ Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7
 | --------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **v1a**   | Sidebar unify + theme catalog                                                            | ✅ merged on `main`: [#226](https://github.com/Hutsoncap/h3code/pull/226) + [#227](https://github.com/Hutsoncap/h3code/pull/227) |
 | **v1b**   | Pinned section + generalized pin store                                                   | ✅ merged on `main`: [#228](https://github.com/Hutsoncap/h3code/pull/228)                                                        |
-| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c1-browser-surface` (`feat/v1c1-browser-surface`)                     |
-| **v1c.2** | Standalone browser route + sidebar Browser section                                       | 📋 Planned                                                                                                                       |
+| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | ✅ merged on `main`: [#229](https://github.com/Hutsoncap/h3code/pull/229)                                                        |
+| **v1c.2** | Standalone browser route + sidebar Browser section                                       | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1c2-browser-section` (`feat/v1c2-browser-section`)                     |
 | **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 📋 Planned                                                                                                                       |
 
 ### v1a — Sidebar unify + theme catalog
@@ -198,7 +198,7 @@ Today's browser ([apps/web/src/components/BrowserPanel.tsx](apps/web/src/compone
 
 _Can run in parallel with v1b after v1a lands._
 
-Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c1-browser-surface` on `feat/v1c1-browser-surface`.
+Merged slice: [#229](https://github.com/Hutsoncap/h3code/pull/229) landed the browser surface abstraction, thread/browser back-compat coercion, and persisted browser-state migration. `v1c.1` is complete on `main`.
 
 Pure refactor. No new routes, no new UI, no new stores. The thread-embedded browser behaves identically after this PR.
 
@@ -219,6 +219,8 @@ Pure refactor. No new routes, no new UI, no new stores. The thread-embedded brow
 #### v1c.2 — Standalone browser route + sidebar Browser section
 
 _Depends on v1c.1. Can run in parallel with v1b._
+
+Live lane: `/Users/hutson/Code/h3code.worktrees/h3code-v1c2-browser-section` on `feat/v1c2-browser-section`.
 
 - Add TanStack Router route `/browser` rendering `<BrowserPanel surfaceId={{ kind: "standalone", id: "main" }} />`.
 - Add the **Browser** section to the sidebar (key `browser` already exists in `sidebarSectionsStore` from v1a). Contents: a single "Open Browser" row that navigates to `/browser`.

@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   FolderIcon,
   GitPullRequestIcon,
+  GlobeIcon,
   type LucideIcon,
   SearchIcon,
   SettingsIcon,
@@ -707,6 +708,7 @@ export default function Sidebar() {
   const setSidebarSectionOpen = useSidebarSectionsStore((store) => store.setSectionOpen);
   const navigate = useNavigate();
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
+  const isOnBrowser = useLocation({ select: (loc) => loc.pathname === "/browser" });
   const { settings: appSettings, updateSettings } = useAppSettings();
   const { handleNewThread } = useHandleNewThread();
   const { createThreadHandoff } = useThreadHandoff();
@@ -4259,6 +4261,35 @@ export default function Sidebar() {
                       </SortableContext>
                     </SidebarMenu>
                   </DndContext>
+                </div>
+              </SidebarSection>
+
+              <SidebarSection
+                title="Browser"
+                open={sidebarSections.browser}
+                onOpenChange={(open) => {
+                  setSidebarSectionOpen("browser", open);
+                }}
+              >
+                <div className="px-1.5 pb-1.5">
+                  <SidebarMenu className="gap-0.5">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        size="default"
+                        className="h-8 gap-2.5 rounded-lg px-2 text-[length:var(--app-font-size-ui,12px)] font-normal text-muted-foreground/72 hover:bg-accent/55 hover:text-foreground"
+                        isActive={isOnBrowser}
+                        onClick={() => {
+                          if (isOnBrowser) {
+                            return;
+                          }
+                          void navigate({ to: "/browser" });
+                        }}
+                      >
+                        <GlobeIcon className="size-[15px]" />
+                        <span>Open Browser</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
                 </div>
               </SidebarSection>
             </SidebarGroup>
