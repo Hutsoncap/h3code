@@ -97,32 +97,33 @@ Every one of these directly lifts a constraint that Phase 1+ would otherwise hit
 
 Phase 1 work (v1a and below) does not start until **p0.1, p0.2, p0.3, p0.5, p0.7, p0.9 are ✅ merged**. p0.4, p0.6, p0.8 are strongly preferred but can land in parallel with v1a if scope conflicts allow it — document any deviation at the top of the affected sub-PR.
 
-**Current gate status (2026-04-18):** p0.1, p0.2, p0.4, p0.5, p0.6, p0.7, p0.8, and p0.9 are merged. **p0.3 is still open, so no Phase 1 slice is legitimately started yet.** Recent merged work has been almost entirely hardening and normalization in the always-open lane.
+**Current gate status (2026-04-19):** p0.1 through p0.9 are merged. **Phase 0 is complete.** PR [#225](https://github.com/Hutsoncap/h3code/pull/225) closed `p0.3`, so the roadmap now advances directly to **v1a**.
 
-**Execution priority until `p0.3` closes:**
+**Execution priority now:**
 
-1. Resume and finish **p0.3**.
-2. Once `p0.3` is ✅ on `main`, start **v1a** immediately.
-3. Do **not** start new hardening-only slices while `p0.3` is open unless they directly unblock the active `p0.3` work or are required to keep an already-open PR green.
+1. Start **v1a** immediately.
+2. Keep the roadmap accurate at every lane change, merge, or CI/blocker transition.
+3. Hardening work stays background-only unless it directly unblocks the active roadmap lane, fixes a failing check on an already-open roadmap PR, or prevents a proven regression from blocking the roadmap path.
 
-**`p0.3` closeout mode (effective immediately):**
+**Execution mode after `p0.3`:**
 
-1. Optimize for **gate closure**, not PR count. Remaining `p0.3` work should retire whole responsibility clusters or leaf surfaces, not shave line count with tiny slices.
-2. Keep at most **two** active `p0.3` lanes: one live code-bearing PR, plus one next lane only when the front PR is CI-only or the write scopes are demonstrably disjoint. No deep stacked chains.
+1. Prefer **PR-sized slices with clear user-facing progress**, but avoid reopening micro-slice churn for work that can safely land as a larger coherent step.
+2. Keep at most **two** active roadmap lanes: one live code-bearing PR, plus one prep lane only when the front PR is CI-only or the write scopes are demonstrably disjoint.
 3. `ROADMAP.md` must stay accurate, but do **not** repush doc-only commits merely to refresh PR numbers or transient CI state. Batch those updates into the next code-bearing push unless merge/blocker truth changed materially.
-4. Clean up merged or abandoned `p0.3` worktrees so active lanes remain obvious and parallelism stays intentional.
+4. Create new H3 Code worktrees under `/Users/hutson/Code/h3code.worktrees/`, not directly in `/Users/hutson/Code`, unless a specific task requires a different location.
+5. Clean up merged or abandoned worktrees so active lanes stay obvious and parallelism stays intentional.
 
 ---
 
 ## Phase 1 — Foundations: sidebar, theme, browser surface
 
-| ID        | Title                                                                                    | Status     |
-| --------- | ---------------------------------------------------------------------------------------- | ---------- |
-| **v1a**   | Sidebar unify + theme catalog                                                            | 📋 Planned |
-| **v1b**   | Pinned section + generalized pin store                                                   | 📋 Planned |
-| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 📋 Planned |
-| **v1c.2** | Standalone browser route + sidebar Browser section                                       | 📋 Planned |
-| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 📋 Planned |
+| ID        | Title                                                                                    | Status                                                                                                   |
+| --------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **v1a**   | Sidebar unify + theme catalog                                                            | 🚧 worktree: `/Users/hutson/Code/h3code.worktrees/h3code-v1a-sidebar-themes` (`feat/v1a-sidebar-themes`) |
+| **v1b**   | Pinned section + generalized pin store                                                   | 📋 Planned                                                                                               |
+| **v1c.1** | Browser surface abstraction (thread-scoped → surface-scoped, back-compat, no UI changes) | 📋 Planned                                                                                               |
+| **v1c.2** | Standalone browser route + sidebar Browser section                                       | 📋 Planned                                                                                               |
+| **v1c.3** | Web Apps store + install-as-web-app flow + Settings → Browser page                       | 📋 Planned                                                                                               |
 
 ### v1a — Sidebar unify + theme catalog
 
@@ -132,7 +133,7 @@ Smallest viable first step. Drops the Threads/Workspaces segmented picker; both 
 
 - Delete `SidebarSegmentedPicker` from [apps/web/src/components/Sidebar.tsx](apps/web/src/components/Sidebar.tsx) (~line 651) and the `view` state/handler.
 - Add a reusable `SidebarSection` at `apps/web/src/components/sidebar/SidebarSection.tsx` — header row (title + chevron + optional trailing action) with a collapsible body.
-- Add a persistent collapse store at `apps/web/src/sidebarSectionsStore.ts` (zustand/persist, key `t3code:sidebar-sections:v1`). Shape includes **all four section keys up front** to avoid shared-state churn across later sub-PRs: `{ pinned: boolean; threads: boolean; workspaces: boolean; browser: boolean }`. Only `threads` and `workspaces` are rendered in v1a; `pinned` and `browser` keys sit dormant until their sub-PRs wire them up. This lets v1b and v1c proceed in parallel without touching this file.
+- Add a persistent collapse store at `apps/web/src/sidebarSectionsStore.ts` (zustand/persist, key `h3code:sidebar-sections:v1`, with legacy `t3code:` migration). Shape includes **all four section keys up front** to avoid shared-state churn across later sub-PRs: `{ pinned: boolean; threads: boolean; workspaces: boolean; browser: boolean }`. Only `threads` and `workspaces` are rendered in v1a; `pinned` and `browser` keys sit dormant until their sub-PRs wire them up. This lets v1b and v1c proceed in parallel without touching this file.
 - Render Threads section and Workspaces section stacked; wrap existing trees untouched internally. dnd-kit reorder ([line 620](apps/web/src/components/Sidebar.tsx:620) / [line 684](apps/web/src/components/Sidebar.tsx:684)) keeps working.
 
 **Theme catalog**

@@ -27,6 +27,15 @@ export const PersistedPinnedThreadsStateSchema = Schema.Struct({
   pinnedThreadIds: Schema.Array(ThreadId),
 });
 
+export const PersistedSidebarSectionsStateSchema = Schema.Struct({
+  sections: Schema.Struct({
+    pinned: Schema.Boolean,
+    threads: Schema.Boolean,
+    workspaces: Schema.Boolean,
+    browser: Schema.Boolean,
+  }),
+});
+
 export const PersistedSingleChatPanelStateSchema = Schema.Struct({
   panel: Schema.NullOr(ChatRightPanelSchema),
   diffTurnId: Schema.NullOr(TurnId),
@@ -190,4 +199,13 @@ export interface PersistedWorkspacePage {
 export interface PersistedBrowserState {
   threadStatesByThreadId: Record<string, ThreadBrowserState>;
   recentHistoryByThreadId: Record<string, PersistedBrowserHistoryEntry[]>;
+}
+
+export interface PersistedSidebarSectionsState {
+  sections: {
+    pinned: boolean;
+    threads: boolean;
+    workspaces: boolean;
+    browser: boolean;
+  };
 }
