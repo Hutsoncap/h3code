@@ -33,6 +33,7 @@ import {
   resolveBranchSelectionTarget,
   resolveBranchToolbarValue,
 } from "./BranchToolbar.logic";
+import { toBranchActionErrorMessage } from "./BranchToolbarBranchSelector.logic";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -66,10 +67,6 @@ interface BranchToolbarBranchSelectorProps {
   onSetThreadWorkspace: (patch: ThreadWorkspacePatch) => void;
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest?: () => void;
-}
-
-function toBranchActionErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "An error occurred.";
 }
 
 function getBranchTriggerLabel(input: {
